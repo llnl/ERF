@@ -1,4 +1,5 @@
 #include <ERF_SLM.H>
+#include "EOS.H"
 
 using namespace amrex;
 
@@ -12,7 +13,7 @@ SLM::Init (const MultiFab& cons_in,
     m_geom = geom;
 
     Box domain = geom.Domain();
-    khi_lsm    = domain.smallEnd(2) - 1;
+    khi_lsm    = domain.smallEnd(2) - 1; // index of z_r
 
     LsmVarMap.resize(m_lsm_size);
     LsmVarMap = {LsmVar_SLM::theta};
@@ -40,8 +41,8 @@ SLM::Init (const MultiFab& cons_in,
     const Real*    dom_dx = m_geom.CellSize();
     RealBox lsm_rb = dom_rb;
     Real lsm_dx[AMREX_SPACEDIM] = {AMREX_D_DECL(dom_dx[0],dom_dx[1],m_dz_lsm)};
-    Real lsm_z_hi = dom_rb.lo(2);
-    Real lsm_z_lo = lsm_z_hi - Real(m_nz_lsm)*lsm_dx[2];
+    Real lsm_z_hi = dom_rb.lo(2); // z_r
+    Real lsm_z_lo = lsm_z_hi - Real(m_nz_lsm)*lsm_dx[2]; // bottom Z of last soil layer: z_s
     lsm_rb.setHi(2,lsm_z_hi); lsm_rb.setLo(2,lsm_z_lo);
     m_lsm_geom.define( ba_lsm.minimalBox(), lsm_rb, m_geom.Coord(), m_geom.isPeriodic() );
 
@@ -121,4 +122,58 @@ SLM::AdvanceSLM ()
             theta_array(i,j,k) += dt * ( theta_flux(i,j,k+1) - theta_flux(i,j,k) ) * dzInv;
         });
     }
+}
+
+void SLM::Copy_State_to_Micro(const MultiFab& cons_in)
+{
+    // Get the temperature, density, pressure from input
+    for ( MFIter mfi(cons_in); mfi.isValid(); ++mfi) {
+        const auto& box3d = mfi.tilebox();
+
+        auto states_array = cons_in.array(mfi);
+
+        auto tref_array  = lsm_fab_vars[LsmVar_SLM::tref]->array(mfi);
+        auto rho_array   = lsm_fab_vars[LsmVar_SLM::dref]->array(mfi);
+        auto pres_array  = lsm_fab_vars[LsmVar_SLM::pref]->array(mfi);
+
+        // Get pressure, theta, temperature, density
+        ParallelFor( box3d, [=] AMREX_GPU_DEVICE (int i, int j, int k)
+        {
+            const Real qv = states_array(i,j,k,RhoQ1_comp)/states_array(i,j,k,Rho_comp);
+            rho_array(i,j,k)   = states_array(i,j,k,Rho_comp);
+            pres_array(i,j,k)  = getPgivenRTh(states_array(i,j,k,RhoTheta_comp), qv)/100.;
+            tref_array(i,j,k)  = getTgivenRandRTh(states_array(i,j,k,Rho_comp),
+                                                  states_array(i,j,k,RhoTheta_comp),
+                                                  qv);
+        });
+    }
+}
+
+
+void SLM::Copy_Micro_to_State(MultiFab& cons_in)
+{
+    for ( amrex::MFIter mfi(cons_in,amrex::TilingIfNotGPU()); mfi.isValid(); ++mfi) {
+        const auto& box3d = mfi.tilebox();
+
+        auto states_arr = cons_in.array(mfi);
+
+        auto tref_array  = lsm_fab_vars[LsmVar_SLM::tref]->array(mfi);
+        auto rho_array   = lsm_fab_vars[LsmVar_SLM::dref]->array(mfi);
+        auto pres_array  = lsm_fab_vars[LsmVar_SLM::pref]->array(mfi);
+
+        // get potential total density, temperature, qt, qp
+        ParallelFor( box3d, [=] AMREX_GPU_DEVICE (int i, int j, int k)
+        {
+            // TODO
+            /*
+            states_arr(i,j,k,RhoTheta_comp) = rho_arr(i,j,k)*theta_arr(i,j,k);
+            states_arr(i,j,k,RhoQ1_comp)    = rho_arr(i,j,k)*qv_arr(i,j,k);
+            states_arr(i,j,k,RhoQ2_comp)    = rho_arr(i,j,k)*qc_arr(i,j,k);
+            states_arr(i,j,k,RhoQ3_comp)    = rho_arr(i,j,k)*qp_arr(i,j,k);
+            */
+        });
+    }
+
+    // Fill interior ghost cells and periodic boundaries
+    cons_in.FillBoundary(m_geom.periodicity());
 }

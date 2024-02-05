@@ -17,7 +17,32 @@
 namespace LsmVar_SLM {
    enum {
       // independent variables
-      theta = 0,
+      tref = 0,        // temperature at reference level
+      qref,            // specific humidity at ref
+      pref,            // pressure at reference level
+      dref,            // density at reference level
+      uref,            // zonal wind speed at ref
+      vref,            // meridional wind speed at ref
+      precipref,       // precipitation rate at ref
+      swdsvisxyref,    // downwelling SW radiation, direct visible flux
+      swdsnirxyref,    // downwelling SW radiation, direct near-IR flux
+      swdsvisdxyref,   // downwelling SW radiation, diffuse visible flux
+      swdsnirdxyref,   // downwelling SW radiation, diffuse near-IR flux
+      lwref,           // downwelling LW radiation
+      coszrsxy,        // zenith angle
+      tsurf,           // surface temperature
+      // model variables
+      tv,              // vegetation temperature
+      mv,              // vegetation moisture storage
+      soilt,           // soil temperature
+      soilw,           // soil wetness
+      // model outputs
+      flbu,            // surface u-momentum
+      flbv,            // surface v-momentum
+      flbq,            // surface vapor flux (latent heat flux)
+      flbt,            // surface heat flux
+      prsfc,           // precipitation rate reaching soil
+      //theta,
       NumVars
   };
 }
@@ -106,6 +131,26 @@ public:
         return LsmVarName[lsmIdx];
     }
 
+    void
+    Copy_State_to_Micro (const amrex::MultiFab& cons_in) override;
+
+    void
+    Copy_Micro_to_State (amrex::MultiFab& cons_in) override;
+
+    void
+    Update_Micro_Vars (amrex::MultiFab& cons_in) override
+    {
+        this->Copy_State_to_Micro(cons_in);
+        //this->Diagnose();
+        //this->Compute_Coefficients();
+    }
+
+    void
+    Update_State_Vars (amrex::MultiFab& cons_in) override
+    {
+        this->Copy_Micro_to_State(cons_in);
+    }
+
 private:
     // number of lsm variables (theta)
     int m_lsm_size = 1;
@@ -143,7 +188,7 @@ private:
     // Vars that should be parsed
     // ==========================
     // Number of grid points in z
-    int m_nz_lsm = 30;
+    int m_nz_lsm = 4;
 
     // Size of grid spacing in z
     amrex::Real m_dz_lsm = 0.1; // 3 [m] below surface

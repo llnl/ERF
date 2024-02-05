@@ -3,10 +3,12 @@
 using namespace amrex;
 
 void ERF::advance_lsm (int lev,
-                       MultiFab& /*cons*/,
+                       MultiFab& cons,
                        const Real& dt_advance)
 {
     if (solverChoice.lsm_type != LandSurfaceType::None) {
+        lsm.Update_Micro_Vars_Lev(lev, cons);
         lsm.Advance(lev, dt_advance);
+        lsm.Update_State_Vars_Lev(lev, cons);
     }
 }
