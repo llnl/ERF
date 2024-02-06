@@ -17,7 +17,8 @@
 namespace LsmVar_SLM {
    enum {
       // independent variables
-      tref = 0,        // temperature at reference level
+      theta = 0,
+      tref,            // temperature at reference level
       qref,            // specific humidity at ref
       pref,            // pressure at reference level
       dref,            // density at reference level
@@ -42,7 +43,6 @@ namespace LsmVar_SLM {
       flbq,            // surface vapor flux (latent heat flux)
       flbt,            // surface heat flux
       prsfc,           // precipitation rate reaching soil
-      //theta,
       NumVars
   };
 }
