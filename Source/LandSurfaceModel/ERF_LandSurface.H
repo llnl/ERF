@@ -54,9 +54,9 @@ public:
     }
 
     void
-    Update_Micro_Vars_Lev (const int& lev, amrex::MultiFab& cons_in)
+    Update_Lsm_Vars_Lev (const int& lev, amrex::MultiFab& cons_in)
     {
-        m_lsm_model[lev]->Update_Micro_Vars(cons_in);
+        m_lsm_model[lev]->Update_Lsm_Vars(cons_in);
     }
 
     void

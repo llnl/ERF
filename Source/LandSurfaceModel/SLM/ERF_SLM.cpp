@@ -124,7 +124,7 @@ SLM::AdvanceSLM ()
     }
 }
 
-void SLM::Copy_State_to_Micro(const MultiFab& cons_in)
+void SLM::Copy_State_to_Lsm(const MultiFab& cons_in)
 {
     // Get the temperature, density, pressure from input
     for ( MFIter mfi(cons_in); mfi.isValid(); ++mfi) {
@@ -150,7 +150,7 @@ void SLM::Copy_State_to_Micro(const MultiFab& cons_in)
 }
 
 
-void SLM::Copy_Micro_to_State(MultiFab& cons_in)
+void SLM::Copy_Lsm_to_State(MultiFab& cons_in)
 {
     for ( amrex::MFIter mfi(cons_in,amrex::TilingIfNotGPU()); mfi.isValid(); ++mfi) {
         const auto& box3d = mfi.tilebox();

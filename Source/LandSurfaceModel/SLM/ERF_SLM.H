@@ -132,15 +132,15 @@ public:
     }
 
     void
-    Copy_State_to_Micro (const amrex::MultiFab& cons_in) override;
+    Copy_State_to_Lsm (const amrex::MultiFab& cons_in) override;
 
     void
-    Copy_Micro_to_State (amrex::MultiFab& cons_in) override;
+    Copy_Lsm_to_State (amrex::MultiFab& cons_in) override;
 
     void
-    Update_Micro_Vars (amrex::MultiFab& cons_in) override
+    Update_Lsm_Vars (amrex::MultiFab& cons_in) override
     {
-        this->Copy_State_to_Micro(cons_in);
+        this->Copy_State_to_Lsm(cons_in);
         //this->Diagnose();
         //this->Compute_Coefficients();
     }
@@ -148,7 +148,7 @@ public:
     void
     Update_State_Vars (amrex::MultiFab& cons_in) override
     {
-        this->Copy_Micro_to_State(cons_in);
+        this->Copy_Lsm_to_State(cons_in);
     }
 
 private:

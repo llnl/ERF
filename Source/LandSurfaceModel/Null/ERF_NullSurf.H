@@ -27,7 +27,7 @@ class NullSurf {
 
     virtual
     void
-    Update_Micro_Vars (amrex::MultiFab& /*cons_in*/) { }
+    Update_Lsm_Vars (amrex::MultiFab& /*cons_in*/) { }
 
     virtual
     void
@@ -35,11 +35,11 @@ class NullSurf {
 
     virtual
     void
-    Copy_State_to_Micro (const amrex::MultiFab& /*cons_in*/) { }
+    Copy_State_to_Lsm (const amrex::MultiFab& /*cons_in*/) { }
 
     virtual
     void
-    Copy_Micro_to_State (amrex::MultiFab& /*cons_in*/) { }
+    Copy_Lsm_to_State (amrex::MultiFab& /*cons_in*/) { }
 
     virtual
     amrex::MultiFab*
