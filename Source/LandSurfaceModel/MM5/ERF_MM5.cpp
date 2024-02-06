@@ -5,6 +5,8 @@ using namespace amrex;
 /* Initialize lsm data structures */
 void
 MM5::Init (const MultiFab& cons_in,
+           const MultiFab& u_in,
+           const MultiFab& v_in,
            const Geometry& geom,
            const Real& dt)
 {

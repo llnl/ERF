@@ -6,6 +6,8 @@ using namespace amrex;
 /* Initialize lsm data structures */
 void
 SLM::Init (const MultiFab& cons_in,
+           const MultiFab& u_in,
+           const MultiFab& v_in,
            const Geometry& geom,
            const Real& dt)
 {
@@ -124,17 +126,22 @@ SLM::AdvanceSLM ()
     }
 }
 
-void SLM::Copy_State_to_Lsm(const MultiFab& cons_in)
+void SLM::Copy_State_to_Lsm(const MultiFab& cons_in, const MultiFab& u_in, const MultiFab& v_in)
 {
     // Get the temperature, density, pressure from input
     for ( MFIter mfi(cons_in); mfi.isValid(); ++mfi) {
         const auto& box3d = mfi.tilebox();
 
         auto states_array = cons_in.array(mfi);
+        auto u_array = u_in.array(mfi);
+        auto v_array = v_in.array(mfi);
 
         auto tref_array  = lsm_fab_vars[LsmVar_SLM::tref]->array(mfi);
         auto rho_array   = lsm_fab_vars[LsmVar_SLM::dref]->array(mfi);
         auto pres_array  = lsm_fab_vars[LsmVar_SLM::pref]->array(mfi);
+
+        auto slm_u       = lsm_fab_vars[LsmVar_SLM::uref]->array(mfi);
+        auto slm_v       = lsm_fab_vars[LsmVar_SLM::vref]->array(mfi);
 
         // Get pressure, theta, temperature, density
         ParallelFor( box3d, [=] AMREX_GPU_DEVICE (int i, int j, int k)
@@ -145,6 +152,9 @@ void SLM::Copy_State_to_Lsm(const MultiFab& cons_in)
             tref_array(i,j,k)  = getTgivenRandRTh(states_array(i,j,k,Rho_comp),
                                                   states_array(i,j,k,RhoTheta_comp),
                                                   qv);
+
+            slm_u(i,j,k) = u_array(i,j,k);
+            slm_v(i,j,k) = v_array(i,j,k);
         });
     }
 }

@@ -16,8 +16,11 @@ class NullSurf {
     void
     Define (SolverChoice& /*sc*/) { }
 
+    // u_in and v_in might not be needed in all LSM models (e.g MM5), maybe refactor?
     virtual
     void Init (const amrex::MultiFab& /*cons_in*/,
+               const amrex::MultiFab& /*u_in*/,
+               const amrex::MultiFab& /*v_in*/,
                const amrex::Geometry& /*geom*/,
                const amrex::Real& /*dt_advance*/) { }
 
@@ -27,7 +30,9 @@ class NullSurf {
 
     virtual
     void
-    Update_Lsm_Vars (amrex::MultiFab& /*cons_in*/) { }
+    Update_Lsm_Vars (amrex::MultiFab& /*cons_in*/,
+                     amrex::MultiFab& /*u_in*/,
+                     amrex::MultiFab& /*v_in*/) { }
 
     virtual
     void
@@ -35,7 +40,9 @@ class NullSurf {
 
     virtual
     void
-    Copy_State_to_Lsm (const amrex::MultiFab& /*cons_in*/) { }
+    Copy_State_to_Lsm (const amrex::MultiFab& /*cons_in*/,
+                       const amrex::MultiFab& /*u_in*/,
+                       const amrex::MultiFab& /*v_in*/) { }
 
     virtual
     void

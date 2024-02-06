@@ -71,6 +71,8 @@ public:
     // Initialize data structures
     void
     Init (const amrex::MultiFab& cons_in,
+          const amrex::MultiFab& u_in,
+          const amrex::MultiFab& v_in,
           const amrex::Geometry& geom,
           const amrex::Real& dt) override;
 
@@ -132,15 +134,15 @@ public:
     }
 
     void
-    Copy_State_to_Lsm (const amrex::MultiFab& cons_in) override;
+    Copy_State_to_Lsm (const amrex::MultiFab& cons_in, const amrex::MultiFab& u_in, const amrex::MultiFab& v_in) override;
 
     void
     Copy_Lsm_to_State (amrex::MultiFab& cons_in) override;
 
     void
-    Update_Lsm_Vars (amrex::MultiFab& cons_in) override
+    Update_Lsm_Vars (amrex::MultiFab& cons_in, amrex::MultiFab& u_in, amrex::MultiFab& v_in) override
     {
-        this->Copy_State_to_Lsm(cons_in);
+        this->Copy_State_to_Lsm(cons_in, u_in, v_in);
         //this->Diagnose();
         //this->Compute_Coefficients();
     }

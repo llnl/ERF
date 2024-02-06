@@ -41,10 +41,12 @@ public:
     void
     Init (const int& lev,
           const amrex::MultiFab& cons_in,
+          const amrex::MultiFab& u_in,
+          const amrex::MultiFab& v_in,
           const amrex::Geometry& geom,
           const amrex::Real& dt_advance)
     {
-        m_lsm_model[lev]->Init(cons_in, geom, dt_advance);
+        m_lsm_model[lev]->Init(cons_in, u_in, v_in, geom, dt_advance);
     }
 
     void
@@ -54,9 +56,10 @@ public:
     }
 
     void
-    Update_Lsm_Vars_Lev (const int& lev, amrex::MultiFab& cons_in)
+    Update_Lsm_Vars_Lev (const int& lev, amrex::MultiFab& cons_in,
+                         amrex::MultiFab& u_in, amrex::MultiFab& v_in)
     {
-        m_lsm_model[lev]->Update_Lsm_Vars(cons_in);
+        m_lsm_model[lev]->Update_Lsm_Vars(cons_in, u_in, v_in);
     }
 
     void
