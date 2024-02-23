@@ -130,8 +130,9 @@ Problem::init_custom_pert(
         const Real theta = getThgivenPandT(sounding[2][0], pres, R_d / Cp_d);
         const Real rho = getRhogivenThetaPress(theta, pres, R_d / Cp_d, qv);
 
-        state(i, j, k, Rho_comp) = rho;
-        state(i, j, k, RhoTheta_comp) = rho * theta;
+        // NOTE: these are pertubations from the initial state
+        state(i, j, k, Rho_comp) = rho - 1.0;
+        state(i, j, k, RhoTheta_comp) = (rho * theta) - (parms.rho_0 * parms.T_0);
         state(i, j, k, RhoScalar_comp) = 0.0;
 
         state(i, j, k, RhoKE_comp) = 0.0;
