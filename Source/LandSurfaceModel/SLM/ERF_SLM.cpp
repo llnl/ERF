@@ -1,5 +1,6 @@
 #include <ERF_SLM.H>
 #include "EOS.H"
+#include "TileNoZ.H"
 
 using namespace amrex;
 
@@ -16,6 +17,7 @@ SLM::Init (const MultiFab& cons_in,
 
     Box domain = geom.Domain();
     khi_lsm    = domain.smallEnd(2) - 1; // index of z_r
+    klo_lsm    = khi_lsm - m_nz_lsm + 1;
 
     LsmVarMap.resize(m_lsm_size);
     LsmVarMap = {LsmVar_SLM::theta};
@@ -33,8 +35,8 @@ SLM::Init (const MultiFab& cons_in,
     DistributionMapping dm = cons_in.DistributionMap();
     BoxList bl_lsm = ba.boxList();
     for (auto& b : bl_lsm) {
-        b.setBig(2,khi_lsm);                  // First point below the surface
-        b.setSmall(2,khi_lsm - m_nz_lsm + 1); // Last point below the surface
+        b.setBig(2, khi_lsm);                  // First point below the surface
+        b.setSmall(2, klo_lsm);                // Last point below the surface
     }
     BoxArray ba_lsm(std::move(bl_lsm));
 
@@ -128,9 +130,17 @@ SLM::AdvanceSLM ()
 
 void SLM::Copy_State_to_Lsm(const MultiFab& cons_in, const MultiFab& u_in, const MultiFab& v_in)
 {
-    // Get the temperature, density, pressure from input
-    for ( MFIter mfi(cons_in); mfi.isValid(); ++mfi) {
+    int khi = khi_lsm;
+
+    auto theta = lsm_fab_vars[LsmVar_SLM::theta];
+
+    // Get the temperature, density, pressure at the reference level
+    for ( MFIter mfi(*theta, TileNoZ()); mfi.isValid(); ++mfi) {
         const auto& box3d = mfi.tilebox();
+
+        // Create a box with the same i,j bounds, but only at z = 0
+        amrex::Box b2d = box3d;
+        b2d.setRange(2, 0);
 
         auto states_array = cons_in.array(mfi);
         auto u_array = u_in.array(mfi);
@@ -143,8 +153,7 @@ void SLM::Copy_State_to_Lsm(const MultiFab& cons_in, const MultiFab& u_in, const
         auto slm_u       = lsm_fab_vars[LsmVar_SLM::uref]->array(mfi);
         auto slm_v       = lsm_fab_vars[LsmVar_SLM::vref]->array(mfi);
 
-        // Get pressure, theta, temperature, density
-        ParallelFor( box3d, [=] AMREX_GPU_DEVICE (int i, int j, int k)
+        ParallelFor(b2d, [=] AMREX_GPU_DEVICE (int i, int j, int k)
         {
             const Real qv = states_array(i,j,k,RhoQ1_comp)/states_array(i,j,k,Rho_comp);
             rho_array(i,j,k)   = states_array(i,j,k,Rho_comp);

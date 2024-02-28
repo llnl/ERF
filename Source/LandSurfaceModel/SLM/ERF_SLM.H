@@ -175,6 +175,8 @@ private:
     // domain klo-1 or lsm khi
     int khi_lsm;
 
+    int klo_lsm;
+
     // constants
     // amrex::Real m_fac_cond;
     // amrex::Real m_fac_fus;
@@ -190,7 +192,7 @@ private:
     // Vars that should be parsed
     // ==========================
     // Number of grid points in z
-    int m_nz_lsm = 4;
+    int m_nz_lsm = 5;
 
     // Size of grid spacing in z
     amrex::Real m_dz_lsm = 0.1; // 3 [m] below surface
