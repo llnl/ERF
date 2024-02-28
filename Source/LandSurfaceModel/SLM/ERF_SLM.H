@@ -153,6 +153,13 @@ public:
         this->Copy_Lsm_to_State(cons_in);
     }
 
+    void
+    set_flux_inputs(const amrex::MultiFab* sw_lw_fluxes_in,
+                    const amrex::MultiFab* zenith_in) override;
+
+    void
+    set_precip_input(const amrex::MultiFab* precip_in) override;
+
 private:
     // number of lsm variables (theta)
     int m_lsm_size = 1;

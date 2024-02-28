@@ -119,6 +119,19 @@ public:
         }
     }
 
+    void set_LSM_flux_inputs (const int& lev,
+                              const amrex::MultiFab* sw_lw_fluxes_in,
+                              const amrex::MultiFab* zenith_in)
+    {
+        m_lsm_model[lev]->set_flux_inputs(sw_lw_fluxes_in, zenith_in);
+    }
+
+    void set_LSM_precip_input (const int& lev,
+                              const amrex::MultiFab* precip_in)
+    {
+        m_lsm_model[lev]->set_precip_input(precip_in);
+    }
+
 private:
     // lsm model at each level
     amrex::Vector<std::unique_ptr<NullSurf>> m_lsm_model;

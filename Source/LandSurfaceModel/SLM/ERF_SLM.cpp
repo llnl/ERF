@@ -168,6 +168,67 @@ void SLM::Copy_State_to_Lsm(const MultiFab& cons_in, const MultiFab& u_in, const
     }
 }
 
+void
+SLM::set_flux_inputs(const amrex::MultiFab* sw_lw_fluxes_in,
+                     const amrex::MultiFab* zenith_in)
+{
+    auto theta = lsm_fab_vars[LsmVar_SLM::theta];
+
+    for ( MFIter mfi(*theta, TileNoZ()); mfi.isValid(); ++mfi) {
+        const auto& box3d = mfi.tilebox();
+
+        // Create a box with the same i,j bounds, but only at z = 0
+        amrex::Box b2d = box3d;
+        b2d.setRange(2, 0);
+
+        auto sw_lw_fluxes_arr = sw_lw_fluxes_in->const_array(mfi);
+        auto zenith_array     = zenith_in->const_array(mfi);
+
+        auto slm_dir_sw_vis  = lsm_fab_vars[LsmVar_SLM::swdsvisxyref]->array(mfi);
+        auto slm_dir_sw_nir  = lsm_fab_vars[LsmVar_SLM::swdsnirxyref]->array(mfi);
+        auto slm_diff_sw_vis = lsm_fab_vars[LsmVar_SLM::swdsvisdxyref]->array(mfi);
+        auto slm_diff_sw_nir = lsm_fab_vars[LsmVar_SLM::swdsnirdxyref]->array(mfi);
+
+        auto slm_lw          = lsm_fab_vars[LsmVar_SLM::lwref]->array(mfi);
+        auto slm_zenith      = lsm_fab_vars[LsmVar_SLM::coszrsxy]->array(mfi);
+
+        ParallelFor(b2d, [=] AMREX_GPU_DEVICE (int i, int j, int k)
+        {
+            slm_dir_sw_vis(i, j, k) = sw_lw_fluxes_arr(i, j, k, 0);
+            slm_dir_sw_nir(i, j, k) = sw_lw_fluxes_arr(i, j, k, 1);
+
+            slm_diff_sw_vis(i, j, k) = sw_lw_fluxes_arr(i, j, k, 2);
+            slm_diff_sw_nir(i, j, k) = sw_lw_fluxes_arr(i, j, k, 3);
+
+            slm_lw(i, j, k) = sw_lw_fluxes_arr(i, j, k, 4);
+            slm_zenith(i, j, k) = zenith_array(i, j, k, 0);
+        });
+    }
+}
+
+void
+SLM::set_precip_input(const amrex::MultiFab* precip_in)
+{
+    auto theta = lsm_fab_vars[LsmVar_SLM::theta];
+
+    for ( MFIter mfi(*theta, TileNoZ()); mfi.isValid(); ++mfi) {
+        const auto& box3d = mfi.tilebox();
+
+        // Create a box with the same i,j bounds, but only at z = 0
+        amrex::Box b2d = box3d;
+        b2d.setRange(2, 0);
+
+        auto precip_array = precip_in->const_array(mfi);
+
+        auto slm_precip   = lsm_fab_vars[LsmVar_SLM::precipref]->array(mfi);
+
+        ParallelFor(b2d, [=] AMREX_GPU_DEVICE (int i, int j, int k)
+        {
+            slm_precip(i, j, k) = precip_array(i, j, k, 0);
+        });
+    }
+}
+
 
 void SLM::Copy_Lsm_to_State(MultiFab& cons_in)
 {

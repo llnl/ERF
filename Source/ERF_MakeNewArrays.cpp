@@ -248,6 +248,12 @@ ERF::init_stuff (int lev, const BoxArray& ba, const DistributionMapping& dm,
         mapfac_v[lev]->setVal(1.);
     }
 
+    // Additional inputs for LSM
+    if (solverChoice.lsm_type != LandSurfaceType::None) {
+        precip[lev] = std::make_unique<MultiFab>(ba, dm, 1, ngrow_state);
+        precip[lev]->setVal(0.0);
+    }
+
 #if defined(ERF_USE_WINDFARM)
     //*********************************************************
     // Variables for Fitch model for windfarm parametrization

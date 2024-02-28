@@ -137,6 +137,8 @@ ERF::ERF_shared ()
     lsm_data.resize(nlevs_max);
     lsm_flux.resize(nlevs_max);
 
+    precip.resize(nlevs_max);
+
     // NOTE: size canopy model before readparams (if file exists, we construct)
     m_forest_drag.resize(nlevs_max);
     for (int lev = 0; lev <= max_level; ++lev) { m_forest_drag[lev] = nullptr;}
