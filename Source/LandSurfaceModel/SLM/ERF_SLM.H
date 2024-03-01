@@ -8,6 +8,8 @@
 #include <AMReX_FArrayBox.H>
 #include <AMReX_Geometry.H>
 #include <AMReX_MultiFabUtil.H>
+#include <AMReX_iMultiFab.H>
+#include <AMReX_TableData.H>
 
 #include <ERF_NullSurf.H>
 #include <ERF_Constants.H>
@@ -18,6 +20,7 @@ namespace LsmVar_SLM {
    enum {
       // independent variables
       theta = 0,
+      // inputs from ERF
       tref,            // temperature at reference level
       qref,            // specific humidity at ref
       pref,            // pressure at reference level
@@ -37,6 +40,29 @@ namespace LsmVar_SLM {
       mv,              // vegetation moisture storage
       soilt,           // soil temperature
       soilw,           // soil wetness
+      // soil parameters
+      sand,            // sand percentage
+      clay,            // clay percentage
+      s_depth,         // thickness of each soil layer in meters
+      node_z,          // depth of the center of each soil layer
+      interface_z,     // depth of the soil layer interface
+      soilw_nudge,     // nudging of soilw
+      soilt_nudge,     // nudging of soilt
+      sw_over_sat,     // soilw over saturation
+      soil_relax_hgt,  // depth dependent soil relaxation function
+      // vegetation
+      rootF,           // fraction of total root length of a vegetation in each soil layer
+      w_s_FC,          // wetness at field capacity
+      w_s_WP,          // wetness at wilting point
+      // soil parameters calculated from sand/clay
+      sst_capa,        // heat capacity for soil solids
+      sst_cond,        // heat conductivity of soil solids
+      poro_soil,       // saturation moisture content, porosity
+      theta_FC,        // volumetric moisture content at field capacity
+      theta_WP,        // volumetric moisture content at wilting point
+      m_pot_sat,       // moisture potential at saturation
+      Bconst,          // B constant
+      ks,              // hydraulic conductivity at saturation [m/s]
       // model outputs
       flbu,            // surface u-momentum
       flbv,            // surface v-momentum
@@ -161,6 +187,14 @@ public:
     set_precip_input(const amrex::MultiFab* precip_in) override;
 
 private:
+    void slm_init();
+
+    void init_landtype();
+
+    void init_soil_tw();
+
+    void vege_root_init();
+
     // number of lsm variables (theta)
     int m_lsm_size = 1;
 
@@ -215,5 +249,93 @@ private:
 
     // Thermal diffusivity
     amrex::Real m_d_soil = m_k_soil / m_cp_soil; // [m^2/s]
+
+
+    // Input variables
+    // TODO: move these to inputs parsing
+    int landtype0 = 0; // landtype over whole domain
+
+    amrex::Real LAI0 = 0.0; // default leaf area index
+    amrex::Real clay0 = 0.0; // uniform clay content (%)
+    amrex::Real sand0 = 0.0; // uniform sand content (%)
+    amrex::Real sw0 = 0.0; // uniform soil wetness (fraction)
+    amrex::Real st0 = 0.0; // uniform soil temperature (K)
+
+    //   TODO: implement reading these input files
+    bool readlandtype = false; // read landtype map from file
+    bool readLAI = false; // read LAI file
+    std::string landtypefile;
+    std::string LAIfile;
+
+    bool dosoilwnudging = false;
+    bool dosoiltnudging = false;
+    amrex::Real tausoil = 86400.0;
+
+    amrex::Real mws_mx0 = 50.0; // maximum puddle water storage (mm)
+
+
+    // Model variables
+    //   NOTE: these MultiFabs are defined over the grid only in X and Y (no Z component)
+    amrex::MultiFab t_canop; // canopy leaf temperature
+    amrex::MultiFab mw; // water storage on leaves, kg/m^2 = mm of water
+    amrex::MultiFab mws; // water storage in puddle, kg/m^2 = mm of water
+    amrex::MultiFab t_skin; // skin temperature, surface level viewed from atmosphere
+
+    amrex::MultiFab t_cas; // canopy air space temperature
+    amrex::MultiFab q_cas; // canopy air space specific humidity
+
+    amrex::TableData<amrex::Real, 1> soilw_inc;
+
+    // TODO: placeholder landmask array - should probably use the one defined by ERF
+    amrex::iMultiFab landmask;
+    amrex::iMultiFab landtype; // IGBP landtype (1 to 16)
+    amrex::MultiFab LAI; // leaf area index
+
+    // Vegetation parameter lists
+    amrex::iMultiFab vegetype; // vegetation type (0 - baresoil, non-zero for vegetated)
+    amrex::MultiFab cp_vege; // heat capacity of vegetation
+    amrex::MultiFab z0_sfc; // surface level roughness: for vegetated z0_sfc=z0_vege, for non-vegetated, z0_sfc=z0_soil
+    amrex::MultiFab Khai_L; // leaf distribution factor
+    amrex::MultiFab phi_1;
+    amrex::MultiFab phi_2;
+    amrex::MultiFab IR_emis_vege; // vegetation emissivity for infrared radiation
+    amrex::MultiFab IR_emis_soil; // soil emissivity for infrared radiation
+    amrex::MultiFab ztop; // height of vegetation
+    amrex::MultiFab disp_hgt; // displacement height
+    amrex::MultiFab Rgl; // parameter for stomatal resistance
+    amrex::MultiFab Rc_min; // minimum stomatal resistance
+    amrex::MultiFab hs_rc; // parameter for stomatal resistance
+    amrex::MultiFab rootL; // root length
+    amrex::MultiFab root_a; // coef a for root density
+    amrex::MultiFab root_b; // coef b for root density
+    amrex::MultiFab precip_extinc; // precipitation extinction coef
+    amrex::MultiFab mw_mx; // max of mw
+    amrex::MultiFab mws_mx; // max of mws
+    amrex::MultiFab BAI; // Basal area index, sq.feet/acre
+
+    amrex::TableData<amrex::Real, 1> alpha;
+    amrex::TableData<amrex::Real, 1> beta;
+
+    amrex::MultiFab tau_soil; // soil nudging time in seconds, when dosoiltnudging or dosoilwnudging=true
+
+    amrex::MultiFab soilw_inc_tot;
+
+    amrex::MultiFab ustar, tstar;
+
+
+    // Sensible heat fluxes
+    amrex::MultiFab shf_canop; // flux transfer between canopy and air space [W/m^2]
+    amrex::MultiFab shf_soil; // flux transfer between soil surface and air space [W/m^2]
+    amrex::MultiFab shf_air; // flux transfer between air space and the reference level [W/m^2]
+
+    // Latent heat fluxes
+    amrex::MultiFab lhf_canop;
+    amrex::MultiFab lhf_soil;
+    amrex::MultiFab lhf_air;
+
+    // Albedos
+    amrex::MultiFab albedovis_v, albedonir_v; // visible and NIR albedos for vegetation
+    amrex::MultiFab albedovis_s, albedonir_s; // visible and NIR albedos for soil
+
 };
 #endif
