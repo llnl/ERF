@@ -107,6 +107,9 @@ public:
     Advance (const amrex::Real& dt) override
     {
         m_dt = dt;
+
+        this->init_slm_vars();
+
         this->ComputeFluxes();
         this->AdvanceSLM();
         this->ComputeTsurf();
@@ -195,6 +198,23 @@ private:
 
     void vege_root_init();
 
+    void init_slm_vars();
+
+    void radiative_fluxes(const int i, const int j);
+
+    void transfer_coeff(const int i, const int j);
+
+    void resistances(const int i, const int j);
+
+    void vapor_fluxes(const int i, const int j);
+
+    void soil_water(const int i, const int j);
+
+    void soil_temperature(const int i, const int j);
+
+    amrex::Real fh_calc(const amrex::Real &t, const amrex::Real &mps,
+                        const amrex::Real &sw, const amrex::Real &B);
+
     // number of lsm variables (theta)
     int m_lsm_size = 1;
 
@@ -253,11 +273,11 @@ private:
 
     // Input variables
     // TODO: move these to inputs parsing
-    int landtype0 = 0; // landtype over whole domain
+    int landtype0 = 1; // landtype over whole domain
 
-    amrex::Real LAI0 = 0.0; // default leaf area index
-    amrex::Real clay0 = 0.0; // uniform clay content (%)
-    amrex::Real sand0 = 0.0; // uniform sand content (%)
+    amrex::Real LAI0 = 1.0; // default leaf area index
+    amrex::Real clay0 = 50.0; // uniform clay content (%)
+    amrex::Real sand0 = 50.0; // uniform sand content (%)
     amrex::Real sw0 = 0.0; // uniform soil wetness (fraction)
     amrex::Real st0 = 0.0; // uniform soil temperature (K)
 
@@ -273,6 +293,11 @@ private:
 
     amrex::Real mws_mx0 = 50.0; // maximum puddle water storage (mm)
 
+    amrex::Real tfriz = 273.15;
+
+    amrex::Real pres0 = p_0; // reference surface pressure [Pa]
+
+    amrex::Real cp_water = 4.1796e6; // heat capacity of water [J/m^3K]
 
     // Model variables
     //   NOTE: these MultiFabs are defined over the grid only in X and Y (no Z component)
@@ -291,8 +316,11 @@ private:
     amrex::iMultiFab landtype; // IGBP landtype (1 to 16)
     amrex::MultiFab LAI; // leaf area index
 
+    amrex::MultiFab sstxy;
+
     // Vegetation parameter lists
     amrex::iMultiFab vegetype; // vegetation type (0 - baresoil, non-zero for vegetated)
+    amrex::MultiFab vege_YES; // 0-baresoil, 1-vegetated
     amrex::MultiFab cp_vege; // heat capacity of vegetation
     amrex::MultiFab z0_sfc; // surface level roughness: for vegetated z0_sfc=z0_vege, for non-vegetated, z0_sfc=z0_soil
     amrex::MultiFab Khai_L; // leaf distribution factor
@@ -336,6 +364,16 @@ private:
     // Albedos
     amrex::MultiFab albedovis_v, albedonir_v; // visible and NIR albedos for vegetation
     amrex::MultiFab albedovis_s, albedonir_s; // visible and NIR albedos for soil
+
+
+    // Resistances
+    //   TODO: in the fortran version, these are scalar quantities but are updated over i,j?
+    amrex::MultiFab r_a; // aerodynamic resistance between surface and ref level
+    amrex::MultiFab r_b; // leaf boundary layer resistance
+    amrex::MultiFab r_c; // stomatal resistance
+    amrex::MultiFab r_d; // undercanopy aerodynamic resistance
+    amrex::Real r_litter = 0.0; // not used currently
+
 
 };
 #endif
