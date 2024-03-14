@@ -80,6 +80,11 @@ class NullSurf {
     void
     set_precip_input(const amrex::MultiFab* precip_in) { }
 
+    virtual
+    void
+    set_terrain_inputs(const amrex::MultiFab& sst_in,
+                       const amrex::iMultiFab& lmask_in) { }
+
  private:
     int m_lsm_size = 1;
     amrex::Geometry m_lsm_geom;

@@ -189,6 +189,10 @@ public:
     void
     set_precip_input(const amrex::MultiFab* precip_in) override;
 
+    void
+    set_terrain_inputs(const amrex::MultiFab& sst_in,
+                       const amrex::iMultiFab& lmask_in) override;
+
 private:
     void slm_init();
 

@@ -127,9 +127,16 @@ public:
     }
 
     void set_LSM_precip_input (const int& lev,
-                              const amrex::MultiFab* precip_in)
+                               const amrex::MultiFab* precip_in)
     {
         m_lsm_model[lev]->set_precip_input(precip_in);
+    }
+
+    void set_LSM_terrain_inputs(const int& lev,
+                                const amrex::MultiFab& sst_in,
+                                const amrex::iMultiFab& lmask_in)
+    {
+        m_lsm_model[lev]->set_terrain_inputs(sst_in, lmask_in);
     }
 
 private:

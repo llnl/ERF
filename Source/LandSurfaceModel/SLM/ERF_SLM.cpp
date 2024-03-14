@@ -1000,6 +1000,34 @@ SLM::set_precip_input(const amrex::MultiFab* precip_in)
     }
 }
 
+void
+SLM::set_terrain_inputs(const amrex::MultiFab& sst_in,
+                        const amrex::iMultiFab& lmask_in)
+{
+    auto theta = lsm_fab_vars[LsmVar_SLM::theta];
+
+    // Set SLM SST and land mask input from ERF
+    for ( MFIter mfi(*theta, TileNoZ()); mfi.isValid(); ++mfi) {
+        const auto& box3d = mfi.tilebox();
+
+        // Create a box with the same i,j bounds, but only at z = 0
+        amrex::Box b2d = box3d;
+        b2d.setRange(2, 0);
+
+        auto sst_array = sst_in.array(mfi);
+        auto lmask_array = lmask_in.array(mfi);
+
+        auto slm_sst   = sstxy.array(mfi);
+        auto slm_lmask   = landmask.array(mfi);
+
+        ParallelFor(b2d, [=] AMREX_GPU_DEVICE (int i, int j, int k)
+        {
+            slm_sst(i, j, k) = sst_array(i, j, k, 0);
+            slm_lmask(i, j, k) = lmask_array(i, j, k, 0);
+        });
+    }
+}
+
 
 void SLM::Copy_Lsm_to_State(MultiFab& cons_in)
 {
