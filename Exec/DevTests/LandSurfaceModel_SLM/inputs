@@ -64,6 +64,7 @@ erf.moisture_model = "Kessler"
 
 erf.land_surface_model = "SLM"
 prob.SLM_num_ref_inputs = 1
+prob.SLM_use_inputs = true
 prob.SLM_ref_sounding_file = "sndref"
 prob.SLM_ref_flux_file = "swlw"
 prob.SLM_ref_sst_file = "sfc"

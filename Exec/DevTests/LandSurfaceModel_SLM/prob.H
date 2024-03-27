@@ -48,7 +48,6 @@ public:
         const SolverChoice& sc) override;
 
     void read_SLM_inputs();
-    std::vector<std::vector<amrex::Real>> read_cols(const std::string &fname, const int skip_nlines = 1);
     void read_SLM_sounding_file(const std::string &fname);
     void read_SLM_flux_file(const std::string &fname);
     void read_SLM_sst_file(const std::string &fname);

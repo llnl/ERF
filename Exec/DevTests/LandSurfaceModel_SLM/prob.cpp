@@ -1,4 +1,5 @@
 #include "prob.H"
+#include <SLM.H>
 
 using namespace amrex;
 
@@ -24,72 +25,15 @@ void Problem::read_SLM_inputs()
 {
     // Reads the SLM input sounding file assuming the following fields:
     //  t[day], pres0[mb], tabs[K], q[g/kg], uvel[m/s], vvel[m/s]
-    sounding = read_cols(parms.SLM_ref_sounding_file, 1);
+    sounding = SLM::read_cols(parms.SLM_ref_sounding_file, 1);
 
     // Reads the SLM input flux file assuming the following fields:
     //  t[day], swdn[W/m2], lwdn[W/m2], swup[W/m2], lwup[W/m2]
-    fluxes = read_cols(parms.SLM_ref_flux_file, 1);
+    fluxes = SLM::read_cols(parms.SLM_ref_flux_file, 1);
 
     // Reads the SLM input SST file assuming the following fields:
     // t[day], sst[K], precip[mm/s]
-    sst = read_cols(parms.SLM_ref_sst_file, 1);
-}
-
-/**
- * Read columns of data from a file, returning each column in a vector.
- */
-std::vector<std::vector<amrex::Real>> Problem::read_cols(const std::string &fname, const int skip_nlines)
-{
-    std::ifstream ifs(fname);
-    if (!ifs.is_open())
-    {
-        amrex::Error("Error opening input file " + fname);
-    }
-
-    std::vector<std::vector<amrex::Real>> datasets;
-    std::string line;
-    int i = 0;
-    int ncols = -1;
-
-    while (std::getline(ifs, line))
-    {
-        i++;
-        if (i <= skip_nlines) continue;
-
-        std::istringstream iss(line);
-
-        amrex::Real tmp;
-        // Get the number of columns in the file
-        if (ncols == -1) {
-            int j = 0;
-            while (iss >> tmp) {
-                datasets.push_back(std::vector<amrex::Real>());
-                j+= 1;
-            }
-
-            ncols = j;
-            iss = std::istringstream(line);
-
-            amrex::Print() << "-> got " << std::to_string(j) << " columns\n";
-        }
-
-        int j = 0;
-        while (iss >> tmp) {
-            // verify each line has the same number of columns
-            if (j > ncols) {
-              amrex::Error(
-                "Error reading file '" + fname + "': expected line " +
-                std::to_string(i) + " to have " + std::to_string(ncols) +
-                " columns, but got " + std::to_string(j));
-            }
-            datasets[j].push_back(tmp);
-            j+= 1;
-        }
-    }
-
-    ifs.close();
-
-    return datasets;
+    sst = SLM::read_cols(parms.SLM_ref_sst_file, 1);
 }
 
 void

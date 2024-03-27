@@ -10,6 +10,7 @@
 #include <AMReX_MultiFabUtil.H>
 #include <AMReX_iMultiFab.H>
 #include <AMReX_TableData.H>
+#include <AMReX_ParmParse.H>
 
 #include <ERF_NullSurf.H>
 #include <ERF_Constants.H>
@@ -193,7 +194,12 @@ public:
     set_terrain_inputs(const amrex::MultiFab& sst_in,
                        const amrex::iMultiFab& lmask_in) override;
 
-private:
+    static std::vector<std::vector<amrex::Real>>
+    read_cols(const std::string& fname, const int skip_nlines = 1);
+
+  private:
+    void init_from_file();
+
     void slm_init();
 
     void init_landtype();
@@ -379,5 +385,9 @@ private:
     amrex::Real r_litter = 0.0; // not used currently
 
 
+    // Variables related to setting initial conditions (for testing purposes only)
+    bool set_from_file = false;
+    int num_ref_inputs = 1;
+    std::string ref_sounding_file, ref_flux_file, ref_sst_file;
 };
 #endif

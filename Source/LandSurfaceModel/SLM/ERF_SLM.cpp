@@ -141,7 +141,51 @@ SLM::Init (const MultiFab& cons_in,
     beta.resize({klo_lsm},  {khi_lsm});
 
 
+    // Initialize SLM from inputs if specified
+    init_from_file();
+
     slm_init();
+}
+
+/**
+ * Initialize SLM from input data - used for testing only
+ */
+void SLM::init_from_file()
+{
+    ParmParse pp("prob");
+    pp.query("SLM_use_inputs", set_from_file);
+
+    if (set_from_file)
+    {
+        pp.query("SLM_num_ref_inputs", num_ref_inputs);
+        pp.query("SLM_ref_sounding_file", ref_sounding_file);
+        pp.query("SLM_ref_flux_file", ref_flux_file);
+        pp.query("SLM_ref_sst_file", ref_sst_file);
+
+        //std::vector<std::vector<amrex::Real>> sounding;
+        std::vector<std::vector<amrex::Real>> fluxes;
+        std::vector<std::vector<amrex::Real>> sst;
+
+        // Reads the SLM input flux file assuming the following fields:
+        //  t[day], swdn[W/m2], lwdn[W/m2], swup[W/m2], lwup[W/m2]
+        fluxes = SLM::read_cols(ref_flux_file, 1);
+
+        // Reads the SLM input SST file assuming the following fields:
+        // t[day], sst[K], precip[mm/s]
+        sst = SLM::read_cols(ref_sst_file, 1);
+
+        lsm_fab_flux[LsmVar_SLM::precipref]->setVal(sst[2][0]);
+
+        lsm_fab_vars[LsmVar_SLM::swdsvisxyref]->setVal(fluxes[1][0]);
+        lsm_fab_vars[LsmVar_SLM::swdsnirxyref]->setVal(0.0);
+        lsm_fab_vars[LsmVar_SLM::swdsvisdxyref]->setVal(0.0);
+        lsm_fab_vars[LsmVar_SLM::swdsnirdxyref]->setVal(0.0);
+
+        lsm_fab_vars[LsmVar_SLM::lwref]->setVal(fluxes[2][0]);
+        lsm_fab_vars[LsmVar_SLM::coszrsxy]->setVal(1.0);
+    
+        sstxy.setVal(sst[1][0]);
+    }
 }
 
 /**
@@ -1055,4 +1099,61 @@ void SLM::Copy_Lsm_to_State(MultiFab& cons_in)
 
     // Fill interior ghost cells and periodic boundaries
     cons_in.FillBoundary(m_geom.periodicity());
+}
+
+/**
+ * Read columns of data from a file, returning each column in a vector.
+ */
+std::vector<std::vector<amrex::Real>> SLM::read_cols(const std::string &fname, const int skip_nlines)
+{
+    std::ifstream ifs(fname);
+    if (!ifs.is_open())
+    {
+        amrex::Error("Error opening input file " + fname);
+    }
+
+    std::vector<std::vector<amrex::Real>> datasets;
+    std::string line;
+    int i = 0;
+    int ncols = -1;
+
+    while (std::getline(ifs, line))
+    {
+        i++;
+        if (i <= skip_nlines) continue;
+
+        std::istringstream iss(line);
+
+        amrex::Real tmp;
+        // Get the number of columns in the file
+        if (ncols == -1) {
+            int j = 0;
+            while (iss >> tmp) {
+                datasets.push_back(std::vector<amrex::Real>());
+                j+= 1;
+            }
+
+            ncols = j;
+            iss = std::istringstream(line);
+
+            amrex::Print() << "-> got " << std::to_string(j) << " columns\n";
+        }
+
+        int j = 0;
+        while (iss >> tmp) {
+            // verify each line has the same number of columns
+            if (j > ncols) {
+              amrex::Error(
+                "Error reading file '" + fname + "': expected line " +
+                std::to_string(i) + " to have " + std::to_string(ncols) +
+                " columns, but got " + std::to_string(j));
+            }
+            datasets[j].push_back(tmp);
+            j+= 1;
+        }
+    }
+
+    ifs.close();
+
+    return datasets;
 }
