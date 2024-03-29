@@ -14,7 +14,7 @@ void ERF::advance_lsm (int lev,
         lsm.set_LSM_flux_inputs(lev, sw_lw_fluxes[lev].get(), solar_zenith[lev].get());
 #endif
         lsm.set_LSM_precip_input(lev, precip[lev].get());
-        lsm.set_LSM_terrain_inputs(lev, *sst_lev[lev][0], *lmask_lev[lev][0]); // TODO: check whic h index for ntimes?
+        lsm.set_LSM_terrain_inputs(lev, sst_lev, lmask_lev);
         lsm.Advance(lev, dt_advance);
         lsm.Update_State_Vars_Lev(lev, cons);
     }

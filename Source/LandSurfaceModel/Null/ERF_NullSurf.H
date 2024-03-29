@@ -82,8 +82,8 @@ class NullSurf {
 
     virtual
     void
-    set_terrain_inputs(const amrex::MultiFab& sst_in,
-                       const amrex::iMultiFab& lmask_in) { }
+    set_terrain_inputs(const amrex::Vector<std::unique_ptr<amrex::MultiFab>>& sst_in,
+                       const amrex::Vector<std::unique_ptr<amrex::iMultiFab>>& lmask_in) { }
 
  private:
     int m_lsm_size = 1;

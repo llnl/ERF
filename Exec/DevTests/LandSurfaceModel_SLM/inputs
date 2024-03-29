@@ -58,7 +58,7 @@ erf.Cs              = 0.1
 #erf.pbl_type        = "MYNN2.5"
 #erf.QKE_0           = 0.5
 
-erf.use_terrain = false
+erf.use_terrain = true
 
 erf.moisture_model = "Kessler"
 

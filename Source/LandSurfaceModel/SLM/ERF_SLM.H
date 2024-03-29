@@ -132,8 +132,9 @@ public:
     amrex::MultiFab*
     Lsm_Data_Ptr (const int& varIdx) override
     {
+        AMREX_ALWAYS_ASSERT(varIdx < SLM::m_lsm_size && varIdx >= 0);
         int lsmIdx = LsmVarMap[varIdx];
-        AMREX_ALWAYS_ASSERT(lsmIdx < SLM::m_lsm_size && lsmIdx>=0);
+        AMREX_ALWAYS_ASSERT(lsmIdx < LsmVar_SLM::NumVars && lsmIdx>=0);
         return lsm_fab_vars[lsmIdx].get();
     }
 
@@ -141,8 +142,9 @@ public:
     amrex::MultiFab*
     Lsm_Flux_Ptr (const int& varIdx) override
     {
+        AMREX_ALWAYS_ASSERT(varIdx < SLM::m_lsm_size && varIdx >= 0);
         int lsmIdx = LsmVarMap[varIdx];
-        AMREX_ALWAYS_ASSERT(lsmIdx < SLM::m_lsm_size && lsmIdx>=0);
+        AMREX_ALWAYS_ASSERT(lsmIdx < LsmVar_SLM::NumVars && lsmIdx>=0);
         return lsm_fab_flux[lsmIdx].get();
     }
 
@@ -158,9 +160,8 @@ public:
     std::string
     Lsm_VarName (const int& varIdx) override
     {
-        int lsmIdx = LsmVarMap[varIdx];
-        AMREX_ALWAYS_ASSERT(lsmIdx < SLM::m_lsm_size && lsmIdx>=0);
-        return LsmVarName[lsmIdx];
+        AMREX_ALWAYS_ASSERT(varIdx < SLM::m_lsm_size && varIdx >= 0);
+        return LsmVarName[varIdx];
     }
 
     void
@@ -191,8 +192,8 @@ public:
     set_precip_input(const amrex::MultiFab* precip_in) override;
 
     void
-    set_terrain_inputs(const amrex::MultiFab& sst_in,
-                       const amrex::iMultiFab& lmask_in) override;
+    set_terrain_inputs(const amrex::Vector<std::unique_ptr<amrex::MultiFab>>& sst_in,
+                       const amrex::Vector<std::unique_ptr<amrex::iMultiFab>>& lmask_in) override;
 
     static std::vector<std::vector<amrex::Real>>
     read_cols(const std::string& fname, const int skip_nlines = 1);
@@ -226,7 +227,7 @@ public:
                         const amrex::Real &sw, const amrex::Real &B);
 
     // number of lsm variables (theta)
-    int m_lsm_size = 1;
+    int m_lsm_size = 14;
 
     // LsmVar map (state indices -> LsmVar enum)
     amrex::Vector<int> LsmVarMap;
@@ -289,7 +290,10 @@ public:
     amrex::Real clay0 = 50.0; // uniform clay content (%)
     amrex::Real sand0 = 50.0; // uniform sand content (%)
     amrex::Real sw0 = 0.0; // uniform soil wetness (fraction)
-    amrex::Real st0 = 0.0; // uniform soil temperature (K)
+    amrex::Real st0 = 300.0; // uniform soil temperature (K)
+
+    amrex::Real tabs_s = 0.0; // surface temperature (K)
+    amrex::Real t00 = 300.0; // constant offset for sstxy
 
     //   TODO: implement reading these input files
     bool readlandtype = false; // read landtype map from file
@@ -360,6 +364,10 @@ public:
 
     amrex::MultiFab ustar, tstar;
 
+    amrex::Real mom_trans_coef; // surface momentum transfer coef.
+    amrex::Real heat_trans_coef; // surface heat transfer coef.
+    amrex::Real xsi; // M-O stability parameter
+    amrex::Real RiB; // bulk Richardson number
 
     // Sensible heat fluxes
     amrex::MultiFab shf_canop; // flux transfer between canopy and air space [W/m^2]
@@ -382,6 +390,7 @@ public:
     amrex::MultiFab r_b; // leaf boundary layer resistance
     amrex::MultiFab r_c; // stomatal resistance
     amrex::MultiFab r_d; // undercanopy aerodynamic resistance
+    amrex::Real r_soil = 0.0;
     amrex::Real r_litter = 0.0; // not used currently
 
 
