@@ -221,7 +221,7 @@ public:
 
     void soil_water(const int i, const int j);
 
-    void soil_temperature(const int i, const int j);
+    void soil_temperature(const amrex::MFIter &mfi);
 
     amrex::Real fh_calc(const amrex::Real &t, const amrex::Real &mps,
                         const amrex::Real &sw, const amrex::Real &B);
@@ -393,6 +393,9 @@ public:
     amrex::Real r_soil = 0.0;
     amrex::Real r_litter = 0.0; // not used currently
 
+
+    amrex::MultiFab net_rad_canopy; // net absorbed shortwave radiation by canopy (net_rad(1))
+    amrex::MultiFab wet_canop; // wetted portion of canopy
 
     // Variables related to setting initial conditions (for testing purposes only)
     bool set_from_file = false;
