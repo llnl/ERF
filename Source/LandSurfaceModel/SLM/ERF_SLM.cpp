@@ -21,17 +21,24 @@ SLM::Init (const MultiFab& cons_in,
     klo_lsm    = khi_lsm - m_nz_lsm + 1;
 
     LsmVarMap.resize(m_lsm_size);
-    LsmVarMap = {LsmVar_SLM::theta, LsmVar_SLM::tsurf, LsmVar_SLM::tv,
-                 LsmVar_SLM::mv,    LsmVar_SLM::soilt, LsmVar_SLM::soilw,
-                 LsmVar_SLM::sand,  LsmVar_SLM::clay,  LsmVar_SLM::s_depth,
-                 LsmVar_SLM::flbu,  LsmVar_SLM::flbv,  LsmVar_SLM::flbq,
-                 LsmVar_SLM::flbt,  LsmVar_SLM::prsfc};
+    LsmVarMap = {
+      LsmVar_SLM::theta,        LsmVar_SLM::tsurf, LsmVar_SLM::tv,
+      LsmVar_SLM::mv,           LsmVar_SLM::soilt, LsmVar_SLM::soilw,
+      LsmVar_SLM::sand,         LsmVar_SLM::clay,  LsmVar_SLM::s_depth,
+      LsmVar_SLM::flbu,         LsmVar_SLM::flbv,  LsmVar_SLM::flbq,
+      LsmVar_SLM::flbt,         LsmVar_SLM::prsfc, LsmVar_SLM::precipref,
+      LsmVar_SLM::swdsvisxyref, LsmVar_SLM::lwref, LsmVar_SLM::tref,
+      LsmVar_SLM::uref,         LsmVar_SLM::vref,  LsmVar_SLM::dref,
+      LsmVar_SLM::qref,         LsmVar_SLM::pref};
 
     LsmVarName.resize(m_lsm_size);
-    LsmVarName = {"theta",          "tsurf",      "tveg",      "mv",
-                  "tsoil",          "wsoil",      "sand",      "clay",
-                  "soil_thickness", "surface_u",  "surface_v", "surface_vapor",
-                  "surface_heat",   "precip_soil"};
+    LsmVarName = {
+      "theta",          "tsurf",       "tveg",       "mv",
+      "tsoil",          "wsoil",       "sand",       "clay",
+      "soil_thickness", "surface_u",   "surface_v",  "surface_vapor",
+      "surface_heat",   "precip_soil", "ref_precip", "SW_dw_dir_vis",
+      "LW_dw",          "ref_t",       "ref_u",      "ref_v",
+      "ref_d",          "ref_q",       "ref_p"};
 
     // NOTE: All boxes in ba extend from zlo to zhi, so this transform is valid.
     //       If that were to change, the dm and new ba are no longer valid and
@@ -188,21 +195,23 @@ void SLM::init_from_file()
 
         lsm_fab_vars[LsmVar_SLM::precipref]->setVal(sst[2][0]);
 
-        lsm_fab_vars[LsmVar_SLM::swdsvisxyref]->setVal(fluxes[1][15]);
+        lsm_fab_vars[LsmVar_SLM::swdsvisxyref]->setVal(fluxes[1][0]);
         lsm_fab_vars[LsmVar_SLM::swdsnirxyref]->setVal(0.0);
         lsm_fab_vars[LsmVar_SLM::swdsvisdxyref]->setVal(0.0);
         lsm_fab_vars[LsmVar_SLM::swdsnirdxyref]->setVal(0.0);
 
         lsm_fab_vars[LsmVar_SLM::lwref]->setVal(fluxes[2][0]);
         lsm_fab_vars[LsmVar_SLM::coszrsxy]->setVal(1.0);
-    
+
         sstxy.setVal(sst[1][0]);
 
         // TODO: these are set here only for testing!
         net_rad_canopy.setVal(lsm_fab_vars[LsmVar_SLM::swdsvisxyref]->max(0));
         shf_soil.setVal(0.0);
         lhf_soil.setVal(0.0);
-    }
+
+        time = sst[0][0];
+        time_index = 0;
 }
 
 /**
@@ -590,6 +599,46 @@ void SLM::init_slm_vars()
 
     ustar.setVal(0.1);
     tstar.setVal(0.0);
+
+    if (set_from_file)
+    {
+        amrex::Real t0 = sst[0][time_index];
+        amrex::Real t1 = sst[0][time_index+1];
+        if (time > t1)
+        {
+            // shift time index to next window
+            time_index = std::min(time_index + 1, int(sst[0].size() - 1));
+            t0 = sst[0][time_index];
+            t1 = sst[0][time_index+1];
+        }
+
+        amrex::Real precip_interp = linear_interp(t0, t1, time, sst[2][time_index], sst[2][time_index + 1]);
+        amrex::Real sw_interp = linear_interp(t0, t1, time, fluxes[1][time_index], fluxes[1][time_index + 1]);
+        amrex::Real lw_interp = linear_interp(t0, t1, time, fluxes[2][time_index], fluxes[2][time_index + 1]);
+        amrex::Real sst_interp = linear_interp(t0, t1, time, sst[1][time_index], sst[1][time_index + 1]);
+        lsm_fab_vars[LsmVar_SLM::precipref]->setVal(precip_interp);
+
+        lsm_fab_vars[LsmVar_SLM::swdsvisxyref]->setVal(sw_interp);
+        lsm_fab_vars[LsmVar_SLM::swdsnirxyref]->setVal(0.0);
+        lsm_fab_vars[LsmVar_SLM::swdsvisdxyref]->setVal(0.0);
+        lsm_fab_vars[LsmVar_SLM::swdsnirdxyref]->setVal(0.0);
+
+        lsm_fab_vars[LsmVar_SLM::lwref]->setVal(lw_interp);
+        lsm_fab_vars[LsmVar_SLM::coszrsxy]->setVal(1.0);
+
+        sstxy.setVal(sst_interp);
+
+        // TODO: these are set here only for testing!
+        net_rad_canopy.setVal(sw_interp + lw_interp);
+        shf_soil.setVal(0.0);
+        lhf_soil.setVal(0.0);
+
+        // Increment time used when reading input from testing files.
+        //  Note: file times are in days, so we convert our dt to days
+        time += (m_dt / 86400.0);
+
+
+    }
 
     // Initializes SLM quantities from reference values tr, ts, qr at each timestep
     for ( MFIter mfi(landtype, TileNoZ()); mfi.isValid(); ++mfi) {
@@ -1142,6 +1191,19 @@ amrex::Real SLM::fh_calc(const amrex::Real &t, const amrex::Real &mps, const amr
 {
     amrex::Real moist_pot1 = std::max(-100000.0, mps / (std::pow(std::max(0.0001, sw), B)) / 1000.0);
     return std::min(1.0, std::exp(moist_pot1*CONST_GRAV/R_v/t));
+}
+
+amrex::Real
+SLM::linear_interp(const amrex::Real t0, const amrex::Real t1, const amrex::Real t,
+                   const amrex::Real x, const amrex::Real y)
+{
+  // returns a value that is linearly interpolated between x and y at time t. x
+  // is at t=t0, y is at t=t1.
+  if (t0 == t1 || t > t1) {
+    return y;
+  }
+  const amrex::Real dt = (t - t0) / (t1 - t0);
+  return x + (y - x) * dt;
 }
 
 void SLM::Copy_State_to_Lsm(const MultiFab& cons_in, const MultiFab& u_in, const MultiFab& v_in)

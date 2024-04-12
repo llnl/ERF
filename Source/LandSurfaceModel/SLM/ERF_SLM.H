@@ -226,8 +226,12 @@ public:
     amrex::Real fh_calc(const amrex::Real &t, const amrex::Real &mps,
                         const amrex::Real &sw, const amrex::Real &B);
 
+    amrex::Real linear_interp(const amrex::Real t0, const amrex::Real t1,
+                              const amrex::Real t, const amrex::Real x,
+                              const amrex::Real y);
+
     // number of lsm variables (theta)
-    int m_lsm_size = 14;
+    int m_lsm_size = 23;
 
     // LsmVar map (state indices -> LsmVar enum)
     amrex::Vector<int> LsmVarMap;
@@ -401,5 +405,9 @@ public:
     bool set_from_file = false;
     int num_ref_inputs = 1;
     std::string ref_sounding_file, ref_flux_file, ref_sst_file;
+    std::vector<std::vector<amrex::Real>> fluxes;
+    std::vector<std::vector<amrex::Real>> sst;
+    int time_index = 0;
+    amrex::Real time = 0.0;
 };
 #endif
