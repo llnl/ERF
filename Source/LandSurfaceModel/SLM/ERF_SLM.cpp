@@ -181,9 +181,9 @@ void SLM::init_from_file()
         pp.query("SLM_ref_flux_file", ref_flux_file);
         pp.query("SLM_ref_sst_file", ref_sst_file);
 
-        //std::vector<std::vector<amrex::Real>> sounding;
-        std::vector<std::vector<amrex::Real>> fluxes;
-        std::vector<std::vector<amrex::Real>> sst;
+        ParmParse parms("slm");
+        parms.query("start_time", start_time);
+        parms.query("time_unit", time_unit);
 
         // Reads the SLM input flux file assuming the following fields:
         //  t[day], swdn[W/m2], lwdn[W/m2], swup[W/m2], lwup[W/m2]
@@ -193,25 +193,58 @@ void SLM::init_from_file()
         // t[day], sst[K], precip[mm/s]
         sst = SLM::read_cols(ref_sst_file, 1);
 
-        lsm_fab_vars[LsmVar_SLM::precipref]->setVal(sst[2][0]);
+        // Reads the SLM input sounding file assuming the following fields:
+        //  t[day], pres0[mb], tabs[K], q[g/kg], uvel[m/s], vvel[m/s]
+        sounding = SLM::read_cols(ref_sounding_file, 1);
 
-        lsm_fab_vars[LsmVar_SLM::swdsvisxyref]->setVal(fluxes[1][0]);
+        // setup initial time value and input file indices
+        if (start_time != -1.0) {
+            // if the user provided a start time, find which row index it occurs at in the file
+            auto it = std::find(sst[0].begin(), sst[0].end(), start_time);
+            if (it != sst[0].end())
+            {
+                time_index = it - sst[0].begin();
+                time = sst[0][time_index];
+
+            } else {
+                amrex::Error("SLM: invalid start_time value: could not find time value in input file!");
+            }
+        } else {
+            // if the user did not provide a starting time, then default to the first time in the file
+            time = sst[0][0];
+            time_index = 0;
+        }
+
+        start_time_index = time_index;
+
+        lsm_fab_vars[LsmVar_SLM::precipref]->setVal(sst[2][time_index]);
+
+        lsm_fab_vars[LsmVar_SLM::swdsvisxyref]->setVal(fluxes[1][time_index]);
         lsm_fab_vars[LsmVar_SLM::swdsnirxyref]->setVal(0.0);
         lsm_fab_vars[LsmVar_SLM::swdsvisdxyref]->setVal(0.0);
         lsm_fab_vars[LsmVar_SLM::swdsnirdxyref]->setVal(0.0);
 
-        lsm_fab_vars[LsmVar_SLM::lwref]->setVal(fluxes[2][0]);
+        lsm_fab_vars[LsmVar_SLM::lwref]->setVal(fluxes[2][time_index]);
         lsm_fab_vars[LsmVar_SLM::coszrsxy]->setVal(1.0);
 
-        sstxy.setVal(sst[1][0]);
+        const amrex::Real pres = sounding[1][time_index] * 100.0;
+        const amrex::Real qv = sounding[3][time_index] / 1000.0;
+        const amrex::Real theta = getThgivenPandT(sounding[2][time_index], pres, R_d / Cp_d);
+        lsm_fab_vars[LsmVar_SLM::tref]->setVal(sounding[2][time_index]);
+        lsm_fab_vars[LsmVar_SLM::qref]->setVal(qv);
+        lsm_fab_vars[LsmVar_SLM::pref]->setVal(pres);
+        lsm_fab_vars[LsmVar_SLM::dref]->setVal(getRhogivenThetaPress(theta, pres, R_d / Cp_d, qv));
+        lsm_fab_vars[LsmVar_SLM::uref]->setVal(sounding[4][time_index]);
+        lsm_fab_vars[LsmVar_SLM::vref]->setVal(sounding[5][time_index]);
+
+        sstxy.setVal(sst[1][time_index]);
 
         // TODO: these are set here only for testing!
         net_rad_canopy.setVal(lsm_fab_vars[LsmVar_SLM::swdsvisxyref]->max(0));
         shf_soil.setVal(0.0);
         lhf_soil.setVal(0.0);
 
-        time = sst[0][0];
-        time_index = 0;
+    }
 }
 
 /**
@@ -604,18 +637,29 @@ void SLM::init_slm_vars()
     {
         amrex::Real t0 = sst[0][time_index];
         amrex::Real t1 = sst[0][time_index+1];
-        if (time > t1)
+        while (time >= t1)
         {
+            int prev_index = time_index;
             // shift time index to next window
-            time_index = std::min(time_index + 1, int(sst[0].size() - 1));
+            time_index = std::min(time_index + 1, int(sst[0].size() - start_time_index - 2));
             t0 = sst[0][time_index];
             t1 = sst[0][time_index+1];
+            if (prev_index == time_index) {
+                break;
+            }
         }
 
+        // interpolate values from input files based on the current time
         amrex::Real precip_interp = linear_interp(t0, t1, time, sst[2][time_index], sst[2][time_index + 1]);
         amrex::Real sw_interp = linear_interp(t0, t1, time, fluxes[1][time_index], fluxes[1][time_index + 1]);
         amrex::Real lw_interp = linear_interp(t0, t1, time, fluxes[2][time_index], fluxes[2][time_index + 1]);
         amrex::Real sst_interp = linear_interp(t0, t1, time, sst[1][time_index], sst[1][time_index + 1]);
+
+        amrex::Real p_interp = linear_interp(t0, t1, time, sounding[1][time_index], sounding[1][time_index + 1]);
+        amrex::Real t_interp = linear_interp(t0, t1, time, sounding[2][time_index], sounding[2][time_index + 1]);
+        amrex::Real q_interp = linear_interp(t0, t1, time, sounding[3][time_index], sounding[3][time_index + 1]);
+        amrex::Real u_interp = linear_interp(t0, t1, time, sounding[4][time_index], sounding[4][time_index + 1]);
+        amrex::Real v_interp = linear_interp(t0, t1, time, sounding[5][time_index], sounding[5][time_index + 1]);
         lsm_fab_vars[LsmVar_SLM::precipref]->setVal(precip_interp);
 
         lsm_fab_vars[LsmVar_SLM::swdsvisxyref]->setVal(sw_interp);
@@ -626,6 +670,16 @@ void SLM::init_slm_vars()
         lsm_fab_vars[LsmVar_SLM::lwref]->setVal(lw_interp);
         lsm_fab_vars[LsmVar_SLM::coszrsxy]->setVal(1.0);
 
+        const amrex::Real pres = p_interp * 100.0;
+        const amrex::Real qv = q_interp / 1000.0;
+        const amrex::Real theta = getThgivenPandT(t_interp, pres, R_d / Cp_d);
+        lsm_fab_vars[LsmVar_SLM::tref]->setVal(t_interp);
+        lsm_fab_vars[LsmVar_SLM::qref]->setVal(qv);
+        lsm_fab_vars[LsmVar_SLM::pref]->setVal(pres);
+        lsm_fab_vars[LsmVar_SLM::dref]->setVal(getRhogivenThetaPress(theta, pres, R_d / Cp_d, qv));
+        lsm_fab_vars[LsmVar_SLM::uref]->setVal(u_interp);
+        lsm_fab_vars[LsmVar_SLM::vref]->setVal(v_interp);
+
         sstxy.setVal(sst_interp);
 
         // TODO: these are set here only for testing!
@@ -635,9 +689,7 @@ void SLM::init_slm_vars()
 
         // Increment time used when reading input from testing files.
         //  Note: file times are in days, so we convert our dt to days
-        time += (m_dt / 86400.0);
-
-
+        time += (m_dt * (time_unit / 86400.0));
     }
 
     // Initializes SLM quantities from reference values tr, ts, qr at each timestep
@@ -1180,7 +1232,7 @@ void SLM::soil_temperature(const amrex::MFIter &mfi)
 
         // (n+1) time step soil temperature:
         soilt_arr(i, j, klo_lsm) = d_beta[m_nz_lsm-1];
-        for (int k = m_nz_lsm - 1; k >= 0; k--) {
+        for (int k = m_nz_lsm - 2; k >= 0; k--) {
             const int lsm_k = khi_lsm - k;
             soilt_arr(i, j, lsm_k) = d_beta[k] - d_alpha[k] * soilt_arr(i, j, lsm_k - 1);
         }

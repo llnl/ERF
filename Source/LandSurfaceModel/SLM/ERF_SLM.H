@@ -405,9 +405,14 @@ public:
     bool set_from_file = false;
     int num_ref_inputs = 1;
     std::string ref_sounding_file, ref_flux_file, ref_sst_file;
+    std::vector<std::vector<amrex::Real>> sounding;
     std::vector<std::vector<amrex::Real>> fluxes;
     std::vector<std::vector<amrex::Real>> sst;
     int time_index = 0;
+    int start_time_index = 0;
     amrex::Real time = 0.0;
+
+    amrex::Real start_time = -1.0;
+    amrex::Real time_unit = 1.0;
 };
 #endif
