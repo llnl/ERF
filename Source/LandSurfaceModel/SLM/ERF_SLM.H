@@ -310,12 +310,12 @@ public:
 
     // Input variables
     // TODO: move these to inputs parsing
-    int landtype0 = 1; // landtype over whole domain
+    int landtype0 = 16; // landtype over whole domain
 
-    amrex::Real LAI0 = 1.0; // default leaf area index
+    amrex::Real LAI0 = 0.0; // default leaf area index
     amrex::Real clay0 = 50.0; // uniform clay content (%)
     amrex::Real sand0 = 50.0; // uniform sand content (%)
-    amrex::Real sw0 = 0.25; // uniform soil wetness (fraction)
+    amrex::Real sw0 = 0.50; // uniform soil wetness (fraction)
     amrex::Real st0 = 300.0; // uniform soil temperature (K)
 
     amrex::Real tabs_s = 0.0; // surface temperature (K)
@@ -331,9 +331,9 @@ public:
     bool dosoiltnudging = false;
     amrex::Real tausoil = 86400.0;
 
-    amrex::Real mws_mx0 = 50.0; // maximum puddle water storage (mm)
-
+    amrex::Real z0_soil = 0.0387; // baresoil roughness length (m)
     amrex::Real tfriz = 273.15;
+    amrex::Real mws_mx0 = 50.0; // maximum puddle water storage (mm)
 
     amrex::Real pres0 = p_0; // reference surface pressure [Pa]
 

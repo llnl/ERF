@@ -455,6 +455,24 @@ void SLM::init_landtype()
                     BAI_arr(i, j, 0) = 100.;
                     vegetype_arr(i, j, 0) = 1;
                     break;
+                case 16: // baresoil
+                    albedovis_v_arr(i, j, 0) = 0.0; // actually depends on moisture content
+                    albedonir_v_arr(i, j, 0) = 0.0;
+                    albedovis_s_arr(i, j, 0) = 0.19;
+                    albedonir_s_arr(i, j, 0) = 0.38;
+                    ztop_arr(i, j, 0) = 0.;
+                    disp_hgt_arr(i, j, 0) = 0.0;
+                    z0_sfc_arr(i, j, 0) = z0_soil;
+                    Khai_L_arr(i, j, 0) = 0.;
+                    rootL_arr(i, j, 0) = 0.;
+                    root_a_arr(i, j, 0) = 0.;
+                    root_b_arr(i, j, 0) = 0.;
+                    Rc_min_arr(i, j, 0) = 0.;
+                    Rgl_arr(i, j, 0) = 0.;
+                    hs_rc_arr(i, j, 0) = 0.;
+                    BAI_arr(i, j, 0) = 0.;
+                    vegetype_arr(i, j, 0) = 0;
+                    break;
                 default:
                     // TODO: check if AMReX::Abort can be called inside ParFor?
                     amrex::Abort("landtype invalid for i = " + std::to_string(i) + " j = " + std::to_string(j));
@@ -604,17 +622,17 @@ void SLM::vege_root_init()
                     {
                         rootF_arr(i, j, k) = rootF_arr(i, j, k) - rootF_arr(i, j, k + 1);
                     }
-                }
 
-                // to ensure total root density equals 1
-                amrex::Real new_root_density = 0.0;
-                for (int k = khi_lsm; k >= nrootind; k--)
-                {
-                    rootF_arr(i, j, k) = rootF_arr(i, j, k) / tot_root_density;
-                    new_root_density += rootF_arr(i, j, k);
-                }
+                    // to ensure total root density equals 1
+                    amrex::Real new_root_density = 0.0;
+                    for (int k = khi_lsm; k >= nrootind; k--)
+                    {
+                        rootF_arr(i, j, k) = rootF_arr(i, j, k) / tot_root_density;
+                        new_root_density += rootF_arr(i, j, k);
+                    }
 
-                AMREX_ASSERT_WITH_MESSAGE(std::abs(new_root_density - 1.0) < 1.0e-12, "total root density should equal 1.0");
+                    AMREX_ASSERT_WITH_MESSAGE(std::abs(new_root_density - 1.0) < 1.0e-12, "total root density should equal 1.0");
+                }
             }
         });
     }
