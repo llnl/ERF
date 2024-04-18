@@ -74,6 +74,28 @@ namespace LsmVar_SLM {
   };
 }
 
+namespace SLM_NetRad {
+   enum {
+     net_swup1 = 0,
+     net_swup2,
+     net_swdn1,
+     net_swdn2,
+     net_sw1,
+     net_sw2,
+     tir1,
+     tir2,
+     net_lwup1,
+     net_lwup2,
+     net_lwdn1,
+     net_lwdn2,
+     net_lw1,
+     net_lw2,
+     net_rad1,
+     net_rad2,
+     NumVars
+   };
+}
+
 /* See Chen & Dudhia (2001) https://doi.org/10.1175/1520-0493(2001)129<0569:CAALSH>2.0.CO;2 */
 class SLM : public NullSurf {
 
@@ -211,7 +233,7 @@ public:
 
     void init_slm_vars();
 
-    void radiative_fluxes(const int i, const int j);
+    void radiative_fluxes(const amrex::MFIter &mfi);
 
     void transfer_coeff(const int i, const int j);
 
@@ -231,7 +253,7 @@ public:
                               const amrex::Real y);
 
     // number of lsm variables (theta)
-    int m_lsm_size = 23;
+    int m_lsm_size = 26;
 
     // LsmVar map (state indices -> LsmVar enum)
     amrex::Vector<int> LsmVarMap;
@@ -293,7 +315,7 @@ public:
     amrex::Real LAI0 = 1.0; // default leaf area index
     amrex::Real clay0 = 50.0; // uniform clay content (%)
     amrex::Real sand0 = 50.0; // uniform sand content (%)
-    amrex::Real sw0 = 0.0; // uniform soil wetness (fraction)
+    amrex::Real sw0 = 0.25; // uniform soil wetness (fraction)
     amrex::Real st0 = 300.0; // uniform soil temperature (K)
 
     amrex::Real tabs_s = 0.0; // surface temperature (K)
@@ -316,6 +338,8 @@ public:
     amrex::Real pres0 = p_0; // reference surface pressure [Pa]
 
     amrex::Real cp_water = 4.1796e6; // heat capacity of water [J/m^3K]
+
+    amrex::Real sigma = 5.67e-8; // Stefen-Boltzmann constant [W/m^2/K^4]
 
     // Model variables
     //   NOTE: these MultiFabs are defined over the grid only in X and Y (no Z component)
@@ -398,7 +422,7 @@ public:
     amrex::Real r_litter = 0.0; // not used currently
 
 
-    amrex::MultiFab net_rad_canopy; // net absorbed shortwave radiation by canopy (net_rad(1))
+    amrex::MultiFab net_rad;
     amrex::MultiFab wet_canop; // wetted portion of canopy
 
     // Variables related to setting initial conditions (for testing purposes only)

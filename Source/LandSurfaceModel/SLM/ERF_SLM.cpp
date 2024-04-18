@@ -22,23 +22,25 @@ SLM::Init (const MultiFab& cons_in,
 
     LsmVarMap.resize(m_lsm_size);
     LsmVarMap = {
-      LsmVar_SLM::theta,        LsmVar_SLM::tsurf, LsmVar_SLM::tv,
-      LsmVar_SLM::mv,           LsmVar_SLM::soilt, LsmVar_SLM::soilw,
-      LsmVar_SLM::sand,         LsmVar_SLM::clay,  LsmVar_SLM::s_depth,
-      LsmVar_SLM::flbu,         LsmVar_SLM::flbv,  LsmVar_SLM::flbq,
-      LsmVar_SLM::flbt,         LsmVar_SLM::prsfc, LsmVar_SLM::precipref,
-      LsmVar_SLM::swdsvisxyref, LsmVar_SLM::lwref, LsmVar_SLM::tref,
-      LsmVar_SLM::uref,         LsmVar_SLM::vref,  LsmVar_SLM::dref,
-      LsmVar_SLM::qref,         LsmVar_SLM::pref};
+      LsmVar_SLM::theta,         LsmVar_SLM::tsurf,        LsmVar_SLM::tv,
+      LsmVar_SLM::mv,            LsmVar_SLM::soilt,        LsmVar_SLM::soilw,
+      LsmVar_SLM::sand,          LsmVar_SLM::clay,         LsmVar_SLM::s_depth,
+      LsmVar_SLM::flbu,          LsmVar_SLM::flbv,         LsmVar_SLM::flbq,
+      LsmVar_SLM::flbt,          LsmVar_SLM::prsfc,        LsmVar_SLM::precipref,
+      LsmVar_SLM::swdsvisxyref,  LsmVar_SLM::swdsnirxyref, LsmVar_SLM::swdsvisdxyref,
+      LsmVar_SLM::swdsnirdxyref, LsmVar_SLM::lwref,        LsmVar_SLM::tref,
+      LsmVar_SLM::uref,          LsmVar_SLM::vref,         LsmVar_SLM::dref,
+      LsmVar_SLM::qref,          LsmVar_SLM::pref};
 
     LsmVarName.resize(m_lsm_size);
     LsmVarName = {
-      "theta",          "tsurf",       "tveg",       "mv",
-      "tsoil",          "wsoil",       "sand",       "clay",
-      "soil_thickness", "surface_u",   "surface_v",  "surface_vapor",
-      "surface_heat",   "precip_soil", "ref_precip", "SW_dw_dir_vis",
-      "LW_dw",          "ref_t",       "ref_u",      "ref_v",
-      "ref_d",          "ref_q",       "ref_p"};
+      "theta",          "tsurf",         "tveg",          "mv",
+      "tsoil",          "wsoil",         "sand",          "clay",
+      "soil_thickness", "surface_u",     "surface_v",     "surface_vapor",
+      "surface_heat",   "precip_soil",   "ref_precip",    "SW_dw_dir_vis",
+      "SW_dw_dir_nir",  "SW_dw_dif_vis", "SW_dw_dif_nir", "LW_dw",
+      "ref_t",          "ref_u",         "ref_v",         "ref_d",
+      "ref_q",          "ref_p"};
 
     // NOTE: All boxes in ba extend from zlo to zhi, so this transform is valid.
     //       If that were to change, the dm and new ba are no longer valid and
@@ -151,7 +153,7 @@ SLM::Init (const MultiFab& cons_in,
     r_c.define(ba_lsm_2d, dm, 1, ng_2d);
     r_d.define(ba_lsm_2d, dm, 1, ng_2d);
 
-    net_rad_canopy.define(ba_lsm_2d, dm, 1, ng_2d);
+    net_rad.define(ba_lsm_2d, dm, SLM_NetRad::NumVars, ng_2d);
     wet_canop.define(ba_lsm_2d, dm, 1, ng_2d);
 
     // Initialize 1D arrays
@@ -240,7 +242,6 @@ void SLM::init_from_file()
         sstxy.setVal(sst[1][time_index]);
 
         // TODO: these are set here only for testing!
-        net_rad_canopy.setVal(lsm_fab_vars[LsmVar_SLM::swdsvisxyref]->max(0));
         shf_soil.setVal(0.0);
         lhf_soil.setVal(0.0);
 
@@ -662,10 +663,14 @@ void SLM::init_slm_vars()
         amrex::Real v_interp = linear_interp(t0, t1, time, sounding[5][time_index], sounding[5][time_index + 1]);
         lsm_fab_vars[LsmVar_SLM::precipref]->setVal(precip_interp);
 
-        lsm_fab_vars[LsmVar_SLM::swdsvisxyref]->setVal(sw_interp);
-        lsm_fab_vars[LsmVar_SLM::swdsnirxyref]->setVal(0.0);
-        lsm_fab_vars[LsmVar_SLM::swdsvisdxyref]->setVal(0.0);
-        lsm_fab_vars[LsmVar_SLM::swdsnirdxyref]->setVal(0.0);
+        // total SW split into:
+        //   Diffuse = ~30% SW
+        //   Direct  = ~70% SW
+        // Visible and NIR = 50/50%
+        lsm_fab_vars[LsmVar_SLM::swdsvisxyref]->setVal(0.5*(sw_interp*0.7));
+        lsm_fab_vars[LsmVar_SLM::swdsnirxyref]->setVal(0.5*(sw_interp*0.7));
+        lsm_fab_vars[LsmVar_SLM::swdsvisdxyref]->setVal(0.5*(sw_interp*0.3));
+        lsm_fab_vars[LsmVar_SLM::swdsnirdxyref]->setVal(0.5*(sw_interp*0.3));
 
         lsm_fab_vars[LsmVar_SLM::lwref]->setVal(lw_interp);
         lsm_fab_vars[LsmVar_SLM::coszrsxy]->setVal(1.0);
@@ -683,7 +688,6 @@ void SLM::init_slm_vars()
         sstxy.setVal(sst_interp);
 
         // TODO: these are set here only for testing!
-        net_rad_canopy.setVal(sw_interp + lw_interp);
         shf_soil.setVal(0.0);
         lhf_soil.setVal(0.0);
 
@@ -789,6 +793,11 @@ SLM::AdvanceSLM ()
     Real dt = m_dt;
     Real dzInv = m_lsm_geom.InvCellSize(2);
 
+    net_rad.setVal(0.0, SLM_NetRad::net_sw1, 1, 0);
+    net_rad.setVal(0.0, SLM_NetRad::net_sw2, 1, 0);
+    net_rad.setVal(0.0, SLM_NetRad::net_rad1, 1, 0);
+    net_rad.setVal(0.0, SLM_NetRad::net_rad2, 1, 0);
+
     for ( MFIter mfi(landtype, TileNoZ()); mfi.isValid(); ++mfi) {
         auto box = mfi.tilebox();
 
@@ -833,7 +842,6 @@ SLM::AdvanceSLM ()
 
         auto cp_vege_arr = cp_vege.array(mfi);
 
-
         auto tref_arr  = lsm_fab_vars[LsmVar_SLM::tref]->array(mfi);
         auto ur_arr  = lsm_fab_vars[LsmVar_SLM::uref]->array(mfi);
         auto vr_arr  = lsm_fab_vars[LsmVar_SLM::vref]->array(mfi);
@@ -854,8 +862,11 @@ SLM::AdvanceSLM ()
         auto flbt_arr  = lsm_fab_vars[LsmVar_SLM::flbt]->array(mfi);
         auto prsfc_arr  = lsm_fab_vars[LsmVar_SLM::prsfc]->array(mfi);
 
-        auto net_rad_canopy_arr = net_rad_canopy.const_array(mfi);
+        auto net_rad_arr = net_rad.const_array(mfi);
         auto wet_canop_arr = wet_canop.array(mfi);
+
+        // Calculate net radiation absorbed by canopy and soil surface
+        radiative_fluxes(mfi);
 
         ParallelFor( box, [=] AMREX_GPU_DEVICE (int i, int j, int)
         {
@@ -875,7 +886,6 @@ SLM::AdvanceSLM ()
             amrex::Real vel_m = sqrt(std::pow(ur_arr(i, j, 0), 2) + std::pow(vr_arr(i, j, 0), 2)); // reference level wind speed
 
             amrex::Real mws_inc = 0.0;
-            amrex::Real net_rad[2];
 
             if (landmask_arr(i, j, 0) == 1)
             {
@@ -912,7 +922,7 @@ SLM::AdvanceSLM ()
                 amrex::Real mw_inc = dt * (precip - drain);
 
                 // Calculate net radiation absorbed by canopy and soil surface
-                radiative_fluxes(i, j);
+                //radiative_fluxes(i, j);
 
                 // Specific humidity at top soil
                 if (soilt_arr(i, j, khi_lsm) > tfriz)
@@ -1004,7 +1014,7 @@ SLM::AdvanceSLM ()
                 cp_vege_arr(i, j, 0) = (LAI_arr(i, j, 0)*0.001 * ztop_arr(i, j, 0)*BAI_arr(i, j, 0) / 43560.0) * 900.0 * 2800.0;
                 cp_vege_tot = cp_vege_arr(i, j, 0) + mw_arr(i, j, 0) * 1.0e-3 * cp_water;
 
-                amrex::Real t_canop_inc = dt / std::max(1.0e-3, cp_vege_tot)*(net_rad_canopy_arr(i, j, 0) - shf_canop_arr(i, j, 0) - lhf_canop_arr(i, j, 0)) * vege_YES_arr(i, j, 0);
+                amrex::Real t_canop_inc = dt / std::max(1.0e-3, cp_vege_tot)*(net_rad_arr(i, j, 0, SLM_NetRad::net_rad1) - shf_canop_arr(i, j, 0) - lhf_canop_arr(i, j, 0)) * vege_YES_arr(i, j, 0);
                 t_canop_arr(i, j, 0) += t_canop_inc;
 
                 // Compute diagnostic variables at canopy air space level
@@ -1061,9 +1071,186 @@ SLM::AdvanceSLM ()
     }
 }
 
-void SLM::radiative_fluxes(const int i, const int j)
+void SLM::radiative_fluxes(const amrex::MFIter &mfi)
 {
+    auto box = mfi.tilebox();
 
+    auto landmask_arr = landmask.const_array(mfi);
+
+    auto swdsvisxyref_arr  = lsm_fab_vars[LsmVar_SLM::swdsvisxyref]->const_array(mfi);
+    auto swdsnirxyref_arr  = lsm_fab_vars[LsmVar_SLM::swdsnirxyref]->const_array(mfi);
+    auto swdsvisdxyref_arr = lsm_fab_vars[LsmVar_SLM::swdsvisdxyref]->const_array(mfi);
+    auto swdsnirdxyref_arr = lsm_fab_vars[LsmVar_SLM::swdsnirdxyref]->const_array(mfi);
+    auto lwref_arr         = lsm_fab_vars[LsmVar_SLM::lwref]->const_array(mfi);
+    auto coszrsxy_arr      = lsm_fab_vars[LsmVar_SLM::coszrsxy]->const_array(mfi);
+
+    auto phi_1_arr = phi_1.const_array(mfi);
+    auto phi_2_arr = phi_2.const_array(mfi);
+    auto LAI_arr   = LAI.const_array(mfi);
+
+    auto albedovis_v_arr = albedovis_v.const_array(mfi);
+    auto albedonir_v_arr = albedonir_v.const_array(mfi);
+    auto albedovis_s_arr = albedovis_s.const_array(mfi);
+    auto albedonir_s_arr = albedonir_s.const_array(mfi);
+
+    auto IR_emis_vege_arr = IR_emis_vege.const_array(mfi);
+    auto IR_emis_soil_arr = IR_emis_soil.const_array(mfi);
+    auto t_canop_arr      = t_canop.const_array(mfi);
+    auto soilw_arr        = lsm_fab_vars[LsmVar_SLM::soilw]->const_array(mfi);
+    auto soilt_arr        = lsm_fab_vars[LsmVar_SLM::soilt]->const_array(mfi);
+
+    auto t_skin_arr  = t_skin.array(mfi);
+    auto net_rad_arr = net_rad.array(mfi);
+
+    ParallelFor( box, [=] AMREX_GPU_DEVICE (int i, int j, int)
+    {
+        amrex::Real fdn1; // downwelling flux on top
+        amrex::Real fdn2; // transmitted flux (downwelling flux below)
+        amrex::Real fup1; // upwelling flux from top
+        amrex::Real fup2; // upwelling flux from below
+
+        amrex::Real ka; // optical depth
+        amrex::Real explai, explai0, wetfactor;
+
+        if (landmask_arr(i, j, 0) != 1) {
+            return;
+        }
+
+        // ===================================================
+        // Compute shortwave radiation transfer between land surface and reference level
+        // ===================================================
+        if (coszrsxy_arr(i, j, 0) > 0.0)
+        {
+            // Optical depth of the direct beam per unit leaf area
+            ka = phi_1_arr(i, j, 0) / coszrsxy_arr(i, j, 0) + phi_2_arr(i, j, 0);
+            explai = exp(-ka*LAI_arr(i, j, 0)); // for direct radiation
+
+            // Optical depth of the diffuse beam per unit leaf area
+            ka = phi_1_arr(i, j, 0) + phi_2_arr(i, j, 0);
+            explai0 = exp(-ka*LAI_arr(i, j, 0)); // for diffuse radiation
+
+            // net_rad(1) = net absorbed shortwave radiation by canopy
+            net_rad_arr(i, j, 0, SLM_NetRad::net_rad1) += swdsvisxyref_arr(i, j, 0)*(1.0 - albedovis_v_arr(i, j, 0)*(1.0 - explai)-explai);
+            net_rad_arr(i, j, 0, SLM_NetRad::net_rad1) += swdsvisdxyref_arr(i, j, 0)*(1.0 - albedovis_v_arr(i, j, 0)*(1.0 - explai0)-explai);
+            net_rad_arr(i, j, 0, SLM_NetRad::net_rad1) += swdsnirxyref_arr(i, j, 0)*(1.0 - albedonir_v_arr(i, j, 0)*(1.0 - explai)-explai);
+            net_rad_arr(i, j, 0, SLM_NetRad::net_rad1) += swdsnirdxyref_arr(i, j, 0)*(1.0 - albedonir_v_arr(i, j, 0)*(1.0 - explai0)-explai);
+
+            net_rad_arr(i, j, 0, SLM_NetRad::net_swdn1) = swdsvisxyref_arr(i, j, 0) + swdsvisdxyref_arr(i, j, 0) + swdsnirxyref_arr(i, j, 0) + swdsnirdxyref_arr(i, j, 0);
+            net_rad_arr(i, j, 0, SLM_NetRad::net_swup1) = net_rad_arr(i, j, 0, SLM_NetRad::net_rad1) - net_rad_arr(i, j, 0, SLM_NetRad::net_swdn1);
+
+            // net_rad(2) = net absorbed shortwave radiation by soil
+            wetfactor = 1.0 - 0.5*soilw_arr(i, j, khi_lsm); // soil wetness factor: assume that wet soil is twice as dark
+            net_rad_arr(i, j, 0, SLM_NetRad::net_rad2) += swdsvisxyref_arr(i, j, 0)*(1.0 - albedovis_s_arr(i, j, 0)*wetfactor)*explai;
+            net_rad_arr(i, j, 0, SLM_NetRad::net_rad2) += swdsvisdxyref_arr(i, j, 0)*(1.0 - albedovis_s_arr(i, j, 0)*wetfactor)*explai0;
+            net_rad_arr(i, j, 0, SLM_NetRad::net_rad2) += swdsnirxyref_arr(i, j, 0)*(1.0 - albedonir_s_arr(i, j, 0)*wetfactor)*explai;
+            net_rad_arr(i, j, 0, SLM_NetRad::net_rad2) += swdsnirdxyref_arr(i, j, 0)*(1.0 - albedonir_s_arr(i, j, 0)*wetfactor)*explai0;
+
+            net_rad_arr(i, j, 0, SLM_NetRad::net_swdn2) = net_rad_arr(i, j, 0, SLM_NetRad::net_swdn1)*explai;
+            net_rad_arr(i, j, 0, SLM_NetRad::net_swup2) = net_rad_arr(i, j, 0, SLM_NetRad::net_rad2) - net_rad_arr(i, j, 0, SLM_NetRad::net_swdn2);
+
+            // Store net absorbed SW
+            net_rad_arr(i, j, 0, SLM_NetRad::net_sw1) = net_rad_arr(i, j, 0, SLM_NetRad::net_rad1);
+            net_rad_arr(i, j, 0, SLM_NetRad::net_sw2) = net_rad_arr(i, j, 0, SLM_NetRad::net_rad2);
+        }
+
+        // ===================================================
+        // Longwave radiation
+        // ===================================================
+
+        // ===================================================
+        // tir: Emitted thermal infrared radiation
+        // ===================================================
+        //  Note: for no vegetation: IR_trans becomes zero => tir(1) automatically becomes zero
+        net_rad_arr(i, j, 0, SLM_NetRad::tir1) = IR_emis_vege_arr(i, j, 0)*sigma*(std::pow(t_canop_arr(i, j, 0), 4));
+        net_rad_arr(i, j, 0, SLM_NetRad::tir2) = IR_emis_soil_arr(i, j, 0)*sigma*(std::pow(soilt_arr(i, j, khi_lsm), 4));
+
+        // ===================================================
+        // downwelling LW on canopy top: input
+        // ===================================================
+        fdn1 = lwref_arr(i, j, 0);
+        net_rad_arr(i, j, 0, SLM_NetRad::net_lwdn1) = fdn1;
+
+        // ===================================================
+        // downwelling LW below canopy layer
+        // ===================================================
+        //  Note:
+        //    below canopy layer: incoming LW (fdn1) that is not absorbed by canopy
+        //                        + emitted thermal IR by canopy (tir(1)) toward soil surface
+        //    with no canopy: fdn2 is computed to be fdn1
+        //    (1 - IR_emis) = area of canopy gap (skyview factor)
+        // ===================================================
+        fdn2 = (1.0 - IR_emis_vege_arr(i, j, 0))*fdn1 + net_rad_arr(i, j, 0, SLM_NetRad::tir1);
+        net_rad_arr(i, j, 0, SLM_NetRad::net_lw1) = fdn1 - fdn2;
+
+        // ===================================================
+        //  Note: At this stage,
+        //   net_rad(1) = net absorbed SW by canopy
+        //           + downwelling LW on canopy top
+        //           - transmitted LW through canopy layer
+        //           - emitted TIR toward soil surface
+        // ===================================================
+        net_rad_arr(i, j, 0, SLM_NetRad::net_rad1) += fdn1 - fdn2;
+
+        // ===================================================
+        // downwelling LW for soil surface
+        // ===================================================
+        fdn1 = fdn2;
+        net_rad_arr(i, j, 0, SLM_NetRad::net_lwdn2) = fdn1;
+
+        // no fluxes below topsoil
+        fdn2 = 0.0;
+        fup2 = 0.0;
+
+        // ===================================================
+        // Note:
+        //  Emitted LW from topsoil = emitted tir from topspoil + portion of incoming LW that is reflected back toward canopy
+        //  IR_emis_soil is set to 1.0
+        // ===================================================
+        fup1 = (net_rad_arr(i, j, 0, SLM_NetRad::tir2) + (1.0 - IR_emis_soil_arr(i, j, 0))*fdn1);
+        net_rad_arr(i, j, 0, SLM_NetRad::net_lwup2) = fup1;
+
+        // ===================================================
+        // Note: At this stage,
+        //  net_rad(2) = net absorbed SW by soil surface
+        //          + net absorbed LW by soil surface
+        // ===================================================
+        net_rad_arr(i, j, 0, SLM_NetRad::net_rad2) += fdn1 - fdn2 - fup1 + fup2;
+
+        // net absorbed LW by soil surface
+        net_rad_arr(i, j, 0, SLM_NetRad::net_lw2) = fdn1 - fdn2 - fup1 + fup2;
+
+        // ===================================================
+        // Incoming LW from below canopy
+        //  Note: Incoming LW from below canopy = upwelling flux at topsoil
+        // ===================================================
+        fup2 = fup1;
+
+        // ===================================================
+        // Upwelling LW from canopy top
+        //  Note: fup1 = portion of fup2 that is not absorbed + tir emitted from canopy
+        //        for no canopy: fup1 = fup2
+        // ===================================================
+        fup1 = (1.0 - IR_emis_vege_arr(i,j,0))*fup2 + net_rad_arr(i, j, 0, SLM_NetRad::tir1);
+
+        // total upward LW from surface (for canopy cover- from canopy top, for no canopy - from soil surface)
+        net_rad_arr(i, j, 0, SLM_NetRad::net_lwup1) = fup1;
+        t_skin_arr(i, j, 0) = std::pow(fup1 / sigma, 0.25);
+
+        net_rad_arr(i, j, 0, SLM_NetRad::net_lw1) += fup2 - fup1;
+
+
+        // ===================================================
+        //  Note: At this stage,
+        //   net_rad(1) = net absorbed SW by canopy
+        //           + downwelling LW on canopy top
+        //           - transmitted LW through canopy layer (downward direction)
+        //           - emitted TIR from canopy toward soil surface
+        //           - emitted TIR from canopy toward atmosphere
+        //           + upwelling LW from topsoil
+        //           - transmitted LW through canopy layer (upward direction)
+        // ===================================================
+        net_rad_arr(i, j, 0, SLM_NetRad::net_rad1) += fup2 - fup1;
+    });
 }
 
 void SLM::transfer_coeff(const int i, const int j)
@@ -1105,7 +1292,7 @@ void SLM::soil_temperature(const amrex::MFIter &mfi)
     auto shf_soil_arr = shf_soil.const_array(mfi);
     auto lhf_soil_arr = lhf_soil.const_array(mfi);
 
-    auto net_rad_canopy_arr = net_rad_canopy.const_array(mfi);
+    auto net_rad_arr = net_rad.const_array(mfi);
 
     // TODO: Refactor this whole loop for GPU
     ParallelFor( box, [=] AMREX_GPU_DEVICE (int i, int j, int)
@@ -1124,7 +1311,7 @@ void SLM::soil_temperature(const amrex::MFIter &mfi)
         amrex::Gpu::DeviceVector<amrex::Real> d_alpha(m_nz_lsm);
         amrex::Gpu::DeviceVector<amrex::Real> d_beta(m_nz_lsm);
 
-        amrex::Real grflux0 = -1.0 * (net_rad_canopy_arr(i, j, 0) - shf_soil_arr(i, j, 0) - lhf_soil_arr(i, j, 0));
+        amrex::Real grflux0 = -1.0 * (net_rad_arr(i, j, 0, SLM_NetRad::net_rad2) - shf_soil_arr(i, j, 0) - lhf_soil_arr(i, j, 0));
 
         if (landtype_arr(i, j, 0) == 15) {
             // ice
