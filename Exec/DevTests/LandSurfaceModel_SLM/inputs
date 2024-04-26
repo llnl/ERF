@@ -1,5 +1,5 @@
 # ------------------  INPUTS TO MAIN PROGRAM  -------------------
-max_step = 504
+max_step = 172800 # 2 days in seconds
 
 amrex.fpe_trap_invalid = 0
 amrex.fpe_trap_zero = 1
@@ -30,19 +30,19 @@ erf.fixed_dt = 1.0
 # DIAGNOSTICS & VERBOSITY
 erf.sum_interval   = -1       # timesteps between computing mass
 #erf.data_log      = my_data my_1d_data
-erf.v              = 1       # verbosity in ERF.cpp
-amr.v              = 1       # verbosity in Amr.cpp
+erf.v              = 0       # verbosity in ERF.cpp
+amr.v              = 0       # verbosity in Amr.cpp
 
 # REFINEMENT / REGRIDDING
 amr.max_level       = 0       # maximum level number allowed
 
 # CHECKPOINT FILES
 erf.check_file      = chk        # root name of checkpoint file
-erf.check_int       = 1        # number of timesteps between checkpoints
+erf.check_int       = -1        # number of timesteps between checkpoints
 erf.restart_type    = "native"
 # PLOTFILES
 erf.plot_file_1     = plt        # prefix of plotfile name
-erf.plot_int_1      = 1          # number of timesteps between plotfiles
+erf.plot_int_1      = 300          # number of timesteps between plotfiles
 erf.plot_vars_1     = density rhotheta rhoadv_0 x_velocity y_velocity z_velocity pressure theta scalar temp pres_hse dens_hse pert_pres pert_dens
 
 erf.plot_lsm = true
@@ -70,7 +70,7 @@ prob.SLM_ref_flux_file = "swlw"
 prob.SLM_ref_sst_file = "sfc"
 slm.start_time = 209.0
 #slm.start_time = 213.5
-slm.time_unit = 3600.0 # dt time unit scalar in seconds when interpolating from testing input data
+slm.time_unit = 1.0 # dt time unit scalar in seconds when interpolating from testing input data
 
 erf.init_type      = "uniform"
 

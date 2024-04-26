@@ -253,7 +253,7 @@ public:
                               const amrex::Real y);
 
     // number of lsm variables (theta)
-    int m_lsm_size = 26;
+    int m_lsm_size = 27;
 
     // LsmVar map (state indices -> LsmVar enum)
     amrex::Vector<int> LsmVarMap;
@@ -290,10 +290,11 @@ public:
     // Vars that should be parsed
     // ==========================
     // Number of grid points in z
-    int m_nz_lsm = 5;
+    int m_nz_lsm = 7;
 
     // Size of grid spacing in z
-    amrex::Real m_dz_lsm = 0.1; // 3 [m] below surface
+    //amrex::Real m_dz_lsm = 0.1; // 3 [m] below surface
+    std::vector<amrex::Real> m_dz_lsm = {0.02, 0.04, 0.08, 0.16, 0.32, 0.64, 0.128};
 
     // Specific heat
     amrex::Real m_cp_soil =  1.26e6; // [J/m^3 K]
@@ -313,8 +314,8 @@ public:
     int landtype0 = 16; // landtype over whole domain
 
     amrex::Real LAI0 = 0.0; // default leaf area index
-    amrex::Real clay0 = 50.0; // uniform clay content (%)
-    amrex::Real sand0 = 50.0; // uniform sand content (%)
+    amrex::Real clay0 = 34.0; // uniform clay content (%)
+    amrex::Real sand0 = 10.0; // uniform sand content (%)
     amrex::Real sw0 = 0.50; // uniform soil wetness (fraction)
     amrex::Real st0 = 300.0; // uniform soil temperature (K)
 

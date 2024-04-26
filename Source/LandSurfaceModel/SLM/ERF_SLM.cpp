@@ -30,7 +30,7 @@ SLM::Init (const MultiFab& cons_in,
       LsmVar_SLM::swdsvisxyref,  LsmVar_SLM::swdsnirxyref, LsmVar_SLM::swdsvisdxyref,
       LsmVar_SLM::swdsnirdxyref, LsmVar_SLM::lwref,        LsmVar_SLM::tref,
       LsmVar_SLM::uref,          LsmVar_SLM::vref,         LsmVar_SLM::dref,
-      LsmVar_SLM::qref,          LsmVar_SLM::pref};
+      LsmVar_SLM::qref,          LsmVar_SLM::pref,         LsmVar_SLM::node_z};
 
     LsmVarName.resize(m_lsm_size);
     LsmVarName = {
@@ -40,7 +40,7 @@ SLM::Init (const MultiFab& cons_in,
       "surface_heat",   "precip_soil",   "ref_precip",    "SW_dw_dir_vis",
       "SW_dw_dir_nir",  "SW_dw_dif_vis", "SW_dw_dif_nir", "LW_dw",
       "ref_t",          "ref_u",         "ref_v",         "ref_d",
-      "ref_q",          "ref_p"};
+      "ref_q",          "ref_p",         "node_z"};
 
     // NOTE: All boxes in ba extend from zlo to zhi, so this transform is valid.
     //       If that were to change, the dm and new ba are no longer valid and
@@ -61,9 +61,12 @@ SLM::Init (const MultiFab& cons_in,
     const RealBox& dom_rb = m_geom.ProbDomain();
     const Real*    dom_dx = m_geom.CellSize();
     RealBox lsm_rb = dom_rb;
-    Real lsm_dx[AMREX_SPACEDIM] = {AMREX_D_DECL(dom_dx[0],dom_dx[1],m_dz_lsm)};
     Real lsm_z_hi = dom_rb.lo(2); // z_r
-    Real lsm_z_lo = lsm_z_hi - Real(m_nz_lsm)*lsm_dx[2]; // bottom Z of last soil layer: z_s
+    Real lsm_z_lo = lsm_z_hi;
+    for (int k = 0; k < m_nz_lsm; k++)
+    {
+        lsm_z_lo -= m_dz_lsm[k];
+    }
     lsm_rb.setHi(2,lsm_z_hi); lsm_rb.setLo(2,lsm_z_lo);
     m_lsm_geom.define( ba_lsm.minimalBox(), lsm_rb, m_geom.Coord(), m_geom.isPeriodic() );
 
@@ -519,7 +522,7 @@ void SLM::init_soil_tw()
                 tau_soil_arr(i, j, 0) = tausoil;
 
                 // TODO: replace this with input from file
-                s_depth_arr(i, j, k) = m_dz_lsm;
+                s_depth_arr(i, j, k) = m_dz_lsm[(k*-1)+khi_lsm];
                 clay_arr(i, j, k) = clay0;
                 sand_arr(i, j, k) = sand0;
                 soilt_arr(i, j, k) = st0;
