@@ -135,9 +135,11 @@ SLM::Init (const MultiFab& cons_in,
     BAI.define(ba_lsm_2d, dm, 1, ng_2d);
 
     tau_soil.define(ba_lsm_2d, dm, 1, ng_2d);
-    soilw_inc_tot.define(ba_lsm_2d, dm, 1, ng_2d);
+    mw_inc.define(ba_lsm_2d, dm, 1, ng_2d);
     ustar.define(ba_lsm_2d, dm, 1, ng_2d);
     tstar.define(ba_lsm_2d, dm, 1, ng_2d);
+
+    evapo_dry.define(ba_lsm_2d, dm, 1, ng_2d);
 
     shf_canop.define(ba_lsm_2d, dm, 1, ng_2d);
     shf_soil.define(ba_lsm_2d, dm, 1, ng_2d);
@@ -652,6 +654,9 @@ void SLM::init_slm_vars()
     mw.setVal(0.0);
     mws.setVal(0.0);
 
+    mw_inc.setVal(0.0);
+    evapo_dry.setVal(0.0);
+
     ustar.setVal(0.1);
     tstar.setVal(0.0);
 
@@ -831,6 +836,8 @@ SLM::AdvanceSLM ()
         auto mws_arr = mws.array(mfi);
         auto mw_mx_arr = mw_mx.array(mfi);
 
+        auto mw_inc_arr = mw_inc.array(mfi);
+
         auto t_cas_arr = t_cas.array(mfi);
         auto q_cas_arr = q_cas.array(mfi);
 
@@ -920,27 +927,6 @@ SLM::AdvanceSLM ()
 
                 }
 
-                precip = precip_array(i, j, 0)*(1.0 - std::exp(-1.0 * precip_extinc_arr(i, j, 0)*LAI_arr(i, j, 0)));
-
-
-                if (mw_arr(i, j, 0) < mw_mx_arr(i, j, 0))
-                {
-                    drain = 0.0;
-                }
-                else
-                {
-                    // when water holding storage exceeds its maximum, no precipitation is intercepted
-                    drain = precip;
-
-                    // excess water storage gets drained from mw [kg/m^2]
-                    cnp_mw_drip = std::max(mw_arr(i, j, 0) - mw_mx_arr(i, j, 0), 0.0) / dt; // mm/s
-
-                    drain += cnp_mw_drip;
-                }
-
-                precip_sfc = precip_array(i, j, 0) - precip + drain;
-
-                amrex::Real mw_inc = dt * (precip - drain);
 
                 // Calculate net radiation absorbed by canopy and soil surface
                 //radiative_fluxes(i, j);
@@ -1003,20 +989,20 @@ SLM::AdvanceSLM ()
                 vapor_fluxes(i, j); // -- computes r_soil
 
                 // Calculate soil moisture increment
-                soil_water(i, j);
+                //soil_water(mfi);
 
                 // Update vegetation moisture storage
-                mw_arr(i, j, 0) += mw_inc;
-
-                // Update puddle water storage
-                mws_arr(i, j, 0) += mws_inc; // mws_inc -> calculated by SLM::soil_water()
+                //mw_arr(i, j, 0) += mw_inc_arr(i, j, 0);
 
                 // Output variables
                 flbu_arr(i, j, 0) = taux_sfc;
                 flbv_arr(i, j, 0) = tauy_sfc;
-                prsfc_arr(i, j, 0) = precip_sfc;
+                //prsfc_arr(i, j, 0) = precip_sfc;
             }
         });
+
+        // Calculate soil moisture increment
+        soil_water(mfi);
 
         // Calculate soil temperature increment
         //  amrex::Real grflux0 = -1.0 * (net_rad[1] - shf_soil_arr(i, j, 0) - lhf_soil_arr(i, j, 0));
@@ -1289,9 +1275,267 @@ void SLM::vapor_fluxes(const int i, const int j)
 
 }
 
-void SLM::soil_water(const int i, const int j)
+void SLM::soil_water(const amrex::MFIter &mfi)
 {
+    auto box = mfi.tilebox();
 
+    auto landmask_arr = landmask.const_array(mfi);
+    auto landtype_arr = landtype.const_array(mfi);
+
+    auto soilt_arr = lsm_fab_vars[LsmVar_SLM::soilt]->array(mfi);
+    auto soilw_arr = lsm_fab_vars[LsmVar_SLM::soilw]->array(mfi);
+
+    auto sst_capa_arr = lsm_fab_vars[LsmVar_SLM::sst_capa]->const_array(mfi);
+    auto sst_cond_arr = lsm_fab_vars[LsmVar_SLM::sst_cond]->const_array(mfi);
+    auto poro_soil_arr = lsm_fab_vars[LsmVar_SLM::poro_soil]->const_array(mfi);
+    auto s_depth_arr = lsm_fab_vars[LsmVar_SLM::s_depth]->const_array(mfi);
+
+    auto shf_soil_arr = shf_soil.const_array(mfi);
+    auto lhf_soil_arr = lhf_soil.const_array(mfi);
+    auto net_rad_arr = net_rad.const_array(mfi);
+
+    auto precip_array  = lsm_fab_vars[LsmVar_SLM::precipref]->array(mfi);
+    auto LAI_arr = LAI.array(mfi);
+    auto precip_extinc_arr = precip_extinc.array(mfi);
+
+    auto mw_arr = mw.array(mfi);
+    auto mw_mx_arr = mw_mx.array(mfi);
+    auto mw_inc_arr = mw_inc.array(mfi);
+    auto mws_arr = mws.array(mfi);
+    auto mws_mx_arr = mws_mx.const_array(mfi);
+
+    auto evapo_dry_arr = evapo_dry.const_array(mfi);
+    auto prsfc_arr  = lsm_fab_vars[LsmVar_SLM::prsfc]->array(mfi);
+    auto m_pot_sat_arr = lsm_fab_vars[LsmVar_SLM::m_pot_sat]->const_array(mfi);
+    auto ks_arr = lsm_fab_vars[LsmVar_SLM::ks]->const_array(mfi);
+    auto Bconst_arr = lsm_fab_vars[LsmVar_SLM::Bconst]->const_array(mfi);
+    auto w_s_WP_arr = lsm_fab_vars[LsmVar_SLM::w_s_WP]->const_array(mfi);
+    auto rootF_arr = lsm_fab_vars[LsmVar_SLM::rootF]->const_array(mfi);
+
+    ParallelFor( box, [=] AMREX_GPU_DEVICE (int i, int j, int)
+    {
+        if (landmask_arr(i, j, 0) != 1) {
+            return;
+        }
+
+        amrex::Real drain, puddle;
+        amrex::Real aa, bb, cc, dd;
+        amrex::Gpu::DeviceVector<amrex::Real> d_sw_wgt(m_nz_lsm);
+
+        amrex::Gpu::DeviceVector<amrex::Real> d_sh_eff_cond(m_nz_lsm - 1);
+        amrex::Gpu::DeviceVector<amrex::Real> d_sh_eff_vel(m_nz_lsm - 1);
+
+        amrex::Gpu::DeviceVector<amrex::Real> d_alpha(m_nz_lsm);
+        amrex::Gpu::DeviceVector<amrex::Real> d_beta(m_nz_lsm);
+
+        // TODO: fix this
+        amrex::Gpu::DeviceVector<amrex::Real> d_s_depth_mm(m_nz_lsm); // cache for converting s_depth to mm
+
+        amrex::Real precip = 0.0;
+        amrex::Real precip_in = 0.0;
+        amrex::Real mws_inc = 0.0;
+
+        // precipitation interception rate at canoppy
+        precip = precip_array(i, j, 0)*(1.0 - std::exp(-1.0 * precip_extinc_arr(i, j, 0)*LAI_arr(i, j, 0)));
+
+        if (mw_arr(i, j, 0) < mw_mx_arr(i, j, 0))
+        {
+            drain = 0.0;
+        }
+        else
+        {
+            // when water holding storage exceeds its maximum, no precipitation is intercepted
+            drain = precip;
+
+            // excess water storage gets drained from mw [kg/m^2]
+            drain += std::max(mw_arr(i, j, 0) - mw_mx_arr(i, j, 0), 0.0) / m_dt; // mm/s
+        }
+
+        amrex::Real precip_sfc = precip_array(i, j, 0) - precip + drain;
+
+        // Update output variables
+        prsfc_arr(i, j, 0) = precip_sfc;
+
+        // Add to vegetiation moisture increment from SLM::vapor_fluxes()
+        mw_inc_arr(i, j, 0) += m_dt * (precip - drain);
+
+        // Update vegetation moisture storage
+        mw_arr(i, j, 0) += mw_inc_arr(i, j, 0);
+
+        if (landtype_arr(i, j, 0) == 15) {
+            // ice
+            for (int k = 0; k < m_nz_lsm; k++) {
+                soilw_arr(i, j, 0) = 0.0;
+            }
+        } else {
+            for (int k = 0; k < m_nz_lsm; k++) {
+                const int lsm_k = khi_lsm - k;
+                d_s_depth_mm[k] = s_depth_arr(i, j, lsm_k) * 1.0e-3;
+            }
+
+            // Calculate precipitation infiltration rate into the first soil layer
+            puddle = mws_arr(i, j, 0) / m_dt;
+            if (soilw_arr(i, j, khi_lsm) < 1.0 && soilt_arr(i, j, khi_lsm) >= tfriz)
+            {
+                precip_in = std::min(precip_sfc + puddle, ks_arr(i, j, khi_lsm));
+            } else {
+                precip_in = 0.0;
+            }
+
+            puddle += precip_sfc - precip_in;
+            drain = std::max(0.0, puddle - mws_mx_arr(i, j, 0) / m_dt);
+            puddle -= drain;
+
+            mws_inc = puddle*m_dt - mws_arr(i, j, 0);
+
+            // Update puddle water storage
+            mws_arr(i, j, 0) += mws_inc;
+
+            //run_off_sfc = drain;
+
+            // calculate diffusion coefficient and velocity for soil moisture transfer
+            // at each interfacial layer(= between adjacent soil layers)
+            for (int k = 0; k < m_nz_lsm - 1; k++) {
+                const int lsm_k = khi_lsm - k;
+
+                if (soilt_arr(i, j, lsm_k) >= tfriz && soilt_arr(i, j, lsm_k-1) >= tfriz)
+                {
+                    d_sh_eff_cond[k] =
+                      (std::pow(
+                         d_s_depth_mm[k] * soilw_arr(i, j, lsm_k),
+                         Bconst_arr(i, j, lsm_k) + 2.0) +
+                       std::pow(
+                         d_s_depth_mm[k + 1] * soilw_arr(i, j, lsm_k - 1),
+                         Bconst_arr(i, j, lsm_k) + 2.0)) /
+                      (d_s_depth_mm[k] + d_s_depth_mm[k + 1]) *
+                      ks_arr(i, j, lsm_k) * Bconst_arr(i, j, lsm_k) *
+                      std::abs(m_pot_sat_arr(i, j, lsm_k)) /
+                      poro_soil_arr(i, j, lsm_k);
+
+                    d_sh_eff_vel[k] =
+                      (std::pow(
+                         d_s_depth_mm[k] * soilw_arr(i, j, lsm_k),
+                         2.0 * Bconst_arr(i, j, lsm_k) + 2.0) +
+                       std::pow(
+                         d_s_depth_mm[k + 1] * soilw_arr(i, j, lsm_k - 1),
+                         2.0 * Bconst_arr(i, j, lsm_k) + 2.0)) /
+                      (d_s_depth_mm[k] + d_s_depth_mm[k + 1]) *
+                      ks_arr(i, j, lsm_k) / poro_soil_arr(i, j, lsm_k);
+                } else {
+                    // no water movement between two layers, one of which is frozen
+                    d_sh_eff_cond[k] = 0.0;
+                    d_sh_eff_vel[k] = 0.0;
+                }
+            }
+
+            // from FDE by the implicit method, Thomas algorithm is applied
+            //  aa: terms related with soilw(k-1)
+            //  bb: terms related with soilw(k)
+            //  cc: terms related with soilw(k+1)
+            //  dd: current soil wetness - sink + source
+            for (int k = 0; k < m_nz_lsm; k++) {
+                const int lsm_k = khi_lsm - k;
+                if (soilw_arr(i, j, lsm_k) < w_s_WP_arr(i, j, lsm_k))
+                {
+                    d_sw_wgt[k] = 0.0;
+                } else {
+                    d_sw_wgt[k] = 1.0;
+                }
+            }
+
+            aa = 0.0;
+            cc = -2.0 * d_sh_eff_cond[0]*m_dt/(d_s_depth_mm[0]*(d_s_depth_mm[0] + d_s_depth_mm[1]));
+            bb = 1.0 - cc + d_sh_eff_vel[0]*m_dt/d_s_depth_mm[0];
+            dd = soilw_arr(i, j, khi_lsm) - (lhf_soil_arr(i, j, 0)/lcond + rootF_arr(i, j, khi_lsm)*evapo_dry_arr(i, j, 0)*d_sw_wgt[0] - precip_in)*m_dt / poro_soil_arr(i, j, khi_lsm) / d_s_depth_mm[0];
+
+            d_alpha[0] = cc / bb;
+            d_beta[0] = dd / bb;
+
+            // For 2-(nsoil-1) layer:
+            for (int k = 1; k < m_nz_lsm - 1; k++) {
+                // NOTE: SLM k-1 indices here are switched from original SAM
+                // version because our soil level indices are from -1 (top) to
+                // -nsoil (bottom)
+                // Index mapping:
+                //  SAM SLM  -> ERF SLM
+                //   1       ->  khi_lsm
+                //   k - 1   ->  k + 1
+                //   k + 1   ->  k - 1
+                //   nsoil   ->  klo_lsm
+                const int lsm_k = khi_lsm - k;
+
+                aa = -1.0 * m_dt / d_s_depth_mm[k] *
+                     (d_sh_eff_vel[k - 1] +
+                      d_sh_eff_cond[k - 1] * 2.0 /
+                        (d_s_depth_mm[k - 1] + d_s_depth_mm[k]));
+                cc = -1.0 * m_dt / d_s_depth_mm[k] * 2.0 * d_sh_eff_cond[k] / (d_s_depth_mm[k] + d_s_depth_mm[k+1]);
+                bb = 1.0 - cc + m_dt / d_s_depth_mm[k]*d_sh_eff_vel[k] + 2.0 * m_dt / d_s_depth_mm[k] * d_sh_eff_cond[k-1]/(d_s_depth_mm[k-1] + d_s_depth_mm[k]);
+                dd = soilw_arr(i, j, lsm_k) - rootF_arr(i, j, lsm_k)*evapo_dry_arr(i, j, 0)*d_sw_wgt[k] * m_dt / poro_soil_arr(i, j, lsm_k) / d_s_depth_mm[k]; // current time step
+
+                d_alpha[k] = cc / (bb - aa * d_alpha[k-1]);
+                d_beta[k] = (dd - aa * d_beta[k-1]) / (bb - aa * d_alpha[k-1]);
+            }
+
+            // For bottom layer:
+            aa = -1.0 * m_dt / d_s_depth_mm[m_nz_lsm-1] * (d_sh_eff_vel[m_nz_lsm-2] + d_sh_eff_cond[m_nz_lsm-2]*2.0 / (d_s_depth_mm[m_nz_lsm-2]+d_s_depth_mm[m_nz_lsm-1]));
+            cc = 0.0;
+            bb = 1.0 + (m_dt / d_s_depth_mm[m_nz_lsm-1] * 2.0 * d_sh_eff_cond[m_nz_lsm-2] / (d_s_depth_mm[m_nz_lsm-2] + d_s_depth_mm[m_nz_lsm-1]));
+
+            // drainage when it exceeds 1.0 mm/s
+            amrex::Real drainage_flux = std::max(soilw_arr(i, j, klo_lsm) - 1.0, 0.0)*poro_soil_arr(i, j, klo_lsm)*d_s_depth_mm[m_nz_lsm-1]/m_dt;
+            dd = soilw_arr(i, j, klo_lsm) - (rootF_arr(i, j, klo_lsm)*evapo_dry_arr(i, j, 0)*d_sw_wgt[m_nz_lsm-1] + drainage_flux) * m_dt / poro_soil_arr(i, j, klo_lsm) / d_s_depth_mm[m_nz_lsm-1];
+
+            d_alpha[m_nz_lsm-1] = 0.0;
+            d_beta[m_nz_lsm-1] = (dd - aa * d_beta[m_nz_lsm-2]) / (bb - aa * d_alpha[m_nz_lsm-2]);
+
+            // (n+1) time step soil wetness:
+            soilw_arr(i, j, klo_lsm) = d_beta[m_nz_lsm-1];
+            for (int k = m_nz_lsm - 2; k >= 0; k--) {
+                const int lsm_k = khi_lsm - k;
+                soilw_arr(i, j, lsm_k) = std::max(0.0, d_beta[k] - d_alpha[k] * soilw_arr(i, j, lsm_k - 1));
+            }
+
+            bool fix = false;
+            for (int k = 0; k < m_nz_lsm; k++) {
+                const int lsm_k = khi_lsm - k;
+                if (soilw_arr(i, j, lsm_k) > 1.0)
+                {
+                    fix = true;
+                    break;
+                }
+            }
+
+            if (fix) {
+                // fix the levels where wetness exceeds 1 preserving total water:
+                dd = 0.0;
+
+                // compute the excess
+                for (int kk = 0; kk < m_nz_lsm; kk++) {
+                    const int lsm_kk = khi_lsm - kk;
+                    if (soilw_arr(i, j, lsm_kk) > 1.0)
+                    {
+                        dd = dd + (soilw_arr(i, j, kk) - 1.0)*poro_soil_arr(i, j, kk)*d_s_depth_mm[kk];
+                        soilw_arr(i, j, lsm_kk) = 1.0;
+                    }
+                }
+
+                // distribute the excess among layer into deepest layers first:
+                for (int kk = m_nz_lsm - 1; kk >= 0; kk--) {
+                    const int lsm_kk = khi_lsm - kk;
+                    if (soilw_arr(i, j, lsm_kk) < 1.0)
+                    {
+                        cc = std::min(dd, (1.0 - soilw_arr(i, j, lsm_kk))*poro_soil_arr(i, j, lsm_kk)*d_s_depth_mm[kk]);
+                        soilw_arr(i, j, lsm_kk) += cc / (poro_soil_arr(i, j, lsm_kk)*d_s_depth_mm[kk]);
+                        dd -= cc;
+                        if (dd < 0.0)
+                        {
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    });
 }
 
 void SLM::soil_temperature(const amrex::MFIter &mfi)

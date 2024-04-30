@@ -241,7 +241,7 @@ public:
 
     void vapor_fluxes(const int i, const int j);
 
-    void soil_water(const int i, const int j);
+    void soil_water(const amrex::MFIter &mfi);
 
     void soil_temperature(const amrex::MFIter &mfi);
 
@@ -389,7 +389,7 @@ public:
 
     amrex::MultiFab tau_soil; // soil nudging time in seconds, when dosoiltnudging or dosoilwnudging=true
 
-    amrex::MultiFab soilw_inc_tot;
+    amrex::MultiFab mw_inc;
 
     amrex::MultiFab ustar, tstar;
 
@@ -397,6 +397,9 @@ public:
     amrex::Real heat_trans_coef; // surface heat transfer coef.
     amrex::Real xsi; // M-O stability parameter
     amrex::Real RiB; // bulk Richardson number
+
+    // Soil hydrology variables
+    amrex::MultiFab evapo_dry;
 
     // Sensible heat fluxes
     amrex::MultiFab shf_canop; // flux transfer between canopy and air space [W/m^2]
