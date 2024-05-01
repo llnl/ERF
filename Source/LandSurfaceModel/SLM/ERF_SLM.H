@@ -239,7 +239,7 @@ public:
 
     void resistances(const int i, const int j);
 
-    void vapor_fluxes(const int i, const int j);
+    void vapor_fluxes(const amrex::MFIter &mfi);
 
     void soil_water(const amrex::MFIter &mfi);
 
@@ -422,7 +422,7 @@ public:
     amrex::MultiFab r_b; // leaf boundary layer resistance
     amrex::MultiFab r_c; // stomatal resistance
     amrex::MultiFab r_d; // undercanopy aerodynamic resistance
-    amrex::Real r_soil = 0.0;
+    amrex::MultiFab r_soil;
     amrex::Real r_litter = 0.0; // not used currently
 
 

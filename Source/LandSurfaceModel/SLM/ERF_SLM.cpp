@@ -157,6 +157,7 @@ SLM::Init (const MultiFab& cons_in,
     r_b.define(ba_lsm_2d, dm, 1, ng_2d);
     r_c.define(ba_lsm_2d, dm, 1, ng_2d);
     r_d.define(ba_lsm_2d, dm, 1, ng_2d);
+    r_soil.define(ba_lsm_2d, dm, 1, ng_2d);
 
     net_rad.define(ba_lsm_2d, dm, SLM_NetRad::NumVars, ng_2d);
     wet_canop.define(ba_lsm_2d, dm, 1, ng_2d);
@@ -883,6 +884,7 @@ SLM::AdvanceSLM ()
         auto r_b_arr = r_b.const_array(mfi);
         auto r_c_arr = r_c.const_array(mfi);
         auto r_d_arr = r_d.const_array(mfi);
+        auto r_soil_arr = r_soil.const_array(mfi);
 
         auto flbu_arr  = lsm_fab_vars[LsmVar_SLM::flbu]->array(mfi);
         auto flbv_arr  = lsm_fab_vars[LsmVar_SLM::flbv]->array(mfi);
@@ -898,15 +900,13 @@ SLM::AdvanceSLM ()
 
         ParallelFor( box, [=] AMREX_GPU_DEVICE (int i, int j, int)
         {
-            amrex::Real precip = 0.0; // precipitation interception rate at canopy
-            amrex::Real precip_sfc = 0.0; // precipitation reaching to soil surface
-            amrex::Real drain = 0.0; // drainage rate from canopy
-            amrex::Real cnp_mw_drip = 0.0; // dripping from canopy water storage when the storage exceeds mw_mx - mm/s
+            //amrex::Real precip = 0.0; // precipitation interception rate at canopy
+            //amrex::Real precip_sfc = 0.0; // precipitation reaching to soil surface
+            //amrex::Real drain = 0.0; // drainage rate from canopy
+            //amrex::Real cnp_mw_drip = 0.0; // dripping from canopy water storage when the storage exceeds mw_mx - mm/s
 
-            amrex::Real t_sfc, q_sfc, coef;
+            amrex::Real t_sfc, coef;
             amrex::Real taux_sfc, tauy_sfc;
-
-            amrex::Real q_gr;
 
             // SAM rhow[nz] = air density at vertical velocity levels, kg/m^3
             amrex::Real rhow = dref_arr(i, j, 0); // TODO: double check this
@@ -927,35 +927,20 @@ SLM::AdvanceSLM ()
 
                 }
 
-
                 // Calculate net radiation absorbed by canopy and soil surface
                 //radiative_fluxes(i, j);
-
-                // Specific humidity at top soil
-                if (soilt_arr(i, j, khi_lsm) > tfriz)
-                {
-                    erf_qsatw(soilt_arr(i, j, khi_lsm), pres0, q_gr);
-                    if (mws_arr(i, j, 0) < 0.0)
-                    {
-                        q_gr *= fh_calc(soilt_arr(i, j, khi_lsm), m_pot_sat_arr(i, j, khi_lsm), soilw_arr(i, j, khi_lsm), Bconst_arr(i, j, khi_lsm));
-                    }
-                }
-                else
-                {
-                    erf_qsati(soilt_arr(i, j, khi_lsm), pres0, q_gr);
-                }
 
                 if (vegetype_arr(i, j, 0) != 0)
                 {
                     // vegetated surfaces
                     t_sfc = t_cas_arr(i, j, 0);
-                    q_sfc = q_cas_arr(i, j, 0);
+                    //q_sfc = q_cas_arr(i, j, 0);
                 }
                 else
                 {
                     // baresoil
                     t_sfc = soilt_arr(i, j, khi_lsm);
-                    q_sfc = q_gr;
+                    //q_sfc = q_gr;
                 }
 
                 // Calculate turbulent transfer coeff between reference level and surface
@@ -986,7 +971,7 @@ SLM::AdvanceSLM ()
                 tstar_arr(i, j, 0) = -1.0 * shf_air_arr(i, j, 0) / rhow / Cp_d / ustar_arr(i, j, 0);
 
                 // Calculate latent heat fluxes
-                vapor_fluxes(i, j); // -- computes r_soil
+                //vapor_fluxes(i, j); // -- computes r_soil
 
                 // Calculate soil moisture increment
                 //soil_water(mfi);
@@ -1000,6 +985,9 @@ SLM::AdvanceSLM ()
                 //prsfc_arr(i, j, 0) = precip_sfc;
             }
         });
+
+        // Calculate latent heat fluxes
+        vapor_fluxes(mfi); // -- computes r_soil
 
         // Calculate soil moisture increment
         soil_water(mfi);
@@ -1032,10 +1020,10 @@ SLM::AdvanceSLM ()
                 amrex::Real cond_hundercnp = 1.0 / r_d_arr(i, j, 0) / cond_heat * vege_YES_arr(i, j, 0);
 
                 //  Calculate vapor conductances
-                amrex::Real cond_vapor = 1.0 / r_a_arr(i, j, 0) + wet_canop_arr(i, j, 0) / (2.0 * r_b_arr(i, j, 0)) + (1.0 - wet_canop_arr(i, j, 0))/(2.0 * r_b_arr(i, j, 0) + r_c_arr(i, j, 0)) + 1.0 / (r_d_arr(i, j, 0) + r_soil + r_litter);
+                amrex::Real cond_vapor = 1.0 / r_a_arr(i, j, 0) + wet_canop_arr(i, j, 0) / (2.0 * r_b_arr(i, j, 0)) + (1.0 - wet_canop_arr(i, j, 0))/(2.0 * r_b_arr(i, j, 0) + r_c_arr(i, j, 0)) + 1.0 / (r_d_arr(i, j, 0) + r_soil_arr(i, j, 0) + r_litter);
                 amrex::Real cond_vref = 1.0 / r_a_arr(i, j, 0) / cond_vapor * vege_YES_arr(i, j, 0);
                 amrex::Real cond_vcnp = (wet_canop_arr(i, j, 0) / (2.0 * r_b_arr(i, j, 0)) / cond_vapor + (1.0 - wet_canop_arr(i, j, 0)) / (2.0 * r_b_arr(i, j, 0) + r_c_arr(i, j, 0)) / cond_vapor) * vege_YES_arr(i, j, 0);
-                amrex::Real cond_vundercnp = 1.0 / (r_d_arr(i, j, 0) + r_soil + r_litter) / cond_vapor * vege_YES_arr(i, j, 0);
+                amrex::Real cond_vundercnp = 1.0 / (r_d_arr(i, j, 0) + r_soil_arr(i, j, 0) + r_litter) / cond_vapor * vege_YES_arr(i, j, 0);
 
                 // Canopy air space
                 if (vegetype_arr(i, j, 0) == 0)
@@ -1270,9 +1258,163 @@ void SLM::resistances(const int i, const int j)
 
 }
 
-void SLM::vapor_fluxes(const int i, const int j)
+void SLM::vapor_fluxes(const amrex::MFIter &mfi)
 {
+    auto box = mfi.tilebox();
 
+    auto landmask_arr = landmask.const_array(mfi);
+
+    auto q_cas_arr = q_cas.const_array(mfi);
+
+    auto soilt_arr = lsm_fab_vars[LsmVar_SLM::soilt]->array(mfi);
+    auto soilw_arr = lsm_fab_vars[LsmVar_SLM::soilw]->array(mfi);
+
+    auto lhf_canop_arr = lhf_canop.array(mfi);
+    auto lhf_soil_arr = lhf_soil.array(mfi);
+    auto lhf_air_arr = lhf_air.array(mfi);
+
+    auto vegetype_arr = vegetype.const_array(mfi);
+    auto vege_YES_arr = vege_YES.const_array(mfi);
+
+    auto precip_array  = lsm_fab_vars[LsmVar_SLM::precipref]->array(mfi);
+
+    auto mw_arr = mw.array(mfi);
+    auto mw_mx_arr = mw_mx.array(mfi);
+    auto mw_inc_arr = mw_inc.array(mfi);
+    auto mws_arr = mws.array(mfi);
+
+    auto dref_arr = lsm_fab_vars[LsmVar_SLM::dref]->const_array(mfi);
+    auto qr_arr = lsm_fab_vars[LsmVar_SLM::qref]->const_array(mfi);
+    auto m_pot_sat_arr = lsm_fab_vars[LsmVar_SLM::m_pot_sat]->const_array(mfi);
+    auto Bconst_arr = lsm_fab_vars[LsmVar_SLM::Bconst]->const_array(mfi);
+    auto rootF_arr = lsm_fab_vars[LsmVar_SLM::rootF]->const_array(mfi);
+    auto w_s_FC_arr = lsm_fab_vars[LsmVar_SLM::w_s_FC]->const_array(mfi);
+    auto t_canop_arr = t_canop.const_array(mfi);
+
+    auto r_a_arr = r_a.const_array(mfi);
+    auto r_b_arr = r_b.const_array(mfi);
+    auto r_c_arr = r_c.const_array(mfi);
+    auto r_d_arr = r_d.const_array(mfi);
+    auto r_soil_arr = r_soil.array(mfi);
+
+    auto wet_canop_arr = wet_canop.array(mfi);
+    auto evapo_dry_arr = evapo_dry.array(mfi);
+
+    ParallelFor( box, [=] AMREX_GPU_DEVICE (int i, int j, int)
+    {
+        if (landmask_arr(i, j, 0) != 1) {
+            return;
+        }
+
+        amrex::Real q_sfc;
+        amrex::Real q_gr;
+        amrex::Real qref_tmp;
+
+        // SAM rhow[nz] = air density at vertical velocity levels, kg/m^3
+        const amrex::Real rhow = dref_arr(i, j, 0); // TODO: double check this
+
+        // determine input q_sfc
+        if (vegetype_arr(i, j, 0) != 0)
+        {
+            // vegetated surfaces
+            q_sfc = q_cas_arr(i, j, 0);
+
+            qref_tmp = q_sfc;
+        }
+        else
+        {
+            // Specific humidity at top soil
+            if (soilt_arr(i, j, khi_lsm) > tfriz)
+            {
+                erf_qsatw(soilt_arr(i, j, khi_lsm), pres0, q_gr);
+                if (mws_arr(i, j, 0) < 0.0)
+                {
+                    q_gr *= fh_calc(soilt_arr(i, j, khi_lsm), m_pot_sat_arr(i, j, khi_lsm), soilw_arr(i, j, khi_lsm), Bconst_arr(i, j, khi_lsm));
+                }
+            }
+            else
+            {
+                erf_qsati(soilt_arr(i, j, khi_lsm), pres0, q_gr);
+            }
+
+            // baresoil
+            q_sfc = q_gr;
+
+            qref_tmp = qr_arr(i, j, 0);
+        }
+
+        amrex::Real soil_diff, totalR_soil, evapo_s, qsat_canop, evapo_wet;
+
+        // Soil diffusion factor
+        if (soilw_arr(i, j, khi_lsm) >= w_s_FC_arr(i,j,khi_lsm) || (qref_tmp > q_gr))
+        {
+            soil_diff = 1.0;
+        } else {
+            soil_diff = 0.25 * (std::pow(1.0 - cos(M_PI*std::max(0.01, soilw_arr(i, j, khi_lsm))/w_s_FC_arr(i, j, khi_lsm)), 2));
+        }
+
+        // total resistance for the topsoil
+        if (vegetype_arr(i, j, 0) == 0)
+        {
+            // for baresoil
+            r_soil_arr(i, j, 0) = std::min(10000.0, std::max(100.0, r_a_arr(i, j, 0)*(1.0 / soil_diff - 1.0)));
+            totalR_soil = r_soil_arr(i, j, 0) + r_a_arr(i, j, 0) + r_litter;
+        } else {
+            r_soil_arr(i, j, 0) = std::min(10000.0, std::max(50.0, r_d_arr(i, j, 0)*(1.0 / soil_diff - 1.0)));
+            totalR_soil = r_soil_arr(i, j, 0) + r_d_arr(i, j, 0) + r_litter;
+        }
+
+        // Evaporation from soil top underneath the canopy
+        evapo_s = vege_YES_arr(i, j, 0) * (q_gr - q_sfc) * rhow / totalR_soil;
+
+        // Evaporation from canopy
+        wet_canop_arr(i, j, 0) = 1.0;
+        erf_qsatw(t_canop_arr(i, j, 0), pres0, qsat_canop);
+        if (vegetype_arr(i, j, 0) != 0 && qsat_canop > q_sfc)
+        {
+            // wet portion of canopy
+            wet_canop_arr(i, j, 0) = min(1.0, mw_arr(i, j, 0)/mw_mx_arr(i, j, 0));
+        }
+
+        if (vegetype_arr(i, j, 0) == 0)
+        {
+            wet_canop_arr(i, j, 0) = 0.0;
+        }
+
+        // direct evaporation from the water held on canopy
+        evapo_wet = (qsat_canop - q_sfc)*rhow*wet_canop_arr(i, j, 0)/(2.0 * r_b_arr(i, j, 0))*vege_YES_arr(i, j, 0);
+
+        // increment/decrement of the water amount held on leaves following the direct evaporation/dew formation
+        mw_inc_arr(i, j, 0) = m_dt*evapo_wet; // evapo_wet [kg/m2s=mm/s]
+
+        // Transpiration
+        // For dew formation situation (qsat_canop < q_sfc), wet_canop = 1. automatically makes evapo_dry = 0
+        evapo_dry_arr(i, j, 0) = (qsat_canop - q_sfc)*rhow*(1.0 - wet_canop_arr(i, j, 0))/(2.0 * r_b_arr(i, j, 0) + r_c_arr(i, j, 0))*vege_YES_arr(i, j, 0);
+
+        // Check soil moisture availability for transpiration
+        for (int k = 0; k < m_nz_lsm; k++) { // TODO: switch to regular lsm k loop
+            const int lsm_k = khi_lsm - k;
+            if (soilw_arr(i, j, lsm_k))
+            {
+                evapo_dry_arr(i, j, 0) -= evapo_dry_arr(i, j, 0) * rootF_arr(i, j, lsm_k);
+            }
+        }
+
+        // Convert evaporation (kg/m2/s) to latent heat flux (W/m2)
+        lhf_canop_arr(i, j, 0) = lcond*(evapo_wet+evapo_dry_arr(i, j, 0));
+        lhf_soil_arr(i, j, 0) = lcond*evapo_s;
+        lhf_air_arr(i, j, 0) = lcond*(q_sfc-qr_arr(i, j, 0))*rhow / r_a_arr(i, j, 0);
+
+        if (vegetype_arr(i, j, 0) == 0)
+        {
+            // For baresoil case, lhf_air is equal to lhf_soil, lhf_air is updated to include soil diffusion factor
+            lhf_air_arr(i, j, 0) *= r_a_arr(i, j, 0) / (r_soil_arr(i, j, 0) + r_a_arr(i, j, 0));
+            evapo_s = lhf_air_arr(i, j, 0) / lcond;
+            lhf_soil_arr(i, j, 0) = lhf_air_arr(i, j, 0);
+        } else {
+            lhf_air_arr(i, j, 0) = lhf_canop_arr(i, j, 0) + lhf_soil_arr(i, j, 0);
+        }
+    });
 }
 
 void SLM::soil_water(const amrex::MFIter &mfi)
@@ -1514,7 +1656,7 @@ void SLM::soil_water(const amrex::MFIter &mfi)
                     const int lsm_kk = khi_lsm - kk;
                     if (soilw_arr(i, j, lsm_kk) > 1.0)
                     {
-                        dd = dd + (soilw_arr(i, j, kk) - 1.0)*poro_soil_arr(i, j, kk)*d_s_depth_mm[kk];
+                        dd = dd + (soilw_arr(i, j, lsm_kk) - 1.0)*poro_soil_arr(i, j, lsm_kk)*d_s_depth_mm[kk];
                         soilw_arr(i, j, lsm_kk) = 1.0;
                     }
                 }
