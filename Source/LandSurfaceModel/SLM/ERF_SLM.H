@@ -220,6 +220,13 @@ public:
     static std::vector<std::vector<amrex::Real>>
     read_cols(const std::string& fname, const int skip_nlines = 1);
 
+    int Lsm_Type() override
+    {
+        return LSM_Type::SLM;
+    }
+
+    void writeSLM_Data(const amrex::Real time, const std::string plot_prefix, const int level_step);
+
   private:
     void init_from_file();
 
@@ -266,6 +273,8 @@ public:
 
     // geometry for lsm
     amrex::Geometry m_lsm_geom;
+
+    amrex::BoxArray ba_lsm_2d;
 
     // timestep
     amrex::Real m_dt;

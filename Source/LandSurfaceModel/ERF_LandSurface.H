@@ -6,6 +6,7 @@
 #include <ERF_NullSurf.H>
 #include <ERF_SLM.H>
 #include <ERF_MM5.H>
+#include <LSM_Types.H>
 
 #if ERF_USE_NOAH
 #include <ERF_NOAH.H>
@@ -116,6 +117,13 @@ public:
                                      varnames, m_lsm_geom_lev, time, level_steps, ref_ratio);
             m_lsm_geom_lev.clear();
             m_lsm_data_lev.clear();
+
+            if (nlev > 0 && m_lsm_model[0]->Lsm_Type() == LSM_Type::SLM)
+            {
+                for (int lev(0); lev<nlev; ++lev) {
+                    static_cast<SLM*>(m_lsm_model[lev].get())->writeSLM_Data(time, plot_file_lsm, level_steps[0]);
+                }
+            }
         }
     }
 

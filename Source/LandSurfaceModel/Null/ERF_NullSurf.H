@@ -5,6 +5,8 @@
 #include <AMReX_Geometry.H>
 #include <ERF_DataStruct.H>
 
+#include <LSM_Types.H>
+
 class NullSurf {
 
  public:
@@ -84,6 +86,11 @@ class NullSurf {
     void
     set_terrain_inputs(const amrex::Vector<std::unique_ptr<amrex::MultiFab>>& sst_in,
                        const amrex::Vector<std::unique_ptr<amrex::iMultiFab>>& lmask_in) { }
+
+    virtual int Lsm_Type()
+    {
+        return LSM_Type::None;
+    }
 
  private:
     int m_lsm_size = 1;

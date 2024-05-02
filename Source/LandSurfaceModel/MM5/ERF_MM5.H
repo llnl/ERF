@@ -108,6 +108,11 @@ public:
         return LsmVarName[lsmIdx];
     }
 
+    int Lsm_Type() override
+    {
+        return LSM_Type::MM5;
+    }
+
 private:
     // number of lsm variables (theta)
     int m_lsm_size = 1;

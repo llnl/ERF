@@ -3,6 +3,8 @@
 #include "TileNoZ.H"
 #include "Microphysics_Utils.H"
 
+#include <AMReX_PlotFileUtil.H>
+
 using namespace amrex;
 
 /* Initialize lsm data structures */
@@ -87,7 +89,7 @@ SLM::Init (const MultiFab& cons_in,
     for (auto& b : bl_lsm_2d) {
         b.setRange(2, 0, 1);
     }
-    BoxArray ba_lsm_2d(std::move(bl_lsm_2d));
+    ba_lsm_2d = BoxArray(std::move(bl_lsm_2d));
     IntVect ng_2d(0, 0, 0);
 
     // TODO: Placeholder landmask array - fix!
@@ -2081,4 +2083,98 @@ std::vector<std::vector<amrex::Real>> SLM::read_cols(const std::string &fname, c
     ifs.close();
 
     return datasets;
+}
+
+void SLM::writeSLM_Data(const amrex::Real time, const std::string plot_prefix, const int level_step)
+{
+    std::string plotfilename = amrex::Concatenate(plot_prefix + "2D_", level_step, 5);
+
+    amrex::Geometry lsm_2d_geom;
+    lsm_2d_geom.define( ba_lsm_2d.minimalBox(), m_lsm_geom.ProbDomain(), m_lsm_geom.Coord(), m_lsm_geom.isPeriodic());
+
+    amrex::Vector<amrex::MultiFab*> mf_data;
+
+    mf_data.push_back(&net_rad);
+
+    mf_data.push_back(&mw);
+    mf_data.push_back(&mws);
+    mf_data.push_back(&t_canop);
+    mf_data.push_back(&t_skin);
+    mf_data.push_back(&t_cas);
+    mf_data.push_back(&q_cas);
+    mf_data.push_back(&mw_inc);
+
+    mf_data.push_back(&evapo_dry);
+    mf_data.push_back(&shf_air);
+    mf_data.push_back(&shf_canop);
+    mf_data.push_back(&shf_soil);
+    mf_data.push_back(&lhf_air);
+    mf_data.push_back(&lhf_canop);
+    mf_data.push_back(&lhf_soil);
+
+    mf_data.push_back(&r_a);
+    mf_data.push_back(&r_b);
+    mf_data.push_back(&r_c);
+    mf_data.push_back(&r_d);
+    mf_data.push_back(&r_soil);
+
+    mf_data.push_back(&wet_canop);
+
+    IntVect ng(0, 0, 0);
+
+    // Total number of output MFs: net_rad components + mf_data size - 1
+    const int output_size = SLM_NetRad::NumVars + mf_data.size() - 1;
+    MultiFab fab(ba_lsm_2d, net_rad.DistributionMap(), output_size, ng);
+    MultiFab::Copy(fab, *(mf_data[0]), 0, 0, SLM_NetRad::NumVars, 0);
+    for (int i = 1; i < mf_data.size(); i++)
+    {
+        MultiFab::Copy(fab, *(mf_data[i]), 0, i + SLM_NetRad::NumVars - 1, 1, 0);
+    }
+
+
+    amrex::Vector<std::string> varnames;
+    // net_rad component names:
+    varnames.push_back("net_swup1");
+    varnames.push_back("net_swup2");
+    varnames.push_back("net_swdn1");
+    varnames.push_back("net_swdn2");
+    varnames.push_back("net_sw1");
+    varnames.push_back("net_sw2");
+    varnames.push_back("tir1");
+    varnames.push_back("tir2");
+    varnames.push_back("net_lwup1");
+    varnames.push_back("net_lwup2");
+    varnames.push_back("net_lwdn1");
+    varnames.push_back("net_lwdn2");
+    varnames.push_back("net_lw1");
+    varnames.push_back("net_lw2");
+    varnames.push_back("net_rad1");
+    varnames.push_back("net_rad2");
+    // ----------------------------
+
+    varnames.push_back("mw");
+    varnames.push_back("mws");
+    varnames.push_back("t_canop");
+    varnames.push_back("t_skin");
+    varnames.push_back("t_cas");
+    varnames.push_back("q_cas");
+    varnames.push_back("mw_inc");
+
+    varnames.push_back("evapo_dry");
+    varnames.push_back("shf_air");
+    varnames.push_back("shf_canop");
+    varnames.push_back("shf_soil");
+    varnames.push_back("lhf_air");
+    varnames.push_back("lhf_canop");
+    varnames.push_back("lhf_soil");
+
+    varnames.push_back("r_a");
+    varnames.push_back("r_b");
+    varnames.push_back("r_c");
+    varnames.push_back("r_d");
+    varnames.push_back("r_soil");
+
+    varnames.push_back("wet_canop");
+
+    amrex::WriteSingleLevelPlotfile(plotfilename, fab, varnames, lsm_2d_geom, time, level_step);
 }
