@@ -647,7 +647,7 @@ void SLM::vege_root_init()
 void SLM::init_slm_vars()
 {
     // TODO: these are placeholder values until the calculations are implemented
-    r_a.setVal(1.0);
+    r_a.setVal(1.0e9);
     r_b.setVal(1.0e4);
     r_c.setVal(1.0e4);
     r_d.setVal(1.0e4);
