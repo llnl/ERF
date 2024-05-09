@@ -242,7 +242,7 @@ public:
 
     void radiative_fluxes(const amrex::MFIter &mfi);
 
-    void transfer_coeff(const int i, const int j);
+    void transfer_coeff(const amrex::MFIter &mfi);
 
     void resistances(const int i, const int j);
 
@@ -345,8 +345,11 @@ public:
     amrex::Real tfriz = 273.15;
     amrex::Real mws_mx0 = 50.0; // maximum puddle water storage (mm)
 
+    amrex::Real epsv = 0.61;
+
     amrex::Real pres0 = p_0; // reference surface pressure [Pa]
 
+    amrex::Real cp = 1004.0; // specific heat of air [J/kg/K]
     amrex::Real cp_water = 4.1796e6; // heat capacity of water [J/m^3K]
 
     amrex::Real sigma = 5.67e-8; // Stefen-Boltzmann constant [W/m^2/K^4]

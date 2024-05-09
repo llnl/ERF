@@ -888,8 +888,8 @@ SLM::AdvanceSLM ()
         auto r_d_arr = r_d.const_array(mfi);
         auto r_soil_arr = r_soil.const_array(mfi);
 
-        auto flbu_arr  = lsm_fab_vars[LsmVar_SLM::flbu]->array(mfi);
-        auto flbv_arr  = lsm_fab_vars[LsmVar_SLM::flbv]->array(mfi);
+        //auto flbu_arr  = lsm_fab_vars[LsmVar_SLM::flbu]->array(mfi);
+        //auto flbv_arr  = lsm_fab_vars[LsmVar_SLM::flbv]->array(mfi);
         auto flbq_arr  = lsm_fab_vars[LsmVar_SLM::flbq]->array(mfi);
         auto flbt_arr  = lsm_fab_vars[LsmVar_SLM::flbt]->array(mfi);
         auto prsfc_arr  = lsm_fab_vars[LsmVar_SLM::prsfc]->array(mfi);
@@ -899,6 +899,9 @@ SLM::AdvanceSLM ()
 
         // Calculate net radiation absorbed by canopy and soil surface
         radiative_fluxes(mfi);
+
+        // Calculate turbulent transfer coeff between reference level and surface
+        transfer_coeff(mfi);
 
         ParallelFor( box, [=] AMREX_GPU_DEVICE (int i, int j, int)
         {
@@ -946,11 +949,11 @@ SLM::AdvanceSLM ()
                 }
 
                 // Calculate turbulent transfer coeff between reference level and surface
-                transfer_coeff(i, j);
+                //transfer_coeff(i, j);
 
                 // Calculate surface momentum fluxes
-                taux_sfc = -1.0 * mom_trans_coef * vel_m * ur_arr(i, j, 0) * (pres0 * 100.0 / 287.0 / tref_arr(i, j, 0));
-                tauy_sfc = -1.0 * mom_trans_coef * vel_m * vr_arr(i, j, 0) * (pres0 * 100.0 / 287.0 / tref_arr(i, j, 0));
+                //taux_sfc = -1.0 * mom_trans_coef * vel_m * ur_arr(i, j, 0) * (pres0 * 100.0 / 287.0 / tref_arr(i, j, 0));
+                //tauy_sfc = -1.0 * mom_trans_coef * vel_m * vr_arr(i, j, 0) * (pres0 * 100.0 / 287.0 / tref_arr(i, j, 0));
 
                 // Calculate aerodynamic resistances + stomatal resistance
                 resistances(i, j);
@@ -982,8 +985,8 @@ SLM::AdvanceSLM ()
                 //mw_arr(i, j, 0) += mw_inc_arr(i, j, 0);
 
                 // Output variables
-                flbu_arr(i, j, 0) = taux_sfc;
-                flbv_arr(i, j, 0) = tauy_sfc;
+                //flbu_arr(i, j, 0) = taux_sfc;
+                //flbv_arr(i, j, 0) = tauy_sfc;
                 //prsfc_arr(i, j, 0) = precip_sfc;
             }
         });
@@ -1250,9 +1253,251 @@ void SLM::radiative_fluxes(const amrex::MFIter &mfi)
     });
 }
 
-void SLM::transfer_coeff(const int i, const int j)
+void SLM::transfer_coeff(const amrex::MFIter &mfi)
 {
+    auto box = mfi.tilebox();
 
+    auto landmask_arr = landmask.const_array(mfi);
+
+    auto t_cas_arr = t_cas.const_array(mfi);
+    auto q_cas_arr = q_cas.const_array(mfi);
+
+    auto soilt_arr = lsm_fab_vars[LsmVar_SLM::soilt]->array(mfi);
+    auto soilw_arr = lsm_fab_vars[LsmVar_SLM::soilw]->array(mfi);
+    auto vegetype_arr = vegetype.const_array(mfi);
+
+    auto mws_arr = mws.array(mfi);
+
+    auto disp_hgt_arr = disp_hgt.const_array(mfi);
+    auto z0_sfc_arr = z0_sfc.const_array(mfi);
+
+    auto qr_arr = lsm_fab_vars[LsmVar_SLM::qref]->const_array(mfi);
+    auto m_pot_sat_arr = lsm_fab_vars[LsmVar_SLM::m_pot_sat]->const_array(mfi);
+    auto Bconst_arr = lsm_fab_vars[LsmVar_SLM::Bconst]->const_array(mfi);
+
+    auto ustar_arr = ustar.array(mfi);
+    auto tstar_arr = tstar.array(mfi);
+
+    auto tref_arr  = lsm_fab_vars[LsmVar_SLM::tref]->array(mfi);
+    auto ur_arr  = lsm_fab_vars[LsmVar_SLM::uref]->array(mfi);
+    auto vr_arr  = lsm_fab_vars[LsmVar_SLM::vref]->array(mfi);
+    auto dref_arr  = lsm_fab_vars[LsmVar_SLM::dref]->array(mfi);
+    auto qref_arr  = lsm_fab_vars[LsmVar_SLM::qref]->array(mfi);
+    auto precip_array  = lsm_fab_vars[LsmVar_SLM::precipref]->array(mfi);
+
+    auto r_a_arr = r_a.array(mfi);
+
+    auto flbu_arr  = lsm_fab_vars[LsmVar_SLM::flbu]->array(mfi);
+    auto flbv_arr  = lsm_fab_vars[LsmVar_SLM::flbv]->array(mfi);
+
+
+    constexpr amrex::Real zref = 0.5; // TODO: get proper height of ref level
+    constexpr amrex::Real xsim = -1.574;
+    constexpr amrex::Real xsih = -0.465;
+    const amrex::Real xm = sqrt(sqrt(1.0 - 16.0*xsim));
+    const amrex::Real xh = sqrt(sqrt(1.0 - 16.0*xsih));
+
+    constexpr amrex::Real errormax = 0.01;
+    constexpr amrex::Real kk = 0.35;
+    constexpr int nitermax = 10;
+
+    auto constexpr xx = [](const amrex::Real &yy) -> amrex::Real {
+        return sqrt(sqrt((1.0 - 16.0 * yy)));
+    };
+    // unstable: -1.574<xsi<0
+    auto constexpr psim1 = [](const amrex::Real &x, const amrex::Real &x0) -> amrex::Real {
+        return 2.0 * log((1.0 + x) / (1.0 + x0)) + log((1.0 + x*x) / (1.0 + x0*x0)) - 2.0*(atan(x)-atan(x0));
+    };
+    auto constexpr psih1 = [](const amrex::Real &x, const amrex::Real &x0) -> amrex::Real {
+        return 2.0 * log((1.0 + x*x) / (1.0 + x0*x0));
+    };
+    // very unstable: xsi < -1.574
+    auto const psim2 = [&xm, psim1](const amrex::Real &xsi, const amrex::Real &xsim0, const amrex::Real &xm0) -> amrex::Real {
+        return log(xsim / xsim0) - psim1(xm, xm0) + 1.14*(std::pow(-xsi, 0.3333) - std::pow(-xsim, 0.3333));
+    };
+    auto const psih2 = [&xh, psih1](const amrex::Real &xsi, const amrex::Real &xsih0, const amrex::Real &xh0) -> amrex::Real {
+        return log(xsih / xsih0) - psih1(xh, xh0) + 0.8*(std::pow(-xsi, 0.3333) - std::pow(-xsih, 0.3333));
+    };
+    // stable: 0 < xsi < 1
+    auto constexpr psim3 = [](const amrex::Real &xsi, const amrex::Real &xsim0) -> amrex::Real {
+        return -0.5 * (xsi - xsim0);
+    };
+    auto constexpr psih3 = [](const amrex::Real &xsi, const amrex::Real &xsih0) -> amrex::Real {
+        return -0.5 * (xsi - xsih0);
+    };
+    // very stable: 0 < xsi < 1
+    auto constexpr psim4 = [](const amrex::Real &xsi, const amrex::Real &xsim0) -> amrex::Real {
+        return log(std::pow(xsi, 5) / xsim0) + 5.0 * (1.0 - xsim0) + xsi - 1.0;
+    };
+    auto constexpr psih4 = [](const amrex::Real &xsi, const amrex::Real &xsih0) -> amrex::Real {
+        return log(std::pow(xsi, 5) / xsih0) + 5.0 * (1.0 - xsih0) + xsi - 1.0;
+    };
+
+
+    ParallelFor( box, [=] AMREX_GPU_DEVICE (int i, int j, int)
+    {
+        if (landmask_arr(i, j, 0) != 1) {
+            return;
+        }
+
+        amrex::Real t_sfc, q_sfc, q_gr;
+        // TODO: This code is repeated across several functions - store q_sfc,t_sfc for reuse?
+        // determine input q_sfc and t_sfc
+        if (vegetype_arr(i, j, 0) != 0)
+        {
+            // vegetated surfaces
+            q_sfc = q_cas_arr(i, j, 0);
+            t_sfc = t_cas_arr(i, j, 0);
+        }
+        else
+        {
+            // baresoil
+            t_sfc = soilt_arr(i, j, khi_lsm);
+
+            // Specific humidity at top soil
+            if (soilt_arr(i, j, khi_lsm) > tfriz)
+            {
+                erf_qsatw(soilt_arr(i, j, khi_lsm), pres0, q_gr);
+                if (mws_arr(i, j, 0) < 0.0)
+                {
+                    q_gr *= fh_calc(soilt_arr(i, j, khi_lsm), m_pot_sat_arr(i, j, khi_lsm), soilw_arr(i, j, khi_lsm), Bconst_arr(i, j, khi_lsm));
+                }
+            }
+            else
+            {
+                erf_qsati(soilt_arr(i, j, khi_lsm), pres0, q_gr);
+            }
+
+            q_sfc = q_gr;
+        }
+
+        // Inputs:
+        // ts = t_sfc
+        // th = tref
+        // qh = qr
+        // qs = q_sfc
+        // h = zref = height of ref level
+        // z0 = z0_sfc = surface roughness length
+        // disp = disp_hgt
+
+        amrex::Real tsp = t_sfc * std::pow(1000.0/pres0, rgas / cp);
+        amrex::Real thp = tref_arr(i, j, khi_lsm) * std::pow(1000.0 / pres0, rgas / cp);
+
+        amrex::Real vel;
+        // Add additional velocity depending on the stratification
+        if ((thp - tsp) >= 0.0)
+        {
+            vel = sqrt(std::pow(ur_arr(i, j, khi_lsm), 2) + std::pow(vr_arr(i, j, khi_lsm), 2) + 0.1*0.1);
+        }
+        else
+        {
+            vel = sqrt(std::pow(ur_arr(i, j, khi_lsm), 2) + std::pow(vr_arr(i, j, khi_lsm), 2) + 1.0);
+        }
+
+        amrex::Real r = 9.81 / tsp * (thp * (1.0 + epsv * qr_arr(i, j, khi_lsm)) - tsp * (1.0 + epsv * q_sfc)) * (zref - disp_hgt_arr(i, j, 0)) / (vel*vel);
+        r = std::max(-10.0, std::min(r, 0.19));
+
+        // initial guess
+        amrex::Real xsi, fm, fh, xsi1;
+        amrex::Real xsim0, xsih0;
+        amrex::Real z0h = z0_sfc_arr(i, j, 0) / (zref - disp_hgt_arr(i, j, 0));
+
+        amrex::Real zt0 = std::max(0.0001, (70.0*1.5e-5 / ustar_arr(i, j, 0)) * std::exp(-7.2*sqrt(ustar_arr(i, j, 0))*(std::pow(std::abs(tstar_arr(i, j, 0)), 0.25))));
+
+        amrex::Real zTh = zt0 / (zref - disp_hgt_arr(i, j, 0));
+        amrex::Real zodym = log(1.0 / z0h);
+        amrex::Real zodyh = log(1.0 / zTh);
+
+        if (r > 0)
+        {
+            xsi = r * zodym / (1.0 - 5.0 * r);
+        }
+        else
+        {
+            xsi = r*zodym;
+        }
+
+        int niter = 0;
+        amrex::Real error = 1000.0;
+
+        while (error > errormax && niter < nitermax)
+        {
+            xsi1 = xsi;
+            niter++;
+            xsim0 = z0h * xsi;
+            xsih0 = zTh * xsi;
+
+            if (xsi < -0.01)
+            {
+                if (xsi >= xsim)
+                {
+                    fm = zodym - psim1(xx(xsi), xx(xsim0));
+                }
+                else
+                {
+                    fm = psim2(xsi, xsim0, xx(xsim0));
+                }
+
+                if (xsi >= xsih)
+                {
+                    fh = zodyh - psih1(xx(xsi), xx(xsih0));
+                }
+                else
+                {
+                    fh = psih2(xsi, xsih0, xx(xsih0));
+                }
+            }
+            else if (xsi > 0.01)
+            {
+                if (xsi <= 1.0)
+                {
+                    fm = zodym - psim3(xsi, xsim0);
+                    fh = zodyh - psih3(xsi, xsih0);
+                }
+                else
+                {
+                    fm = psim4(xsi, xsim0);
+                    fh = psih4(xsi, xsih0);
+                }
+            }
+            else
+            {
+                fm = zodym;
+                fh = zodyh;
+            }
+
+            xsi = r * fm * fm / fh;
+            error = std::abs(xsi - xsi1);
+        }
+
+        // limit fm and fh to avoid too large fluxes especially over large surface roughness.
+        // Basically, make the maximum slowdown of the velocity not bigger than 50% in one timestep
+        amrex::Real fm0 = sqrt((kk*kk)*vel*m_dt / 0.5 / zref);
+        fm = std::max(fm0, fm);
+        fh = std::max(fh, fh/fm*fm0);
+
+        // drag coefficient C_D = k**2/fm**2
+        // heat transfer coefficient C_H = k**2/fm/fh
+        mom_trans_coef = (kk*kk) / (fm*fm);
+        heat_trans_coef = (kk*kk) / fm / fh;
+        ustar_arr(i, j, 0) = sqrt(mom_trans_coef) * vel;
+
+        // set ustar > 0.2 to avoid too calm conditions at night for the turbulent transfer
+        ustar_arr(i, j, 0) = std::max(0.2, ustar_arr(i, j, 0));
+
+        // aerodynamic resistance between surface and reference level
+        r_a_arr(i, j, 0) = fh / kk / ustar_arr(i, j, 0);
+
+
+        amrex::Real vel_m = vel;
+        // amrex::Real RiB = r; // TODO: not used?
+        amrex::Real taux_sfc = -1.0 * mom_trans_coef * vel_m * ur_arr(i, j, khi_lsm) * (pres0 * 100.0 / 287.0 / tref_arr(i, j, khi_lsm));
+        amrex::Real tauy_sfc = -1.0 * mom_trans_coef * vel_m * vr_arr(i, j, khi_lsm) * (pres0 * 100.0 / 287.0 / tref_arr(i, j, khi_lsm));
+
+        // Output variables
+        flbu_arr(i, j, 0) = taux_sfc;
+        flbv_arr(i, j, 0) = tauy_sfc;
+    });
 }
 
 void SLM::resistances(const int i, const int j)
