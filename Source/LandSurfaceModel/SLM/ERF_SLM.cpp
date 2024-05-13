@@ -1759,7 +1759,7 @@ void SLM::soil_water(const amrex::MFIter &mfi)
         } else {
             for (int k = 0; k < m_nz_lsm; k++) {
                 const int lsm_k = khi_lsm - k;
-                d_s_depth_mm[k] = s_depth_arr(i, j, lsm_k) * 1.0e-3;
+                d_s_depth_mm[k] = s_depth_arr(i, j, lsm_k) * 1.0e3;
             }
 
             // Calculate precipitation infiltration rate into the first soil layer
@@ -1789,27 +1789,28 @@ void SLM::soil_water(const amrex::MFIter &mfi)
 
                 if (soilt_arr(i, j, lsm_k) >= tfriz && soilt_arr(i, j, lsm_k-1) >= tfriz)
                 {
-                    d_sh_eff_cond[k] =
-                      (std::pow(
-                         d_s_depth_mm[k] * soilw_arr(i, j, lsm_k),
-                         Bconst_arr(i, j, lsm_k) + 2.0) +
-                       std::pow(
-                         d_s_depth_mm[k + 1] * soilw_arr(i, j, lsm_k - 1),
-                         Bconst_arr(i, j, lsm_k) + 2.0)) /
-                      (d_s_depth_mm[k] + d_s_depth_mm[k + 1]) *
-                      ks_arr(i, j, lsm_k) * Bconst_arr(i, j, lsm_k) *
-                      std::abs(m_pot_sat_arr(i, j, lsm_k)) /
-                      poro_soil_arr(i, j, lsm_k);
+                  d_sh_eff_cond[k] =
+                    (d_s_depth_mm[k] * std::pow(
+                                         soilw_arr(i, j, lsm_k),
+                                         Bconst_arr(i, j, lsm_k) + 2.0) +
+                     d_s_depth_mm[k + 1] * std::pow(
+                                             soilw_arr(i, j, lsm_k - 1),
+                                             Bconst_arr(i, j, lsm_k) + 2.0)) /
+                    (d_s_depth_mm[k] + d_s_depth_mm[k + 1]) *
+                    ks_arr(i, j, lsm_k) * Bconst_arr(i, j, lsm_k) *
+                    std::abs(m_pot_sat_arr(i, j, lsm_k)) /
+                    poro_soil_arr(i, j, lsm_k);
 
-                    d_sh_eff_vel[k] =
-                      (std::pow(
-                         d_s_depth_mm[k] * soilw_arr(i, j, lsm_k),
-                         2.0 * Bconst_arr(i, j, lsm_k) + 2.0) +
+                  d_sh_eff_vel[k] =
+                    (d_s_depth_mm[k] * std::pow(
+                                         soilw_arr(i, j, lsm_k),
+                                         2.0 * Bconst_arr(i, j, lsm_k) + 2.0) +
+                     d_s_depth_mm[k + 1] *
                        std::pow(
-                         d_s_depth_mm[k + 1] * soilw_arr(i, j, lsm_k - 1),
+                         soilw_arr(i, j, lsm_k - 1),
                          2.0 * Bconst_arr(i, j, lsm_k) + 2.0)) /
-                      (d_s_depth_mm[k] + d_s_depth_mm[k + 1]) *
-                      ks_arr(i, j, lsm_k) / poro_soil_arr(i, j, lsm_k);
+                    (d_s_depth_mm[k] + d_s_depth_mm[k + 1]) *
+                    ks_arr(i, j, lsm_k) / poro_soil_arr(i, j, lsm_k);
                 } else {
                     // no water movement between two layers, one of which is frozen
                     d_sh_eff_cond[k] = 0.0;
