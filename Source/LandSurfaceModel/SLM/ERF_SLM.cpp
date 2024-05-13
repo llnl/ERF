@@ -1320,10 +1320,10 @@ void SLM::transfer_coeff(const amrex::MFIter &mfi)
     };
     // stable: 0 < xsi < 1
     auto constexpr psim3 = [](const amrex::Real &xsi, const amrex::Real &xsim0) -> amrex::Real {
-        return -0.5 * (xsi - xsim0);
+        return -5.0 * (xsi - xsim0);
     };
     auto constexpr psih3 = [](const amrex::Real &xsi, const amrex::Real &xsih0) -> amrex::Real {
-        return -0.5 * (xsi - xsih0);
+        return -5.0 * (xsi - xsih0);
     };
     // very stable: 0 < xsi < 1
     auto constexpr psim4 = [](const amrex::Real &xsi, const amrex::Real &xsim0) -> amrex::Real {
@@ -1408,7 +1408,7 @@ void SLM::transfer_coeff(const amrex::MFIter &mfi)
         amrex::Real zodym = log(1.0 / z0h);
         amrex::Real zodyh = log(1.0 / zTh);
 
-        if (r > 0)
+        if (r > 0.0)
         {
             xsi = r * zodym / (1.0 - 5.0 * r);
         }
