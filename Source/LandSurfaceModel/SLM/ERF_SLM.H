@@ -244,7 +244,7 @@ public:
 
     void transfer_coeff(const amrex::MFIter &mfi);
 
-    void resistances(const int i, const int j);
+    void resistances(const amrex::MFIter &mfi);
 
     void vapor_fluxes(const amrex::MFIter &mfi);
 
@@ -353,6 +353,10 @@ public:
     amrex::Real cp_water = 4.1796e6; // heat capacity of water [J/m^3K]
 
     amrex::Real sigma = 5.67e-8; // Stefen-Boltzmann constant [W/m^2/K^4]
+
+    // parameters for stomatal resistance
+    amrex::Real Rc_max = 5000.0; // maximum stomatal resistance
+    amrex::Real T_opt = 298.0; // optimum temperature for transpiration
 
     // Model variables
     //   NOTE: these MultiFabs are defined over the grid only in X and Y (no Z component)

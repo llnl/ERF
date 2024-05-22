@@ -903,6 +903,9 @@ SLM::AdvanceSLM ()
         // Calculate turbulent transfer coeff between reference level and surface
         transfer_coeff(mfi);
 
+        // Calculate aerodynamic resistances + stomatal resistance
+        resistances(mfi);
+
         ParallelFor( box, [=] AMREX_GPU_DEVICE (int i, int j, int)
         {
             //amrex::Real precip = 0.0; // precipitation interception rate at canopy
@@ -956,7 +959,7 @@ SLM::AdvanceSLM ()
                 //tauy_sfc = -1.0 * mom_trans_coef * vel_m * vr_arr(i, j, 0) * (pres0 * 100.0 / 287.0 / tref_arr(i, j, 0));
 
                 // Calculate aerodynamic resistances + stomatal resistance
-                resistances(i, j);
+                //resistances(i, j);
 
                 // Sensible heat fluxes
                 shf_canop_arr(i, j, 0) = (t_canop_arr(i, j, 0) - t_sfc) * rhow * Cp_d / r_b_arr(i, j, 0) * vege_YES_arr(i, j, 0);
@@ -1500,9 +1503,160 @@ void SLM::transfer_coeff(const amrex::MFIter &mfi)
     });
 }
 
-void SLM::resistances(const int i, const int j)
+void SLM::resistances(const amrex::MFIter &mfi)
 {
+    auto box = mfi.tilebox();
 
+    auto landmask_arr = landmask.const_array(mfi);
+    auto vegetype_arr = vegetype.const_array(mfi);
+
+    auto soilt_arr = lsm_fab_vars[LsmVar_SLM::soilt]->const_array(mfi);
+    auto soilw_arr = lsm_fab_vars[LsmVar_SLM::soilw]->const_array(mfi);
+    auto s_depth_arr = lsm_fab_vars[LsmVar_SLM::s_depth]->const_array(mfi);
+
+    auto LAI_arr = LAI.const_array(mfi);
+    auto t_cas_arr = t_cas.const_array(mfi);
+    auto q_cas_arr = q_cas.const_array(mfi);
+    auto ustar_arr = ustar.const_array(mfi);
+    auto tstar_arr = tstar.const_array(mfi);
+
+    auto w_s_WP_arr = lsm_fab_vars[LsmVar_SLM::w_s_WP]->const_array(mfi);
+    auto w_s_FC_arr = lsm_fab_vars[LsmVar_SLM::w_s_WP]->const_array(mfi);
+    auto rootF_arr = lsm_fab_vars[LsmVar_SLM::rootF]->const_array(mfi);
+    auto poro_soil_arr = lsm_fab_vars[LsmVar_SLM::poro_soil]->const_array(mfi);
+    auto theta_FC_arr = lsm_fab_vars[LsmVar_SLM::theta_FC]->const_array(mfi);
+    auto theta_WP_arr = lsm_fab_vars[LsmVar_SLM::theta_WP]->const_array(mfi);
+
+    auto ztop_arr = ztop.const_array(mfi);
+    auto Rgl_arr = Rgl.const_array(mfi);
+    auto Rc_min_arr = Rc_min.const_array(mfi);
+    auto hs_rc_arr = hs_rc.const_array(mfi);
+    auto net_rad_arr = net_rad.const_array(mfi);
+
+    auto r_a_arr = r_a.const_array(mfi);
+    auto r_b_arr = r_b.array(mfi);
+    auto r_c_arr = r_c.array(mfi);
+    auto r_d_arr = r_d.array(mfi);
+
+    ParallelFor( box, [=] AMREX_GPU_DEVICE (int i, int j, int)
+    {
+        if (landmask_arr(i, j, 0) != 1) {
+            return;
+        }
+
+        if (vegetype_arr(i, j, 0) == 0)
+        {
+            // for baresoil, r_d = r_a
+            // under canopy resistance
+            r_d_arr(i, j, 0) = r_a_arr(i, j, 0);
+        }
+        else
+        {
+            // for vegetated land surfaces
+            amrex::Real Cs_dense;
+            amrex::Real Cs_bare;
+            amrex::Real Cs;
+            amrex::Real rc_fac_rad, rc_fac_vpd, rc_fac_t, rc_fac_sw, d_root;
+
+            // Aerodynamic resistance for heat and vapor transfer under canopy space : r_d
+            // temp_diff > 0 : stable undercanopy
+            // temp_diff < 0 : unstable undercanopy
+            amrex::Real temp_diff = t_cas_arr(i, j, 0) - soilt_arr(i, j, khi_lsm);
+
+            // turbulent transfer coefficient under dense canopy
+            if (temp_diff < 0.0)
+            {
+                Cs_dense = 0.004;
+            }
+            else
+            {
+                // rd_correc_fac : undercanopy stability parameter, in effect only for stable undercanopy
+                amrex::Real rd_correc_fac = CONST_GRAV * ztop_arr(i, j, 0) * std::max(0.0, temp_diff) / soilt_arr(i, j, khi_lsm) / (std::pow(ustar_arr(i, j, 0), 2));
+                // stable undercanopy - Cs_dense becomes smaller than 0.004
+                Cs_dense = 0.004 / (1.0 + 0.5 * std::min(10.0, rd_correc_fac));
+            }
+
+            // turbulent transfer coefficient over the exposed topsoil
+            // typical value of Cs_bare ~0.2
+            Cs_bare = 0.4 / 0.13 * std::pow((z0_soil * ustar_arr(i, j, 0) / (1.5e-5)), -0.45);
+
+            // turbulence transfer coefficient undercanopy
+            // LAI-weighed sum of Cs_bare and Cs_dense
+            Cs = Cs_bare * std::exp(-1.0 * LAI_arr(i, j, 0)) + Cs_dense * (1.0 - std::exp(-1.0 * LAI_arr(i, j, 0)));
+
+            // Undercanopy aerodynamic resistance depends on the weighed sum of the dense canopy covered soil
+            // and baresoil turbulent transfer coefficient and friction velocity
+            //   Reference: [Oleson et al., 2004] [Zeng et al., 2005]
+            r_d_arr(i, j, 0) = 1.0 / ustar_arr(i, j, 0) / Cs;
+
+            // ===================================================
+            // Leaf boundary layer resistance : r_b
+            // ===================================================
+            // turbulent transfer coefficient between canopy surface and canopy air : Cv = 0.01m/s^-0.5
+            // characteristic dimension of the elaves in the direction of wind flux : d_leaf = 0.04m
+            r_b_arr(i, j, 0) = 1.0 / 0.01 * std::pow( ustar_arr(i, j, 0) / 0.04, -0.5) / std::max(0.1, LAI_arr(i, j, 0));
+
+            // ===================================================
+            // Stomatal resistance : r_c
+            // ===================================================
+            // radiation factor
+            // TODO: check if this is the correct downwelling SW to use
+            amrex::Real tmp_radf = 0.55 * net_rad_arr(i, j, 0, SLM_NetRad::net_swdn1) * 2.0 / Rgl_arr(i, j, 0) / LAI_arr(i, j, 0);
+            rc_fac_rad = (Rc_min_arr(i, j, 0) / Rc_max + tmp_radf) / (1.0 + tmp_radf);
+
+            // vapor pressure deficit factor
+            amrex::Real qsatw;
+            erf_qsatw(t_cas_arr(i, j, 0), pres0, qsatw);
+            rc_fac_vpd = 1.0 / (1.0 + hs_rc_arr(i, j, 0) * (qsatw - q_cas_arr(i, j, 0)));
+
+            // temperature factor
+            rc_fac_t = 1.0 - 0.0016 * std::pow(T_opt - t_cas_arr(i, j, 0), 2);
+
+            // rootzone soil moisture factor
+            rc_fac_sw = 0.0;
+            d_root = 0.0;
+            for (int k = 0; k < m_nz_lsm; k++) {
+                const int lsm_k = khi_lsm - k;
+
+                if (rootF_arr(i, j, lsm_k) > 0.0)
+                {
+                    amrex::Real tmp;
+                    // soil layer with the root
+                    if (soilw_arr(i, j, lsm_k) > w_s_FC_arr(i, j, lsm_k))
+                    {
+                        // no water stree if water level exceeds the value at field capacity
+                        tmp = 1.0 * s_depth_arr(i, j, lsm_k);
+                        d_root += s_depth_arr(i, j, lsm_k);
+                    }
+                    else if (soilw_arr(i, j, lsm_k) < w_s_WP_arr(i, j, lsm_k))
+                    {
+                        // below wilting point
+                        tmp = 0.0;
+                    }
+                    else
+                    {
+                        // otherwise
+                        tmp = s_depth_arr(i, j, lsm_k) * (soilw_arr(i, j, lsm_k) * poro_soil_arr(i, j, lsm_k) - theta_WP_arr(i, j, lsm_k)) / (theta_FC_arr(i, j, lsm_k) - theta_WP_arr(i, j, lsm_k));
+                        d_root += s_depth_arr(i, j, lsm_k);
+                    }
+                    rc_fac_sw += tmp;
+                }
+            }
+
+            rc_fac_sw = rc_fac_sw / std::max(1.0e-6, d_root);
+
+            tmp_radf = std::max(1.0e-6, rc_fac_rad*rc_fac_vpd*rc_fac_t*rc_fac_sw);
+            r_c_arr(i, j, 0) = std::min(Rc_max, Rc_min_arr(i, j, 0) / LAI_arr(i, j, 0) / tmp_radf);
+
+            // ===================================================
+            // r_litter : litter resistance - not used in this version
+            // ===================================================
+            //r_litter_arr(i, j, 0) = 0.0;
+            //   Ref. [Sakaguchi and Zeng 2009]
+            //   Set litter LAI as 0.5
+            // r_litter_arr(i, j, 0) = 1.0 / 0.004 / ustar_arr(i, j, 0) * (1.0 - std::exp(-0.5));
+        }
+    });
 }
 
 void SLM::vapor_fluxes(const amrex::MFIter &mfi)
@@ -2358,6 +2512,9 @@ void SLM::writeSLM_Data(const amrex::Real time, const std::string plot_prefix, c
     mf_data.push_back(&lhf_canop);
     mf_data.push_back(&lhf_soil);
 
+    mf_data.push_back(&ustar);
+    mf_data.push_back(&tstar);
+
     mf_data.push_back(&r_a);
     mf_data.push_back(&r_b);
     mf_data.push_back(&r_c);
@@ -2413,6 +2570,9 @@ void SLM::writeSLM_Data(const amrex::Real time, const std::string plot_prefix, c
     varnames.push_back("lhf_air");
     varnames.push_back("lhf_canop");
     varnames.push_back("lhf_soil");
+
+    varnames.push_back("ustar");
+    varnames.push_back("tstar");
 
     varnames.push_back("r_a");
     varnames.push_back("r_b");
