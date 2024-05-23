@@ -763,6 +763,7 @@ void SLM::init_slm_vars()
         auto tref_arr  = lsm_fab_vars[LsmVar_SLM::tref]->const_array(mfi);
         auto tsurf_arr  = lsm_fab_vars[LsmVar_SLM::tsurf]->const_array(mfi);
         auto qref_arr  = lsm_fab_vars[LsmVar_SLM::qref]->const_array(mfi);
+        auto pref_arr  = lsm_fab_vars[LsmVar_SLM::pref]->const_array(mfi);
 
         ParallelFor( box, [=] AMREX_GPU_DEVICE (int i, int j, int)
         {
@@ -773,11 +774,11 @@ void SLM::init_slm_vars()
                 // soil surface specific humidity
                 if (soilt_arr(i, j, khi_lsm) > tfriz)
                 {
-                    erf_qsatw(tsurf_arr(i, j, 0), pres0, q_gr);
+                    erf_qsatw(tsurf_arr(i, j, 0), pref_arr(i, j, 0), q_gr);
                 }
                 else
                 {
-                    erf_qsati(tsurf_arr(i, j, 0), pres0, q_gr);
+                    erf_qsati(tsurf_arr(i, j, 0), pref_arr(i, j, 0), q_gr);
                 }
                 q_gr *= soilw_arr(i, j, khi_lsm);
 
@@ -900,6 +901,7 @@ SLM::AdvanceSLM ()
         auto vr_arr  = lsm_fab_vars[LsmVar_SLM::vref]->array(mfi);
         auto dref_arr  = lsm_fab_vars[LsmVar_SLM::dref]->array(mfi);
         auto qref_arr  = lsm_fab_vars[LsmVar_SLM::qref]->array(mfi);
+        auto pref_arr  = lsm_fab_vars[LsmVar_SLM::pref]->const_array(mfi);
         auto precip_array  = lsm_fab_vars[LsmVar_SLM::precipref]->array(mfi);
 
         auto tsurf_arr = lsm_fab_vars[LsmVar_SLM::tsurf]->array(mfi);
@@ -1066,21 +1068,21 @@ SLM::AdvanceSLM ()
                 amrex::Real qsat_canop;
                 if (t_canop_arr(i, j, 0) >= tfriz)
                 {
-                    erf_qsatw(t_canop_arr(i, j, 0), pres0, qsat_canop);
+                    erf_qsatw(t_canop_arr(i, j, 0), pref_arr(i, j, 0), qsat_canop);
                 }
                 else
                 {
-                    erf_qsati(t_canop_arr(i, j, 0), pres0, qsat_canop);
+                    erf_qsati(t_canop_arr(i, j, 0), pref_arr(i, j, 0), qsat_canop);
                 }
 
                 if (soilt_arr(i, j, khi_lsm) >= tfriz)
                 {
-                    erf_qsatw(soilt_arr(i, j, khi_lsm), pres0, q_gr);
+                    erf_qsatw(soilt_arr(i, j, khi_lsm), pref_arr(i, j, 0), q_gr);
                     q_gr *= fh_calc(soilt_arr(i, j, khi_lsm), m_pot_sat_arr(i, j, khi_lsm), soilw_arr(i, j, khi_lsm), Bconst_arr(i, j, khi_lsm));
                 }
                 else
                 {
-                    erf_qsati(soilt_arr(i, j, khi_lsm), pres0, q_gr);
+                    erf_qsati(soilt_arr(i, j, khi_lsm), pref_arr(i, j, 0), q_gr);
                 }
 
                 q_cas_arr(i, j, 0) = qref_arr(i, j, 0) * cond_vref + qsat_canop*cond_vcnp + q_gr*cond_vundercnp;
@@ -1308,6 +1310,7 @@ void SLM::transfer_coeff(const amrex::MFIter &mfi)
     auto vr_arr  = lsm_fab_vars[LsmVar_SLM::vref]->array(mfi);
     auto dref_arr  = lsm_fab_vars[LsmVar_SLM::dref]->array(mfi);
     auto qref_arr  = lsm_fab_vars[LsmVar_SLM::qref]->array(mfi);
+    auto pref_arr  = lsm_fab_vars[LsmVar_SLM::pref]->const_array(mfi);
     auto precip_array  = lsm_fab_vars[LsmVar_SLM::precipref]->array(mfi);
 
     auto r_a_arr = r_a.array(mfi);
@@ -1382,7 +1385,7 @@ void SLM::transfer_coeff(const amrex::MFIter &mfi)
             // Specific humidity at top soil
             if (soilt_arr(i, j, khi_lsm) > tfriz)
             {
-                erf_qsatw(soilt_arr(i, j, khi_lsm), pres0, q_gr);
+                erf_qsatw(soilt_arr(i, j, khi_lsm), pref_arr(i, j, 0), q_gr);
                 if (mws_arr(i, j, 0) < 0.0)
                 {
                     q_gr *= fh_calc(soilt_arr(i, j, khi_lsm), m_pot_sat_arr(i, j, khi_lsm), soilw_arr(i, j, khi_lsm), Bconst_arr(i, j, khi_lsm));
@@ -1390,7 +1393,7 @@ void SLM::transfer_coeff(const amrex::MFIter &mfi)
             }
             else
             {
-                erf_qsati(soilt_arr(i, j, khi_lsm), pres0, q_gr);
+                erf_qsati(soilt_arr(i, j, khi_lsm), pref_arr(i, j, 0), q_gr);
             }
 
             q_sfc = q_gr;
@@ -1405,8 +1408,8 @@ void SLM::transfer_coeff(const amrex::MFIter &mfi)
         // z0 = z0_sfc = surface roughness length
         // disp = disp_hgt
 
-        amrex::Real tsp = t_sfc * std::pow(1000.0/pres0, rgas / cp);
-        amrex::Real thp = tref_arr(i, j, khi_lsm) * std::pow(1000.0 / pres0, rgas / cp);
+        amrex::Real tsp = t_sfc * std::pow(1000.0/pref_arr(i, j, 0), rgas / cp);
+        amrex::Real thp = tref_arr(i, j, khi_lsm) * std::pow(1000.0 / pref_arr(i, j, 0), rgas / cp);
 
         amrex::Real vel;
         // Add additional velocity depending on the stratification
@@ -1519,8 +1522,8 @@ void SLM::transfer_coeff(const amrex::MFIter &mfi)
 
         amrex::Real vel_m = vel;
         // amrex::Real RiB = r; // TODO: not used?
-        amrex::Real taux_sfc = -1.0 * mom_trans_coef * vel_m * ur_arr(i, j, khi_lsm) * (pres0 * 100.0 / 287.0 / tref_arr(i, j, khi_lsm));
-        amrex::Real tauy_sfc = -1.0 * mom_trans_coef * vel_m * vr_arr(i, j, khi_lsm) * (pres0 * 100.0 / 287.0 / tref_arr(i, j, khi_lsm));
+        amrex::Real taux_sfc = -1.0 * mom_trans_coef * vel_m * ur_arr(i, j, khi_lsm) * (pref_arr(i, j, 0) * 100.0 / 287.0 / tref_arr(i, j, khi_lsm));
+        amrex::Real tauy_sfc = -1.0 * mom_trans_coef * vel_m * vr_arr(i, j, khi_lsm) * (pref_arr(i, j, 0) * 100.0 / 287.0 / tref_arr(i, j, khi_lsm));
 
         // Output variables
         flbu_arr(i, j, 0) = taux_sfc;
@@ -1538,6 +1541,7 @@ void SLM::resistances(const amrex::MFIter &mfi)
     auto soilt_arr = lsm_fab_vars[LsmVar_SLM::soilt]->const_array(mfi);
     auto soilw_arr = lsm_fab_vars[LsmVar_SLM::soilw]->const_array(mfi);
     auto s_depth_arr = lsm_fab_vars[LsmVar_SLM::s_depth]->const_array(mfi);
+    auto pref_arr  = lsm_fab_vars[LsmVar_SLM::pref]->const_array(mfi);
 
     auto LAI_arr = LAI.const_array(mfi);
     auto t_cas_arr = t_cas.const_array(mfi);
@@ -1631,7 +1635,7 @@ void SLM::resistances(const amrex::MFIter &mfi)
 
             // vapor pressure deficit factor
             amrex::Real qsatw;
-            erf_qsatw(t_cas_arr(i, j, 0), pres0, qsatw);
+            erf_qsatw(t_cas_arr(i, j, 0), pref_arr(i, j, 0), qsatw);
             rc_fac_vpd = 1.0 / (1.0 + hs_rc_arr(i, j, 0) * (qsatw - q_cas_arr(i, j, 0)));
 
             // temperature factor
@@ -1694,6 +1698,7 @@ void SLM::vapor_fluxes(const amrex::MFIter &mfi)
 
     auto soilt_arr = lsm_fab_vars[LsmVar_SLM::soilt]->array(mfi);
     auto soilw_arr = lsm_fab_vars[LsmVar_SLM::soilw]->array(mfi);
+    auto pref_arr  = lsm_fab_vars[LsmVar_SLM::pref]->const_array(mfi);
 
     auto lhf_canop_arr = lhf_canop.array(mfi);
     auto lhf_soil_arr = lhf_soil.array(mfi);
@@ -1752,7 +1757,7 @@ void SLM::vapor_fluxes(const amrex::MFIter &mfi)
             // Specific humidity at top soil
             if (soilt_arr(i, j, khi_lsm) > tfriz)
             {
-                erf_qsatw(soilt_arr(i, j, khi_lsm), pres0, q_gr);
+                erf_qsatw(soilt_arr(i, j, khi_lsm), pref_arr(i, j, 0), q_gr);
                 if (mws_arr(i, j, 0) < 0.0)
                 {
                     q_gr *= fh_calc(soilt_arr(i, j, khi_lsm), m_pot_sat_arr(i, j, khi_lsm), soilw_arr(i, j, khi_lsm), Bconst_arr(i, j, khi_lsm));
@@ -1760,7 +1765,7 @@ void SLM::vapor_fluxes(const amrex::MFIter &mfi)
             }
             else
             {
-                erf_qsati(soilt_arr(i, j, khi_lsm), pres0, q_gr);
+                erf_qsati(soilt_arr(i, j, khi_lsm), pref_arr(i, j, 0), q_gr);
             }
 
             // baresoil
@@ -1795,7 +1800,7 @@ void SLM::vapor_fluxes(const amrex::MFIter &mfi)
 
         // Evaporation from canopy
         wet_canop_arr(i, j, 0) = 1.0;
-        erf_qsatw(t_canop_arr(i, j, 0), pres0, qsat_canop);
+        erf_qsatw(t_canop_arr(i, j, 0), pref_arr(i, j, 0), qsat_canop);
         if (vegetype_arr(i, j, 0) != 0 && qsat_canop > q_sfc)
         {
             // wet portion of canopy
