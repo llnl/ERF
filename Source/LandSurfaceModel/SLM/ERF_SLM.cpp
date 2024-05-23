@@ -18,6 +18,14 @@ SLM::Init (const MultiFab& cons_in,
     m_dt = dt;
     m_geom = geom;
 
+    ParmParse pp("slm");
+    pp.query("nsoil", m_nz_lsm);
+    pp.queryarr("soil_dz", m_dz_lsm);
+    AMREX_ALWAYS_ASSERT_WITH_MESSAGE(
+      m_dz_lsm.size() == m_nz_lsm,
+      "Provided soil thicknesses most match number of soil layers");
+    AMREX_ALWAYS_ASSERT(m_dz_lsm.size() > 0);
+
     Box domain = geom.Domain();
     khi_lsm    = domain.smallEnd(2) - 1; // index of z_r
     klo_lsm    = khi_lsm - m_nz_lsm + 1;
@@ -181,8 +189,23 @@ SLM::Init (const MultiFab& cons_in,
  */
 void SLM::init_from_file()
 {
-    ParmParse pp("prob");
+    ParmParse pp("slm");
     pp.query("SLM_use_inputs", set_from_file);
+
+    pp.query("landtype0", landtype0);
+    pp.query("LAI0", LAI0);
+    pp.query("clay0", clay0);
+    pp.query("sand0", sand0);
+    pp.query("sw0", sw0);
+    pp.query("st0", st0);
+
+    pp.query("tabs_s", tabs_s);
+    pp.query("t00", t00);
+
+    pp.query("z0_soil", z0_soil);
+    pp.query("mws_mx0", mws_mx0);
+    pp.query("Rc_max", Rc_max);
+    pp.query("T_opt", T_opt);
 
     if (set_from_file)
     {
@@ -191,9 +214,8 @@ void SLM::init_from_file()
         pp.query("SLM_ref_flux_file", ref_flux_file);
         pp.query("SLM_ref_sst_file", ref_sst_file);
 
-        ParmParse parms("slm");
-        parms.query("start_time", start_time);
-        parms.query("time_unit", time_unit);
+        pp.query("start_time", start_time);
+        pp.query("time_unit", time_unit);
 
         // Reads the SLM input flux file assuming the following fields:
         //  t[day], swdn[W/m2], lwdn[W/m2], swup[W/m2], lwup[W/m2]
@@ -1404,6 +1426,9 @@ void SLM::transfer_coeff(const amrex::MFIter &mfi)
         amrex::Real xsi, fm, fh, xsi1;
         amrex::Real xsim0, xsih0;
         amrex::Real z0h = z0_sfc_arr(i, j, 0) / (zref - disp_hgt_arr(i, j, 0));
+
+        // make sure (h - disp) is not negative, otherwise z0dym,z0dyh become nan
+        AMREX_ALWAYS_ASSERT(zref - disp_hgt_arr(i, j, 0) > 0.0);
 
         amrex::Real zt0 = std::max(0.0001, (70.0*1.5e-5 / ustar_arr(i, j, 0)) * std::exp(-7.2*sqrt(ustar_arr(i, j, 0))*(std::pow(std::abs(tstar_arr(i, j, 0)), 0.25))));
 

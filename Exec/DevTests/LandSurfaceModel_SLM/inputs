@@ -63,11 +63,35 @@ erf.use_terrain = true
 erf.moisture_model = "Kessler"
 
 erf.land_surface_model = "SLM"
-prob.SLM_num_ref_inputs = 1
-prob.SLM_use_inputs = true
-prob.SLM_ref_sounding_file = "sndref"
-prob.SLM_ref_flux_file = "swlw"
-prob.SLM_ref_sst_file = "sfc"
+
+# ------------------------
+# SLM configuration
+# ------------------------
+# number of soil layers
+slm.nsoil = 7
+# soil thickness (in m) for each layer (from top layer to bottom)
+slm.soil_dz = 0.02 0.04 0.08 0.16 0.32 0.64 1.28
+
+# initial values used over entire grid
+slm.landtype0 = 16    # baresoil
+slm.LAI0 = 0.0        # default leaf area index
+slm.clay0 = 34.0      # uniform clay content (%)
+slm.sand0 = 10.0      # uniform sand content (%)
+slm.sw0 = 0.50        # uniform soil wetness fraction
+slm.st0 = 300.0       # uniform soil temperature (K)
+slm.tabs_s = 0.0      # surface temperature (K)
+slm.t00 = 300.0       # constant offset for sstxy
+
+slm.z0_soil = 0.0387  # baresoil roughness length
+slm.mws_mx0 = 50.0    # maximum puddle water storage (mm)
+slm.Rc_max  = 5000.0  # maximum stomatal resistance
+slm.T_opt   = 298.0   # optimum temperature for transpiration
+
+slm.SLM_num_ref_inputs = 1
+slm.SLM_use_inputs = true
+slm.SLM_ref_sounding_file = "sndref"
+slm.SLM_ref_flux_file = "swlw"
+slm.SLM_ref_sst_file = "sfc"
 slm.start_time = 209.0
 #slm.start_time = 213.5
 slm.time_unit = 1.0 # dt time unit scalar in seconds when interpolating from testing input data

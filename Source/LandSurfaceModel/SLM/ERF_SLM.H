@@ -303,7 +303,7 @@ public:
 
     // Size of grid spacing in z
     //amrex::Real m_dz_lsm = 0.1; // 3 [m] below surface
-    std::vector<amrex::Real> m_dz_lsm = {0.02, 0.04, 0.08, 0.16, 0.32, 0.64, 1.28};
+    std::vector<amrex::Real> m_dz_lsm;
 
     // Specific heat
     amrex::Real m_cp_soil =  1.26e6; // [J/m^3 K]

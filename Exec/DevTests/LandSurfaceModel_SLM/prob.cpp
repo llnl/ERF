@@ -12,7 +12,7 @@ amrex_probinit(const amrex_real* problo, const amrex_real* probhi)
 Problem::Problem(const amrex::Real* /*problo*/, const amrex::Real* /*probhi*/)
 {
     // Parse params
-    ParmParse pp("prob");
+    ParmParse pp("slm");
     pp.query("SLM_num_ref_inputs", parms.SLM_num_ref_inputs);
     pp.query("SLM_ref_sounding_file", parms.SLM_ref_sounding_file);
     pp.query("SLM_ref_flux_file", parms.SLM_ref_flux_file);
