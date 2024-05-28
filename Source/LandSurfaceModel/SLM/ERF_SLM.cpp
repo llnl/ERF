@@ -177,6 +177,8 @@ SLM::Init (const MultiFab& cons_in,
     alpha.resize({klo_lsm},  {khi_lsm});
     beta.resize({klo_lsm},  {khi_lsm});
 
+    ustar.setVal(0.1);
+    tstar.setVal(0.0);
 
     // Initialize SLM from inputs if specified
     init_from_file();
@@ -682,9 +684,6 @@ void SLM::init_slm_vars()
     mw_inc.setVal(0.0);
     evapo_dry.setVal(0.0);
 
-    ustar.setVal(0.1);
-    tstar.setVal(0.0);
-
     if (set_from_file)
     {
         amrex::Real t0 = sst[0][time_index];
@@ -731,7 +730,7 @@ void SLM::init_slm_vars()
         const amrex::Real theta = getThgivenPandT(t_interp, pres, R_d / Cp_d);
         lsm_fab_vars[LsmVar_SLM::tref]->setVal(t_interp);
         lsm_fab_vars[LsmVar_SLM::qref]->setVal(qv);
-        lsm_fab_vars[LsmVar_SLM::pref]->setVal(pres);
+        lsm_fab_vars[LsmVar_SLM::pref]->setVal(pres / 100.0);
         lsm_fab_vars[LsmVar_SLM::dref]->setVal(getRhogivenThetaPress(theta, pres, R_d / Cp_d, qv));
         lsm_fab_vars[LsmVar_SLM::uref]->setVal(u_interp);
         lsm_fab_vars[LsmVar_SLM::vref]->setVal(v_interp);
