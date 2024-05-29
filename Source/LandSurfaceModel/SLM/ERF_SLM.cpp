@@ -1385,7 +1385,7 @@ void SLM::transfer_coeff(const amrex::MFIter &mfi)
             if (soilt_arr(i, j, khi_lsm) > tfriz)
             {
                 erf_qsatw(soilt_arr(i, j, khi_lsm), pref_arr(i, j, 0), q_gr);
-                if (mws_arr(i, j, 0) < 0.0)
+                if (mws_arr(i, j, 0) == 0.0)
                 {
                     q_gr *= fh_calc(soilt_arr(i, j, khi_lsm), m_pot_sat_arr(i, j, khi_lsm), soilw_arr(i, j, khi_lsm), Bconst_arr(i, j, khi_lsm));
                 }
@@ -1757,7 +1757,7 @@ void SLM::vapor_fluxes(const amrex::MFIter &mfi)
             if (soilt_arr(i, j, khi_lsm) > tfriz)
             {
                 erf_qsatw(soilt_arr(i, j, khi_lsm), pref_arr(i, j, 0), q_gr);
-                if (mws_arr(i, j, 0) < 0.0)
+                if (mws_arr(i, j, 0) == 0.0)
                 {
                     q_gr *= fh_calc(soilt_arr(i, j, khi_lsm), m_pot_sat_arr(i, j, khi_lsm), soilw_arr(i, j, khi_lsm), Bconst_arr(i, j, khi_lsm));
                 }
