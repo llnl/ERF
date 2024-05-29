@@ -686,6 +686,10 @@ void SLM::init_slm_vars()
 
     if (set_from_file)
     {
+        // Increment time used when reading input from testing files.
+        //  Note: file times are in days, so we convert our dt to days
+        time += (m_dt * (time_unit / 86400.0));
+
         amrex::Real t0 = sst[0][time_index];
         amrex::Real t1 = sst[0][time_index+1];
         while (time >= t1)
@@ -740,10 +744,6 @@ void SLM::init_slm_vars()
         // TODO: these are set here only for testing!
         shf_soil.setVal(0.0);
         lhf_soil.setVal(0.0);
-
-        // Increment time used when reading input from testing files.
-        //  Note: file times are in days, so we convert our dt to days
-        time += (m_dt * (time_unit / 86400.0));
     }
 
     // Initializes SLM quantities from reference values tr, ts, qr at each timestep
