@@ -277,6 +277,17 @@ void SLM::init_from_file()
         shf_soil.setVal(0.0);
         lhf_soil.setVal(0.0);
 
+
+        r_a.setVal(1.0e9);
+        r_b.setVal(1.0e4);
+        r_c.setVal(1.0e4);
+        r_d.setVal(1.0e4);
+
+        mw.setVal(0.0);
+        mws.setVal(0.0);
+
+        mw_inc.setVal(0.0);
+        evapo_dry.setVal(0.0);
     }
 }
 
@@ -672,17 +683,6 @@ void SLM::vege_root_init()
 
 void SLM::init_slm_vars()
 {
-    // TODO: these are placeholder values until the calculations are implemented
-    r_a.setVal(1.0e9);
-    r_b.setVal(1.0e4);
-    r_c.setVal(1.0e4);
-    r_d.setVal(1.0e4);
-
-    mw.setVal(0.0);
-    mws.setVal(0.0);
-
-    mw_inc.setVal(0.0);
-    evapo_dry.setVal(0.0);
 
     if (set_from_file)
     {
@@ -1815,7 +1815,7 @@ void SLM::vapor_fluxes(const amrex::MFIter &mfi)
         evapo_wet = (qsat_canop - q_sfc)*rhow*wet_canop_arr(i, j, 0)/(2.0 * r_b_arr(i, j, 0))*vege_YES_arr(i, j, 0);
 
         // increment/decrement of the water amount held on leaves following the direct evaporation/dew formation
-        mw_inc_arr(i, j, 0) = m_dt*evapo_wet; // evapo_wet [kg/m2s=mm/s]
+        mw_inc_arr(i, j, 0) = -m_dt*evapo_wet; // evapo_wet [kg/m2s=mm/s]
 
         // Transpiration
         // For dew formation situation (qsat_canop < q_sfc), wet_canop = 1. automatically makes evapo_dry = 0
@@ -1824,7 +1824,7 @@ void SLM::vapor_fluxes(const amrex::MFIter &mfi)
         // Check soil moisture availability for transpiration
         for (int k = 0; k < m_nz_lsm; k++) { // TODO: switch to regular lsm k loop
             const int lsm_k = khi_lsm - k;
-            if (soilw_arr(i, j, lsm_k))
+            if (soilw_arr(i, j, lsm_k) < 0.1)
             {
                 evapo_dry_arr(i, j, 0) -= evapo_dry_arr(i, j, 0) * rootF_arr(i, j, lsm_k);
             }
