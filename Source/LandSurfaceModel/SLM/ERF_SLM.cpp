@@ -177,6 +177,10 @@ SLM::Init (const MultiFab& cons_in,
     alpha.resize({klo_lsm},  {khi_lsm});
     beta.resize({klo_lsm},  {khi_lsm});
 
+    r_a.setVal(0.0);
+    r_b.setVal(0.0);
+    r_c.setVal(0.0);
+    r_d.setVal(0.0);
     ustar.setVal(0.1);
     tstar.setVal(0.0);
 
@@ -266,7 +270,7 @@ void SLM::init_from_file()
         const amrex::Real theta = getThgivenPandT(sounding[2][time_index], pres, R_d / Cp_d);
         lsm_fab_vars[LsmVar_SLM::tref]->setVal(sounding[2][time_index]);
         lsm_fab_vars[LsmVar_SLM::qref]->setVal(qv);
-        lsm_fab_vars[LsmVar_SLM::pref]->setVal(pres);
+        lsm_fab_vars[LsmVar_SLM::pref]->setVal(pres / 100.0);
         lsm_fab_vars[LsmVar_SLM::dref]->setVal(getRhogivenThetaPress(theta, pres, R_d / Cp_d, qv));
         lsm_fab_vars[LsmVar_SLM::uref]->setVal(sounding[4][time_index]);
         lsm_fab_vars[LsmVar_SLM::vref]->setVal(sounding[5][time_index]);
@@ -288,6 +292,69 @@ void SLM::init_from_file()
 
         mw_inc.setVal(0.0);
         evapo_dry.setVal(0.0);
+    }
+}
+
+void SLM::time_interp_from_ref()
+{
+    // performs time interpolation of SLM inputs from reference data instead of
+    // using ERF inputs
+    if (set_from_file)
+    {
+        // Increment time used when reading input from testing files.
+        //  Note: file times are in days, so we convert our dt to days
+        time += (m_dt * (time_unit / 86400.0));
+
+        amrex::Real t0 = sst[0][time_index];
+        amrex::Real t1 = sst[0][time_index+1];
+        while (time >= t1)
+        {
+            int prev_index = time_index;
+            // shift time index to next window
+            time_index = std::min(time_index + 1, int(sst[0].size() - start_time_index - 2));
+            t0 = sst[0][time_index];
+            t1 = sst[0][time_index+1];
+            if (prev_index == time_index) {
+                break;
+            }
+        }
+
+        // interpolate values from input files based on the current time
+        amrex::Real precip_interp = linear_interp(t0, t1, time, sst[2][time_index], sst[2][time_index + 1]);
+        amrex::Real sw_interp = linear_interp(t0, t1, time, fluxes[1][time_index], fluxes[1][time_index + 1]);
+        amrex::Real lw_interp = linear_interp(t0, t1, time, fluxes[2][time_index], fluxes[2][time_index + 1]);
+        amrex::Real sst_interp = linear_interp(t0, t1, time, sst[1][time_index], sst[1][time_index + 1]);
+
+        amrex::Real p_interp = linear_interp(t0, t1, time, sounding[1][time_index], sounding[1][time_index + 1]);
+        amrex::Real t_interp = linear_interp(t0, t1, time, sounding[2][time_index], sounding[2][time_index + 1]);
+        amrex::Real q_interp = linear_interp(t0, t1, time, sounding[3][time_index], sounding[3][time_index + 1]);
+        amrex::Real u_interp = linear_interp(t0, t1, time, sounding[4][time_index], sounding[4][time_index + 1]);
+        amrex::Real v_interp = linear_interp(t0, t1, time, sounding[5][time_index], sounding[5][time_index + 1]);
+        lsm_fab_vars[LsmVar_SLM::precipref]->setVal(precip_interp);
+
+        // total SW split into:
+        //   Diffuse = ~30% SW
+        //   Direct  = ~70% SW
+        // Visible and NIR = 50/50%
+        lsm_fab_vars[LsmVar_SLM::swdsvisxyref]->setVal(0.5*(sw_interp*0.7));
+        lsm_fab_vars[LsmVar_SLM::swdsnirxyref]->setVal(0.5*(sw_interp*0.7));
+        lsm_fab_vars[LsmVar_SLM::swdsvisdxyref]->setVal(0.5*(sw_interp*0.3));
+        lsm_fab_vars[LsmVar_SLM::swdsnirdxyref]->setVal(0.5*(sw_interp*0.3));
+
+        lsm_fab_vars[LsmVar_SLM::lwref]->setVal(lw_interp);
+        lsm_fab_vars[LsmVar_SLM::coszrsxy]->setVal(1.0);
+
+        const amrex::Real pres = p_interp * 100.0;
+        const amrex::Real qv = q_interp / 1000.0;
+        const amrex::Real theta = getThgivenPandT(t_interp, pres, R_d / Cp_d);
+        lsm_fab_vars[LsmVar_SLM::tref]->setVal(t_interp);
+        lsm_fab_vars[LsmVar_SLM::qref]->setVal(qv);
+        lsm_fab_vars[LsmVar_SLM::pref]->setVal(pres / 100.0);
+        lsm_fab_vars[LsmVar_SLM::dref]->setVal(getRhogivenThetaPress(theta, pres, R_d / Cp_d, qv));
+        lsm_fab_vars[LsmVar_SLM::uref]->setVal(u_interp);
+        lsm_fab_vars[LsmVar_SLM::vref]->setVal(v_interp);
+
+        sstxy.setVal(sst_interp);
     }
 }
 
@@ -683,70 +750,7 @@ void SLM::vege_root_init()
 
 void SLM::init_slm_vars()
 {
-
-    if (set_from_file)
-    {
-        // Increment time used when reading input from testing files.
-        //  Note: file times are in days, so we convert our dt to days
-        time += (m_dt * (time_unit / 86400.0));
-
-        amrex::Real t0 = sst[0][time_index];
-        amrex::Real t1 = sst[0][time_index+1];
-        while (time >= t1)
-        {
-            int prev_index = time_index;
-            // shift time index to next window
-            time_index = std::min(time_index + 1, int(sst[0].size() - start_time_index - 2));
-            t0 = sst[0][time_index];
-            t1 = sst[0][time_index+1];
-            if (prev_index == time_index) {
-                break;
-            }
-        }
-
-        // interpolate values from input files based on the current time
-        amrex::Real precip_interp = linear_interp(t0, t1, time, sst[2][time_index], sst[2][time_index + 1]);
-        amrex::Real sw_interp = linear_interp(t0, t1, time, fluxes[1][time_index], fluxes[1][time_index + 1]);
-        amrex::Real lw_interp = linear_interp(t0, t1, time, fluxes[2][time_index], fluxes[2][time_index + 1]);
-        amrex::Real sst_interp = linear_interp(t0, t1, time, sst[1][time_index], sst[1][time_index + 1]);
-
-        amrex::Real p_interp = linear_interp(t0, t1, time, sounding[1][time_index], sounding[1][time_index + 1]);
-        amrex::Real t_interp = linear_interp(t0, t1, time, sounding[2][time_index], sounding[2][time_index + 1]);
-        amrex::Real q_interp = linear_interp(t0, t1, time, sounding[3][time_index], sounding[3][time_index + 1]);
-        amrex::Real u_interp = linear_interp(t0, t1, time, sounding[4][time_index], sounding[4][time_index + 1]);
-        amrex::Real v_interp = linear_interp(t0, t1, time, sounding[5][time_index], sounding[5][time_index + 1]);
-        lsm_fab_vars[LsmVar_SLM::precipref]->setVal(precip_interp);
-
-        // total SW split into:
-        //   Diffuse = ~30% SW
-        //   Direct  = ~70% SW
-        // Visible and NIR = 50/50%
-        lsm_fab_vars[LsmVar_SLM::swdsvisxyref]->setVal(0.5*(sw_interp*0.7));
-        lsm_fab_vars[LsmVar_SLM::swdsnirxyref]->setVal(0.5*(sw_interp*0.7));
-        lsm_fab_vars[LsmVar_SLM::swdsvisdxyref]->setVal(0.5*(sw_interp*0.3));
-        lsm_fab_vars[LsmVar_SLM::swdsnirdxyref]->setVal(0.5*(sw_interp*0.3));
-
-        lsm_fab_vars[LsmVar_SLM::lwref]->setVal(lw_interp);
-        lsm_fab_vars[LsmVar_SLM::coszrsxy]->setVal(1.0);
-
-        const amrex::Real pres = p_interp * 100.0;
-        const amrex::Real qv = q_interp / 1000.0;
-        const amrex::Real theta = getThgivenPandT(t_interp, pres, R_d / Cp_d);
-        lsm_fab_vars[LsmVar_SLM::tref]->setVal(t_interp);
-        lsm_fab_vars[LsmVar_SLM::qref]->setVal(qv);
-        lsm_fab_vars[LsmVar_SLM::pref]->setVal(pres / 100.0);
-        lsm_fab_vars[LsmVar_SLM::dref]->setVal(getRhogivenThetaPress(theta, pres, R_d / Cp_d, qv));
-        lsm_fab_vars[LsmVar_SLM::uref]->setVal(u_interp);
-        lsm_fab_vars[LsmVar_SLM::vref]->setVal(v_interp);
-
-        sstxy.setVal(sst_interp);
-
-        // TODO: these are set here only for testing!
-        shf_soil.setVal(0.0);
-        lhf_soil.setVal(0.0);
-    }
-
-    // Initializes SLM quantities from reference values tr, ts, qr at each timestep
+    // Initializes SLM quantities from reference values tr, ts, qr
     for ( MFIter mfi(landtype, TileNoZ()); mfi.isValid(); ++mfi) {
         auto box = mfi.tilebox();
 

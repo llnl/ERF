@@ -131,7 +131,15 @@ public:
     {
         m_dt = dt;
 
-        this->init_slm_vars();
+        // override ERF inputs from reference data if testing flag is set
+        this->time_interp_from_ref();
+
+        if (first_step)
+        {
+            // initialize values using first reference data
+            this->init_slm_vars();
+            first_step = false;
+        }
 
         this->ComputeFluxes();
         this->AdvanceSLM();
@@ -229,6 +237,8 @@ public:
 
   private:
     void init_from_file();
+
+    void time_interp_from_ref();
 
     void slm_init();
 
@@ -458,5 +468,6 @@ public:
 
     amrex::Real start_time = -1.0;
     amrex::Real time_unit = 1.0;
+    bool first_step = true;
 };
 #endif
