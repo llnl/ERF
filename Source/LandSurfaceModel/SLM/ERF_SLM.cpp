@@ -105,11 +105,7 @@ SLM::Init (const MultiFab& cons_in,
     landmask.setVal(1);
 
     landtype.define(ba_lsm_2d, dm, 1, ng_2d);
-    landtype.setVal(landtype0);
-
     LAI.define(ba_lsm_2d, dm, 1, ng_2d);
-    LAI.setVal(LAI0);
-
     sstxy.define(ba_lsm_2d, dm, 1, ng_2d);
 
     t_canop.define(ba_lsm_2d, dm, 1, ng_2d);
@@ -138,10 +134,7 @@ SLM::Init (const MultiFab& cons_in,
     root_b.define(ba_lsm_2d, dm, 1, ng_2d);
     precip_extinc.define(ba_lsm_2d, dm, 1, ng_2d);
     mw_mx.define(ba_lsm_2d, dm, 1, ng_2d);
-
     mws_mx.define(ba_lsm_2d, dm, 1, ng_2d);
-    mws_mx.setVal(mws_mx0);
-
     BAI.define(ba_lsm_2d, dm, 1, ng_2d);
 
     tau_soil.define(ba_lsm_2d, dm, 1, ng_2d);
@@ -187,6 +180,10 @@ SLM::Init (const MultiFab& cons_in,
     // Initialize SLM from inputs if specified
     init_from_file();
 
+    landtype.setVal(landtype0);
+    LAI.setVal(LAI0);
+    mws_mx.setVal(mws_mx0);
+
     slm_init();
 }
 
@@ -212,6 +209,7 @@ void SLM::init_from_file()
     pp.query("mws_mx0", mws_mx0);
     pp.query("Rc_max", Rc_max);
     pp.query("T_opt", T_opt);
+    pp.query("zref", zref);
 
     if (set_from_file)
     {
@@ -363,15 +361,6 @@ void SLM::time_interp_from_ref()
  */
 void SLM::slm_init()
 {
-
-    // TODO: implement slm_setparm() function here
-
-    // Read land_type data from file, otherwise landtype is uniformly set to landtype0
-    if (readlandtype && landtype0 == 0)
-    {
-        // TODO: read input land type file
-    }
-
     // validate the landtype flag
     const int landtype_min = landtype.min(0);
     const int landtype_max = landtype.max(0);
@@ -379,11 +368,6 @@ void SLM::slm_init()
     {
         amrex::Abort("SLM: landtype values are outside of valid 0-16 range! min = " +
                      std::to_string(landtype_min) + ", max = " + std::to_string(landtype_max));
-    }
-
-    if (readLAI && LAI0 == 0.0)
-    {
-        // TODO: read input LAI file
     }
 
     // validate LAI - check that they are within [0,10]
@@ -503,10 +487,6 @@ void SLM::slm_init()
 
     // Calculate fraction of root in each soil layer
     vege_root_init();
-
-    // TODO:
-    // soilt_obs == soilt
-    // soilw_obs == soilw
 }
 
 /**
@@ -952,15 +932,6 @@ SLM::AdvanceSLM ()
 
             if (landmask_arr(i, j, 0) == 1)
             {
-                if (dosoilwnudging)
-                {
-
-                }
-
-                if (dosoiltnudging)
-                {
-
-                }
 
                 // Calculate net radiation absorbed by canopy and soil surface
                 //radiative_fluxes(i, j);
@@ -1292,11 +1263,11 @@ void SLM::transfer_coeff(const amrex::MFIter &mfi)
     auto t_cas_arr = t_cas.const_array(mfi);
     auto q_cas_arr = q_cas.const_array(mfi);
 
-    auto soilt_arr = lsm_fab_vars[LsmVar_SLM::soilt]->array(mfi);
-    auto soilw_arr = lsm_fab_vars[LsmVar_SLM::soilw]->array(mfi);
+    auto soilt_arr = lsm_fab_vars[LsmVar_SLM::soilt]->const_array(mfi);
+    auto soilw_arr = lsm_fab_vars[LsmVar_SLM::soilw]->const_array(mfi);
     auto vegetype_arr = vegetype.const_array(mfi);
 
-    auto mws_arr = mws.array(mfi);
+    auto mws_arr = mws.const_array(mfi);
 
     auto disp_hgt_arr = disp_hgt.const_array(mfi);
     auto z0_sfc_arr = z0_sfc.const_array(mfi);
@@ -1306,23 +1277,21 @@ void SLM::transfer_coeff(const amrex::MFIter &mfi)
     auto Bconst_arr = lsm_fab_vars[LsmVar_SLM::Bconst]->const_array(mfi);
 
     auto ustar_arr = ustar.array(mfi);
-    auto tstar_arr = tstar.array(mfi);
+    auto tstar_arr = tstar.const_array(mfi);
 
-    auto tref_arr  = lsm_fab_vars[LsmVar_SLM::tref]->array(mfi);
-    auto ur_arr  = lsm_fab_vars[LsmVar_SLM::uref]->array(mfi);
-    auto vr_arr  = lsm_fab_vars[LsmVar_SLM::vref]->array(mfi);
-    auto dref_arr  = lsm_fab_vars[LsmVar_SLM::dref]->array(mfi);
-    auto qref_arr  = lsm_fab_vars[LsmVar_SLM::qref]->array(mfi);
+    auto tref_arr  = lsm_fab_vars[LsmVar_SLM::tref]->const_array(mfi);
+    auto ur_arr  = lsm_fab_vars[LsmVar_SLM::uref]->const_array(mfi);
+    auto vr_arr  = lsm_fab_vars[LsmVar_SLM::vref]->const_array(mfi);
+    auto dref_arr  = lsm_fab_vars[LsmVar_SLM::dref]->const_array(mfi);
+    auto qref_arr  = lsm_fab_vars[LsmVar_SLM::qref]->const_array(mfi);
     auto pref_arr  = lsm_fab_vars[LsmVar_SLM::pref]->const_array(mfi);
-    auto precip_array  = lsm_fab_vars[LsmVar_SLM::precipref]->array(mfi);
+    auto precip_array  = lsm_fab_vars[LsmVar_SLM::precipref]->const_array(mfi);
 
     auto r_a_arr = r_a.array(mfi);
 
     auto flbu_arr  = lsm_fab_vars[LsmVar_SLM::flbu]->array(mfi);
     auto flbv_arr  = lsm_fab_vars[LsmVar_SLM::flbv]->array(mfi);
 
-
-    constexpr amrex::Real zref = 0.5; // TODO: get proper height of ref level
     constexpr amrex::Real xsim = -1.574;
     constexpr amrex::Real xsih = -0.465;
     const amrex::Real xm = sqrt(sqrt(1.0 - 16.0*xsim));
@@ -1699,8 +1668,8 @@ void SLM::vapor_fluxes(const amrex::MFIter &mfi)
 
     auto q_cas_arr = q_cas.const_array(mfi);
 
-    auto soilt_arr = lsm_fab_vars[LsmVar_SLM::soilt]->array(mfi);
-    auto soilw_arr = lsm_fab_vars[LsmVar_SLM::soilw]->array(mfi);
+    auto soilt_arr = lsm_fab_vars[LsmVar_SLM::soilt]->const_array(mfi);
+    auto soilw_arr = lsm_fab_vars[LsmVar_SLM::soilw]->const_array(mfi);
     auto pref_arr  = lsm_fab_vars[LsmVar_SLM::pref]->const_array(mfi);
 
     auto lhf_canop_arr = lhf_canop.array(mfi);
@@ -1710,12 +1679,12 @@ void SLM::vapor_fluxes(const amrex::MFIter &mfi)
     auto vegetype_arr = vegetype.const_array(mfi);
     auto vege_YES_arr = vege_YES.const_array(mfi);
 
-    auto precip_array  = lsm_fab_vars[LsmVar_SLM::precipref]->array(mfi);
+    auto precip_array  = lsm_fab_vars[LsmVar_SLM::precipref]->const_array(mfi);
 
-    auto mw_arr = mw.array(mfi);
-    auto mw_mx_arr = mw_mx.array(mfi);
+    auto mw_arr = mw.const_array(mfi);
+    auto mw_mx_arr = mw_mx.const_array(mfi);
     auto mw_inc_arr = mw_inc.array(mfi);
-    auto mws_arr = mws.array(mfi);
+    auto mws_arr = mws.const_array(mfi);
 
     auto dref_arr = lsm_fab_vars[LsmVar_SLM::dref]->const_array(mfi);
     auto qr_arr = lsm_fab_vars[LsmVar_SLM::qref]->const_array(mfi);
@@ -1858,7 +1827,7 @@ void SLM::soil_water(const amrex::MFIter &mfi)
     auto landmask_arr = landmask.const_array(mfi);
     auto landtype_arr = landtype.const_array(mfi);
 
-    auto soilt_arr = lsm_fab_vars[LsmVar_SLM::soilt]->array(mfi);
+    auto soilt_arr = lsm_fab_vars[LsmVar_SLM::soilt]->const_array(mfi);
     auto soilw_arr = lsm_fab_vars[LsmVar_SLM::soilw]->array(mfi);
 
     auto sst_capa_arr = lsm_fab_vars[LsmVar_SLM::sst_capa]->const_array(mfi);
@@ -1870,12 +1839,12 @@ void SLM::soil_water(const amrex::MFIter &mfi)
     auto lhf_soil_arr = lhf_soil.const_array(mfi);
     auto net_rad_arr = net_rad.const_array(mfi);
 
-    auto precip_array  = lsm_fab_vars[LsmVar_SLM::precipref]->array(mfi);
-    auto LAI_arr = LAI.array(mfi);
-    auto precip_extinc_arr = precip_extinc.array(mfi);
+    auto precip_array  = lsm_fab_vars[LsmVar_SLM::precipref]->const_array(mfi);
+    auto LAI_arr = LAI.const_array(mfi);
+    auto precip_extinc_arr = precip_extinc.const_array(mfi);
 
     auto mw_arr = mw.array(mfi);
-    auto mw_mx_arr = mw_mx.array(mfi);
+    auto mw_mx_arr = mw_mx.const_array(mfi);
     auto mw_inc_arr = mw_inc.array(mfi);
     auto mws_arr = mws.array(mfi);
     auto mws_mx_arr = mws_mx.const_array(mfi);

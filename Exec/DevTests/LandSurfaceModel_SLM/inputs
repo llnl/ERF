@@ -86,6 +86,7 @@ slm.z0_soil = 0.0387  # baresoil roughness length
 slm.mws_mx0 = 50.0    # maximum puddle water storage (mm)
 slm.Rc_max  = 5000.0  # maximum stomatal resistance
 slm.T_opt   = 298.0   # optimum temperature for transpiration
+slm.zref    = 0.5     # height of reference level (m)
 
 slm.SLM_num_ref_inputs = 1
 slm.SLM_use_inputs = true

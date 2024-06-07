@@ -368,6 +368,8 @@ public:
     amrex::Real Rc_max = 5000.0; // maximum stomatal resistance
     amrex::Real T_opt = 298.0; // optimum temperature for transpiration
 
+    amrex::Real zref = 0.5; // height of reference level (m), used in transer coef
+
     // Model variables
     //   NOTE: these MultiFabs are defined over the grid only in X and Y (no Z component)
     amrex::MultiFab t_canop; // canopy leaf temperature
