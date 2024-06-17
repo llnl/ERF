@@ -1088,34 +1088,33 @@ SLM::AdvanceSLM ()
     for ( MFIter mfi(landtype, TileNoZ()); mfi.isValid(); ++mfi) {
         auto box = mfi.tilebox();
 
-        auto landmask_arr = landmask.array(mfi);
+        auto landmask_arr = landmask.const_array(mfi);
 
-        auto LAI_arr = LAI.array(mfi);
-        auto precip_extinc_arr = precip_extinc.array(mfi);
+        auto LAI_arr = LAI.const_array(mfi);
+        auto precip_extinc_arr = precip_extinc.const_array(mfi);
 
-        auto mw_arr = mw.array(mfi);
-        auto mws_arr = mws.array(mfi);
-        auto mw_mx_arr = mw_mx.array(mfi);
+        auto mw_arr = mw.const_array(mfi);
+        auto mws_arr = mws.const_array(mfi);
+        auto mw_mx_arr = mw_mx.const_array(mfi);
 
-        auto mw_inc_arr = mw_inc.array(mfi);
+        auto mw_inc_arr = mw_inc.const_array(mfi);
 
         auto t_cas_arr = t_cas.array(mfi);
         auto q_cas_arr = q_cas.array(mfi);
 
         auto t_canop_arr = t_canop.array(mfi);
-        auto t_skin_arr = t_skin.array(mfi);
+        auto t_skin_arr = t_skin.const_array(mfi);
 
-        auto soilt_arr = lsm_fab_vars[LsmVar_SLM::soilt]->array(mfi);
-        auto soilt_nudge_arr = lsm_fab_vars[LsmVar_SLM::soilt_nudge]->array(mfi);
-        auto soilw_arr = lsm_fab_vars[LsmVar_SLM::soilw]->array(mfi);
+        auto soilt_arr = lsm_fab_vars[LsmVar_SLM::soilt]->const_array(mfi);
+        auto soilw_arr = lsm_fab_vars[LsmVar_SLM::soilw]->const_array(mfi);
 
-        auto m_pot_sat_arr = lsm_fab_vars[LsmVar_SLM::m_pot_sat]->array(mfi);
-        auto Bconst_arr = lsm_fab_vars[LsmVar_SLM::Bconst]->array(mfi);
+        auto m_pot_sat_arr = lsm_fab_vars[LsmVar_SLM::m_pot_sat]->const_array(mfi);
+        auto Bconst_arr = lsm_fab_vars[LsmVar_SLM::Bconst]->const_array(mfi);
 
-        auto ustar_arr = ustar.array(mfi);
+        auto ustar_arr = ustar.const_array(mfi);
         auto tstar_arr = tstar.array(mfi);
 
-        auto BAI_arr = BAI.array(mfi);
+        auto BAI_arr = BAI.const_array(mfi);
         auto ztop_arr = ztop.const_array(mfi);
 
         auto shf_canop_arr = shf_canop.array(mfi);
@@ -1131,13 +1130,13 @@ SLM::AdvanceSLM ()
 
         auto cp_vege_arr = cp_vege.array(mfi);
 
-        auto tref_arr  = lsm_fab_vars[LsmVar_SLM::tref]->array(mfi);
-        auto ur_arr  = lsm_fab_vars[LsmVar_SLM::uref]->array(mfi);
-        auto vr_arr  = lsm_fab_vars[LsmVar_SLM::vref]->array(mfi);
-        auto dref_arr  = lsm_fab_vars[LsmVar_SLM::dref]->array(mfi);
-        auto qref_arr  = lsm_fab_vars[LsmVar_SLM::qref]->array(mfi);
+        auto tref_arr  = lsm_fab_vars[LsmVar_SLM::tref]->const_array(mfi);
+        auto ur_arr  = lsm_fab_vars[LsmVar_SLM::uref]->const_array(mfi);
+        auto vr_arr  = lsm_fab_vars[LsmVar_SLM::vref]->const_array(mfi);
+        auto dref_arr  = lsm_fab_vars[LsmVar_SLM::dref]->const_array(mfi);
+        auto qref_arr  = lsm_fab_vars[LsmVar_SLM::qref]->const_array(mfi);
         auto pref_arr  = lsm_fab_vars[LsmVar_SLM::pref]->const_array(mfi);
-        auto precip_array  = lsm_fab_vars[LsmVar_SLM::precipref]->array(mfi);
+        auto precip_array  = lsm_fab_vars[LsmVar_SLM::precipref]->const_array(mfi);
 
         auto tsurf_arr = lsm_fab_vars[LsmVar_SLM::tsurf]->array(mfi);
 
@@ -1151,10 +1150,10 @@ SLM::AdvanceSLM ()
         //auto flbv_arr  = lsm_fab_vars[LsmVar_SLM::flbv]->array(mfi);
         auto flbq_arr  = lsm_fab_vars[LsmVar_SLM::flbq]->array(mfi);
         auto flbt_arr  = lsm_fab_vars[LsmVar_SLM::flbt]->array(mfi);
-        auto prsfc_arr  = lsm_fab_vars[LsmVar_SLM::prsfc]->array(mfi);
+        auto prsfc_arr  = lsm_fab_vars[LsmVar_SLM::prsfc]->const_array(mfi);
 
         auto net_rad_arr = net_rad.const_array(mfi);
-        auto wet_canop_arr = wet_canop.array(mfi);
+        auto wet_canop_arr = wet_canop.const_array(mfi);
 
         // Calculate net radiation absorbed by canopy and soil surface
         radiative_fluxes(mfi);
@@ -1172,15 +1171,9 @@ SLM::AdvanceSLM ()
             //amrex::Real drain = 0.0; // drainage rate from canopy
             //amrex::Real cnp_mw_drip = 0.0; // dripping from canopy water storage when the storage exceeds mw_mx - mm/s
 
-            amrex::Real t_sfc, coef;
-            amrex::Real taux_sfc, tauy_sfc;
-
+            amrex::Real t_sfc;
             // SAM rhow[nz] = air density at vertical velocity levels, kg/m^3
             amrex::Real rhow = dref_arr(i, j, 0); // TODO: double check this
-
-            amrex::Real vel_m = sqrt(std::pow(ur_arr(i, j, 0), 2) + std::pow(vr_arr(i, j, 0), 2)); // reference level wind speed
-
-            amrex::Real mws_inc = 0.0;
 
             if (landmask_arr(i, j, 0) == 1)
             {
