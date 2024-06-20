@@ -1625,8 +1625,8 @@ void SLM::transfer_coeff(const amrex::MFIter &mfi)
         // z0 = z0_sfc = surface roughness length
         // disp = disp_hgt
 
-        amrex::Real tsp = t_sfc * std::pow(1000.0/pref_arr(i, j, 0), rgas / cp);
-        amrex::Real thp = tref_arr(i, j, khi_lsm) * std::pow(1000.0 / pref_arr(i, j, 0), rgas / cp);
+        amrex::Real tsp = t_sfc * std::pow(1000.0/pref_arr(i, j, 0), rair / cp);
+        amrex::Real thp = tref_arr(i, j, khi_lsm) * std::pow(1000.0 / pref_arr(i, j, 0), rair / cp);
 
         amrex::Real vel;
         // Add additional velocity depending on the stratification
@@ -1961,6 +1961,20 @@ void SLM::vapor_fluxes(const amrex::MFIter &mfi)
         // SAM rhow[nz] = air density at vertical velocity levels, kg/m^3
         const amrex::Real rhow = dref_arr(i, j, 0); // TODO: double check this
 
+        // Specific humidity at top soil
+        if (soilt_arr(i, j, khi_lsm) > tfriz)
+        {
+            erf_qsatw(soilt_arr(i, j, khi_lsm), pref_arr(i, j, 0), q_gr);
+            if (mws_arr(i, j, 0) == 0.0)
+            {
+                q_gr *= fh_calc(soilt_arr(i, j, khi_lsm), m_pot_sat_arr(i, j, khi_lsm), soilw_arr(i, j, khi_lsm), Bconst_arr(i, j, khi_lsm));
+            }
+        }
+        else
+        {
+            erf_qsati(soilt_arr(i, j, khi_lsm), pref_arr(i, j, 0), q_gr);
+        }
+
         // determine input q_sfc
         if (vegetype_arr(i, j, 0) != 0)
         {
@@ -1971,20 +1985,6 @@ void SLM::vapor_fluxes(const amrex::MFIter &mfi)
         }
         else
         {
-            // Specific humidity at top soil
-            if (soilt_arr(i, j, khi_lsm) > tfriz)
-            {
-                erf_qsatw(soilt_arr(i, j, khi_lsm), pref_arr(i, j, 0), q_gr);
-                if (mws_arr(i, j, 0) == 0.0)
-                {
-                    q_gr *= fh_calc(soilt_arr(i, j, khi_lsm), m_pot_sat_arr(i, j, khi_lsm), soilw_arr(i, j, khi_lsm), Bconst_arr(i, j, khi_lsm));
-                }
-            }
-            else
-            {
-                erf_qsati(soilt_arr(i, j, khi_lsm), pref_arr(i, j, 0), q_gr);
-            }
-
             // baresoil
             q_sfc = q_gr;
 
