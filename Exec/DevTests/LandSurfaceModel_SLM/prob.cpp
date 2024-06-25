@@ -61,6 +61,12 @@ Problem::init_custom_pert(
 
     read_SLM_inputs();
 
+    const Real q_ref = sounding[3][0];
+    const Real T_ref = sounding[2][0];
+    const Real p_ref = sounding[1][0];
+    const Real vx_ref = sounding[4][0];
+    const Real vy_ref = sounding[5][0];
+
     ParallelFor(bx, [=, parms=parms] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
         // Geometry
         const Real* prob_lo = geomdata.ProbLo();
@@ -70,9 +76,9 @@ Problem::init_custom_pert(
         const Real y = prob_lo[1] + (j + 0.5) * dx[1];
         const Real z = prob_lo[2] + (k + 0.5) * dx[2];
 
-        const Real qv = sounding[3][0] / 1000.0; // qv converted to kg/kg
-        const Real pres = sounding[1][0] * 100.0; // pressure converted from mbar to Pa
-        const Real theta = getThgivenPandT(sounding[2][0], pres, R_d / Cp_d);
+        const Real qv = q_ref / 1000.0; // qv converted to kg/kg
+        const Real pres = p_ref * 100.0; // pressure converted from mbar to Pa
+        const Real theta = getThgivenPandT(T_ref, pres, R_d / Cp_d);
         const Real rho = getRhogivenThetaPress(theta, pres, R_d / Cp_d, qv);
 
         // NOTE: these are pertubations from the initial state
@@ -93,14 +99,14 @@ Problem::init_custom_pert(
         const auto *const prob_hi  = geomdata.ProbHi();
         const auto *const dx       = geomdata.CellSize();
         const Real z = (k + 0.5) * dx[2];
-        x_vel_pert(i, j, k) = sounding[4][0];
+        x_vel_pert(i, j, k) = vx_ref;
     });
 
     amrex::ParallelFor(ybx, [=, parms=parms] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
         const auto *const prob_hi  = geomdata.ProbHi();
         const auto *const dx       = geomdata.CellSize();
         const Real z = (k + 0.5) * dx[2];
-        y_vel_pert(i, j, k) = sounding[5][0];
+        y_vel_pert(i, j, k) = vy_ref;
     });
 
     amrex::ParallelFor(zbx, [=, parms=parms] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {

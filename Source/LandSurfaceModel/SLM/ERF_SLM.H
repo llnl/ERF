@@ -235,7 +235,6 @@ public:
 
     void writeSLM_Data(const amrex::Real time, const std::string plot_prefix, const int level_step);
 
-  private:
     void init_from_file();
 
     void time_interp_from_ref();
@@ -262,13 +261,16 @@ public:
 
     void soil_temperature(const amrex::MFIter &mfi);
 
-    amrex::Real fh_calc(const amrex::Real &t, const amrex::Real &mps,
+    AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
+    static amrex::Real fh_calc(const amrex::Real &t, const amrex::Real &mps,
                         const amrex::Real &sw, const amrex::Real &B);
 
-    amrex::Real linear_interp(const amrex::Real t0, const amrex::Real t1,
+    AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
+    static amrex::Real linear_interp(const amrex::Real t0, const amrex::Real t1,
                               const amrex::Real t, const amrex::Real x,
                               const amrex::Real y);
 
+private:
     // number of lsm variables (theta)
     int m_lsm_size = 27;
 
@@ -349,20 +351,20 @@ public:
 
     bool dosoilwnudging = false;
     bool dosoiltnudging = false;
-    amrex::Real tausoil = 86400.0;
+    static constexpr amrex::Real tausoil = 86400.0;
 
     amrex::Real z0_soil = 0.0387; // baresoil roughness length (m)
-    amrex::Real tfriz = 273.15;
+    static constexpr amrex::Real tfriz = 273.15;
     amrex::Real mws_mx0 = 50.0; // maximum puddle water storage (mm)
 
-    amrex::Real epsv = 0.61;
+    static constexpr amrex::Real epsv = 0.61;
 
     amrex::Real pres0 = p_0; // reference surface pressure [Pa]
 
-    amrex::Real cp = 1004.0; // specific heat of air [J/kg/K]
-    amrex::Real cp_water = 4.1796e6; // heat capacity of water [J/m^3K]
+    static constexpr amrex::Real cp = 1004.0; // specific heat of air [J/kg/K]
+    static constexpr amrex::Real cp_water = 4.1796e6; // heat capacity of water [J/m^3K]
 
-    amrex::Real sigma = 5.67e-8; // Stefen-Boltzmann constant [W/m^2/K^4]
+    static constexpr amrex::Real sigma = 5.67e-8; // Stefen-Boltzmann constant [W/m^2/K^4]
 
     // parameters for stomatal resistance
     amrex::Real Rc_max = 5000.0; // maximum stomatal resistance
@@ -421,8 +423,8 @@ public:
 
     amrex::MultiFab ustar, tstar;
 
-    amrex::Real mom_trans_coef; // surface momentum transfer coef.
-    amrex::Real heat_trans_coef; // surface heat transfer coef.
+    //amrex::Real mom_trans_coef; // surface momentum transfer coef.
+    //amrex::Real heat_trans_coef; // surface heat transfer coef.
     amrex::Real xsi; // M-O stability parameter
     amrex::Real RiB; // bulk Richardson number
 
@@ -451,7 +453,7 @@ public:
     amrex::MultiFab r_c; // stomatal resistance
     amrex::MultiFab r_d; // undercanopy aerodynamic resistance
     amrex::MultiFab r_soil;
-    amrex::Real r_litter = 0.0; // not used currently
+    static constexpr amrex::Real r_litter = 0.0; // not used currently
 
 
     amrex::MultiFab net_rad;
