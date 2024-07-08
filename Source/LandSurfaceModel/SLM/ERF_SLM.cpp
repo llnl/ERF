@@ -1290,7 +1290,7 @@ SLM::AdvanceSLM ()
 
             if (landmask_arr(i, j, 0) == 1) {
                 // Update vegetation temperature
-                cp_vege_arr(i, j, 0) = (LAI_arr(i, j, 0)*0.001 * ztop_arr(i, j, 0)*BAI_arr(i, j, 0) / 43560.0) * 900.0 * 2800.0;
+                cp_vege_arr(i, j, 0) = (LAI_arr(i, j, 0)*0.001 + ztop_arr(i, j, 0)*BAI_arr(i, j, 0) / 43560.0) * 900.0 * 2800.0;
                 cp_vege_tot = cp_vege_arr(i, j, 0) + mw_arr(i, j, 0) * 1.0e-3 * cp_water;
 
                 amrex::Real t_canop_inc = dt / std::max(1.0e-3, cp_vege_tot)*(net_rad_arr(i, j, 0, SLM_NetRad::net_rad1) - shf_canop_arr(i, j, 0) - lhf_canop_arr(i, j, 0)) * vege_YES_arr(i, j, 0);
@@ -1816,7 +1816,7 @@ void SLM::resistances(const amrex::MFIter &mfi)
     auto tstar_arr = tstar.const_array(mfi);
 
     auto w_s_WP_arr = lsm_fab_vars[LsmVar_SLM::w_s_WP]->const_array(mfi);
-    auto w_s_FC_arr = lsm_fab_vars[LsmVar_SLM::w_s_WP]->const_array(mfi);
+    auto w_s_FC_arr = lsm_fab_vars[LsmVar_SLM::w_s_FC]->const_array(mfi);
     auto rootF_arr = lsm_fab_vars[LsmVar_SLM::rootF]->const_array(mfi);
     auto poro_soil_arr = lsm_fab_vars[LsmVar_SLM::poro_soil]->const_array(mfi);
     auto theta_FC_arr = lsm_fab_vars[LsmVar_SLM::theta_FC]->const_array(mfi);
@@ -2730,17 +2730,7 @@ SLM::set_terrain_inputs(const amrex::Vector<std::unique_ptr<amrex::MultiFab>>& s
     } else {
         // If no terrain is setup, initialize SST to reference temperature and set default land mask
         landmask.setVal(1);
-        for ( MFIter mfi(landtype, TileNoZ()); mfi.isValid(); ++mfi) {
-            auto box = mfi.tilebox();
-
-            auto tref_arr  = lsm_fab_vars[LsmVar_SLM::tref]->const_array(mfi);
-            auto tsurf_arr  = lsm_fab_vars[LsmVar_SLM::tsurf]->array(mfi);
-
-            ParallelFor( box, [=] AMREX_GPU_DEVICE (int i, int j, int)
-            {
-                tsurf_arr(i, j, 0) = tref_arr(i, j, 0);
-            });
-        }
+        lsm_fab_vars[LsmVar_SLM::tsurf]->setVal(st0);
     }
 }
 
