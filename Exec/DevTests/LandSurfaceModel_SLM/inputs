@@ -1,5 +1,5 @@
 # ------------------  INPUTS TO MAIN PROGRAM  -------------------
-max_step = 172800 # 2 days in seconds
+max_step = 17280 # 2 days in seconds
 
 amrex.fpe_trap_invalid = 0
 amrex.fpe_trap_zero = 1
@@ -23,7 +23,7 @@ erf.most.zref = 0.5
 zhi.type = "SlipWall"
 
 # TIME STEP CONTROL
-erf.fixed_dt = 1.0
+erf.fixed_dt = 10.0
 #erf.fixed_mri_dt_ratio = 4
 #erf.no_substepping = 1
 
@@ -42,8 +42,7 @@ erf.check_int       = -1        # number of timesteps between checkpoints
 erf.restart_type    = "native"
 # PLOTFILES
 erf.plot_file_1     = plt        # prefix of plotfile name
-erf.plot_int_1      = 300          # number of timesteps between plotfiles
-erf.plot_vars_1     = density rhotheta rhoadv_0 x_velocity y_velocity z_velocity pressure theta scalar temp pres_hse dens_hse pert_pres pert_dens
+erf.plot_int_1      = 30          # number of timesteps between plotfiles
 
 erf.plot_lsm = true
 

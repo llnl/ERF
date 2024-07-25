@@ -165,6 +165,9 @@ SLM::Init (const MultiFab& cons_in,
     net_rad.define(ba_lsm_2d, dm, SLM_NetRad::NumVars, ng_2d);
     wet_canop.define(ba_lsm_2d, dm, 1, ng_2d);
 
+    slm_diag.define(ba_lsm_2d, dm, SLM_Diag::NumVars, ng_2d);
+    slm_diag.setVal(0.0);
+
     // Initialize 1D arrays
     soilw_inc.resize({klo_lsm},  {khi_lsm});
     alpha.resize({klo_lsm},  {khi_lsm});
@@ -501,7 +504,7 @@ void SLM::init_landtype()
 
         auto landtype_arr = landtype.const_array(mfi);
         auto landmask_arr = landmask.array(mfi);
-        auto LAI_arr = LAI.array(mfi);
+        auto LAI_arr = LAI.const_array(mfi);
 
         auto albedovis_v_arr = albedovis_v.array(mfi);
         auto albedonir_v_arr = albedonir_v.array(mfi);
@@ -2002,6 +2005,8 @@ void SLM::vapor_fluxes(const amrex::MFIter &mfi)
     auto wet_canop_arr = wet_canop.array(mfi);
     auto evapo_dry_arr = evapo_dry.array(mfi);
 
+    auto slm_diag_arr = slm_diag.array(mfi);
+
     ParallelFor( box, [=] AMREX_GPU_DEVICE (int i, int j, int)
     {
         if (landmask_arr(i, j, 0) != 1) {
@@ -2009,7 +2014,7 @@ void SLM::vapor_fluxes(const amrex::MFIter &mfi)
         }
 
         amrex::Real q_sfc;
-        amrex::Real q_gr;
+        amrex::Real q_gr = 0.0;
         amrex::Real qref_tmp;
 
         // SAM rhow[nz] = air density at vertical velocity levels, kg/m^3
@@ -2085,6 +2090,7 @@ void SLM::vapor_fluxes(const amrex::MFIter &mfi)
 
         // direct evaporation from the water held on canopy
         evapo_wet = (qsat_canop - q_sfc)*rhow*wet_canop_arr(i, j, 0)/(2.0 * r_b_arr(i, j, 0))*vege_YES_arr(i, j, 0);
+        slm_diag_arr(i, j, 0, SLM_Diag::evapo_wet) = evapo_wet;
 
         // increment/decrement of the water amount held on leaves following the direct evaporation/dew formation
         mw_inc_arr(i, j, 0) = -dt*evapo_wet; // evapo_wet [kg/m2s=mm/s]
@@ -2161,6 +2167,8 @@ void SLM::soil_water(const amrex::MFIter &mfi)
     auto w_s_WP_arr = lsm_fab_vars[LsmVar_SLM::w_s_WP]->const_array(mfi);
     auto rootF_arr = lsm_fab_vars[LsmVar_SLM::rootF]->const_array(mfi);
 
+    auto slm_diag_arr = slm_diag.array(mfi);
+
     amrex::Gpu::DeviceVector<Real> d_sw_wgt_vec(m_nz_lsm);
     amrex::Gpu::DeviceVector<Real> d_sh_eff_cond_vec(m_nz_lsm - 1);
     amrex::Gpu::DeviceVector<Real> d_sh_eff_vel_vec(m_nz_lsm - 1);
@@ -2182,7 +2190,7 @@ void SLM::soil_water(const amrex::MFIter &mfi)
             return;
         }
 
-        amrex::Real drain, puddle;
+        amrex::Real drain = 0.0, puddle = 0.0;
         amrex::Real aa, bb, cc, dd;
         /*
         amrex::Gpu::DeviceVector<amrex::Real> d_sw_wgt(d_nz_lsm);
@@ -2221,7 +2229,9 @@ void SLM::soil_water(const amrex::MFIter &mfi)
         amrex::Real precip_sfc = precip_array(i, j, 0) - precip + drain;
 
         // Update output variables
-        prsfc_arr(i, j, 0) = precip_sfc;
+        slm_diag_arr(i, j, 0, SLM_Diag::precip_sfc) = precip_sfc;
+        slm_diag_arr(i, j, 0, SLM_Diag::drain) = drain;
+        slm_diag_arr(i, j, 0, SLM_Diag::precip) = precip;
 
         // Add to vegetiation moisture increment from SLM::vapor_fluxes()
         mw_inc_arr(i, j, 0) += dt * (precip - drain);
@@ -2232,7 +2242,8 @@ void SLM::soil_water(const amrex::MFIter &mfi)
         if (landtype_arr(i, j, 0) == 15) {
             // ice
             for (int k = 0; k < d_nz_lsm; k++) {
-                soilw_arr(i, j, 0) = 0.0;
+                const int lsm_k = d_khi_lsm - k;
+                soilw_arr(i, j, lsm_k) = 0.0;
             }
         } else {
             for (int k = 0; k < d_nz_lsm; k++) {
@@ -2259,6 +2270,8 @@ void SLM::soil_water(const amrex::MFIter &mfi)
             mws_arr(i, j, 0) += mws_inc;
 
             //run_off_sfc = drain;
+            slm_diag_arr(i, j, 0, SLM_Diag::run_off_sfc) = drain;
+            slm_diag_arr(i, j, 0, SLM_Diag::precip_in) = precip_in;
 
             // calculate diffusion coefficient and velocity for soil moisture transfer
             // at each interfacial layer(= between adjacent soil layers)
@@ -2353,6 +2366,8 @@ void SLM::soil_water(const amrex::MFIter &mfi)
             amrex::Real drainage_flux = std::max(soilw_arr(i, j, d_klo_lsm) - 1.0, 0.0)*poro_soil_arr(i, j, d_klo_lsm)*d_s_depth_mm[d_nz_lsm-1]/dt;
             dd = soilw_arr(i, j, d_klo_lsm) - (rootF_arr(i, j, d_klo_lsm)*evapo_dry_arr(i, j, 0)*d_sw_wgt[d_nz_lsm-1] + drainage_flux) * dt / poro_soil_arr(i, j, d_klo_lsm) / d_s_depth_mm[d_nz_lsm-1];
 
+            slm_diag_arr(i, j, 0, SLM_Diag::drain_flux) = drainage_flux;
+
             d_alpha[d_nz_lsm-1] = 0.0;
             d_beta[d_nz_lsm-1] = (dd - aa * d_beta[d_nz_lsm-2]) / (bb - aa * d_alpha[d_nz_lsm-2]);
 
@@ -2431,6 +2446,7 @@ void SLM::soil_temperature(const amrex::MFIter &mfi)
     auto lhf_soil_arr = lhf_soil.const_array(mfi);
 
     auto net_rad_arr = net_rad.const_array(mfi);
+    auto slm_diag_arr = slm_diag.array(mfi);
 
     amrex::Gpu::DeviceVector<Real> d_st_cond_vec(m_nz_lsm);
     amrex::Gpu::DeviceVector<Real> d_st_capa_vec(m_nz_lsm);
@@ -2464,7 +2480,7 @@ void SLM::soil_temperature(const amrex::MFIter &mfi)
         */
 
         amrex::Real grflux0 = -1.0 * (net_rad_arr(i, j, 0, SLM_NetRad::net_rad2) - shf_soil_arr(i, j, 0) - lhf_soil_arr(i, j, 0));
-
+        slm_diag_arr(i, j, 0, SLM_Diag::grflux) = grflux0;
         if (landtype_arr(i, j, 0) == 15) {
             // ice
             for (int k = 0; k < d_nz_lsm; k++) {
@@ -2918,7 +2934,7 @@ void SLM::writeSLM_Data(const std::string plotfile_type, const amrex::Real time,
     varnames.push_back("wet_canop");
 
     if (plotfile_type == "amrex") {
-    amrex::WriteSingleLevelPlotfile(plotfilename, fab, varnames, lsm_2d_geom, time, level_step);
+        amrex::WriteSingleLevelPlotfile(plotfilename, fab, varnames, lsm_2d_geom, time, level_step);
 #ifdef ERF_USE_NETCDF
     } else if (plotfile_type == "netcdf" || plotfile_type == "NetCDF") {
         writeSLM_NetCDF(fab, varnames, time, plot_prefix, level_step);

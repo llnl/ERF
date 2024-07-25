@@ -98,6 +98,20 @@ namespace SLM_NetRad {
    };
 }
 
+namespace SLM_Diag {
+   enum {
+     precip = 0,
+     precip_in,
+     precip_sfc, // saved in prsfc too, but 3D
+     run_off_sfc,
+     drain,
+     drain_flux,
+     evapo_wet,
+     grflux,
+     NumVars
+   };
+}
+
 /* See Chen & Dudhia (2001) https://doi.org/10.1175/1520-0493(2001)129<0569:CAALSH>2.0.CO;2 */
 class SLM : public NullSurf {
 
@@ -447,6 +461,7 @@ private:
 
     // Soil hydrology variables
     amrex::MultiFab evapo_dry;
+    amrex::MultiFab evapo_wet;
 
     // Sensible heat fluxes
     amrex::MultiFab shf_canop; // flux transfer between canopy and air space [W/m^2]
@@ -491,6 +506,9 @@ private:
     amrex::Real time_unit = 1.0;
     bool first_step = true;
 
+    // Extra MFs for output:
+    amrex::MultiFab slm_diag;
+
 
 #ifdef ERF_USE_NETCDF
     int ncfid = -1;
@@ -528,6 +546,17 @@ private:
       LsmVar_SLM::m_pot_sat,
       LsmVar_SLM::Bconst,
       LsmVar_SLM::ks
+    };
+
+    inline static const std::vector<std::string> diag_names = {
+        "precip",
+        "precip_in",
+        "precip_sfc",
+        "runoff_sfc",
+        "drain",
+        "drain_flux",
+        "evapo_wet",
+        "grflux"
     };
 
 #endif

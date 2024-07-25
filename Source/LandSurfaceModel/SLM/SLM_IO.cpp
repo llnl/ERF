@@ -60,6 +60,14 @@ SLM::writeSLM_NetCDF(const MultiFab& mf, const Vector<std::string>& varnames, co
 
         //writeMFtoNC(ncf, &ustar, "ustar", time); // ustar and tstar already saved in 2D fab array above
 
+        // additional slm outputs
+        for (int var = 0; var < slm_diag.nComp(); ++var)
+        {
+            MultiFab fab(slm_diag.boxArray(), slm_diag.DistributionMap(), 1, ng);
+            MultiFab::Copy(fab, slm_diag, var, 0, 1, 0);
+            writeMFtoNC(ncf, &fab, diag_names[var], time);
+        }
+
         ncf.close();
     }
 }
