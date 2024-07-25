@@ -1435,7 +1435,7 @@ ERF::WritePlotFile (int which, PlotFileType plotfile_type, Vector<std::string> p
 
     // LSM writes it's own data
     if (which==1 && plot_lsm) {
-        lsm.Plot_Lsm_Data(t_new[0], istep, refRatio());
+        lsm.Plot_Lsm_Data(plotfile_type, t_new[0], istep, refRatio());
     }
 
 #ifdef ERF_USE_RRTMGP

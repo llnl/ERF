@@ -17,6 +17,8 @@
 #include <ERF_IndexDefines.H>
 #include <ERF_DataStruct.H>
 
+#include <NCInterface.H>
+
 namespace LsmVar_SLM {
    enum {
       // independent variables
@@ -233,7 +235,7 @@ public:
         return LSM_Type::SLM;
     }
 
-    void writeSLM_Data(const amrex::Real time, const std::string plot_prefix, const int level_step);
+    void writeSLM_Data(const std::string plotfile_type, const amrex::Real time, const std::string plot_prefix, const int level_step);
 
     void init_from_file();
 
@@ -269,6 +271,21 @@ public:
     static amrex::Real linear_interp(const amrex::Real t0, const amrex::Real t1,
                               const amrex::Real t, const amrex::Real x,
                               const amrex::Real y);
+
+#ifdef ERF_USE_NETCDF
+    void writeSLM_NetCDF(const amrex::MultiFab& mf, const amrex::Vector<std::string>& varnames,
+                         const amrex::Real time, const std::string plot_prefix, const int level_step);
+
+    void writeNCHeader(ncutils::NCFile &nc_file);
+
+    void writeMFtoNC(ncutils::NCFile &nc_file, const amrex::MultiFab* mf,
+                     const std::string name, amrex::Real time, bool write_ghost = false);
+
+    void writeMFVecToNC(ncutils::NCFile &nc_file,
+                        const amrex::Vector<const amrex::MultiFab*> &mf_vec,
+                        const amrex::Vector<std::string> &mf_names,
+                        const amrex::Geometry& geom) const;
+#endif
 
 private:
     // number of lsm variables (theta)
@@ -473,5 +490,46 @@ private:
     amrex::Real start_time = -1.0;
     amrex::Real time_unit = 1.0;
     bool first_step = true;
+
+
+#ifdef ERF_USE_NETCDF
+    int ncfid = -1;
+
+    static constexpr const char* LsmVarName_Full[] = {
+      "theta", "ref_t", "ref_q", "ref_p", "ref_d", "ref_u", "ref_v", "ref_precip",
+      "SW_dw_dir_vis", "SW_dw_dir_nir", "SW_dw_dif_vis", "SW_dw_dif_nir", "LW_dw", "zenith", "tsurf",
+      "tveg", "mv", "tsoil", "wsoil", "sand", "clay", "soil_thickness", "node_z", "interface_z",
+      "soilw_nudge", "soilt_nudge", "sw_over_sat", "soil_relax_hgt", "rootF", "w_s_FC", "w_s_WP",
+      "sst_capa", "sst_cond", "poro_soil", "theta_FC", "theta_WP", "m_pot_sat", "Bconst", "ks",
+      "surface_u", "surface_v", "surface_vapor", "surface_heat", "precip_soil"
+    };
+
+    static_assert(sizeof(LsmVarName_Full)/sizeof(*LsmVarName_Full) == LsmVar_SLM::NumVars);
+
+    // List of output variables that are constant in time
+    inline static const std::unordered_set<int> const_vars = {
+      LsmVar_SLM::sand,
+      LsmVar_SLM::clay,
+      LsmVar_SLM::s_depth,
+      LsmVar_SLM::node_z,
+      LsmVar_SLM::interface_z,
+      LsmVar_SLM::soilw_nudge,
+      LsmVar_SLM::soilt_nudge,
+      LsmVar_SLM::sw_over_sat,
+      LsmVar_SLM::soil_relax_hgt,
+      LsmVar_SLM::rootF,
+      LsmVar_SLM::w_s_FC,
+      LsmVar_SLM::w_s_WP,
+      LsmVar_SLM::sst_capa,
+      LsmVar_SLM::sst_cond,
+      LsmVar_SLM::poro_soil,
+      LsmVar_SLM::theta_FC,
+      LsmVar_SLM::theta_WP,
+      LsmVar_SLM::m_pot_sat,
+      LsmVar_SLM::Bconst,
+      LsmVar_SLM::ks
+    };
+
+#endif
 };
 #endif

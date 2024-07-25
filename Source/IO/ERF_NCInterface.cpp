@@ -531,13 +531,15 @@ int NCGroup::num_variables() const
 
 bool NCGroup::has_group (const std::string& name) const
 {
-    int ierr = nc_inq_ncid(ncid, name.data(), nullptr);
+    int id;
+    int ierr = nc_inq_ncid(ncid, name.data(), &id);
     return (ierr == NC_NOERR);
 }
 
 bool NCGroup::has_dim (const std::string& name) const
 {
-    int ierr = nc_inq_dimid(ncid, name.data(), nullptr);
+    int id;
+    int ierr = nc_inq_dimid(ncid, name.data(), &id);
     return (ierr == NC_NOERR);
 }
 

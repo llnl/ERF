@@ -2820,7 +2820,7 @@ std::vector<std::vector<amrex::Real>> SLM::read_cols(const std::string &fname, c
     return datasets;
 }
 
-void SLM::writeSLM_Data(const amrex::Real time, const std::string plot_prefix, const int level_step)
+void SLM::writeSLM_Data(const std::string plotfile_type, const amrex::Real time, const std::string plot_prefix, const int level_step)
 {
     std::string plotfilename = amrex::Concatenate(plot_prefix + "2D_", level_step, 5);
 
@@ -2917,5 +2917,14 @@ void SLM::writeSLM_Data(const amrex::Real time, const std::string plot_prefix, c
 
     varnames.push_back("wet_canop");
 
+    if (plotfile_type == "amrex") {
     amrex::WriteSingleLevelPlotfile(plotfilename, fab, varnames, lsm_2d_geom, time, level_step);
+#ifdef ERF_USE_NETCDF
+    } else if (plotfile_type == "netcdf" || plotfile_type == "NetCDF") {
+        writeSLM_NetCDF(fab, varnames, time, plot_prefix, level_step);
+#endif
+    } else {
+        Print() << "User specified plot_filetype = " << plotfile_type << std::endl;
+        Abort("Dont know this plot_filetype");
+    }
 }
