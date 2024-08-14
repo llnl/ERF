@@ -272,7 +272,9 @@ void SLM::init_from_file()
         lsm_fab_vars[LsmVar_SLM::tref]->setVal(sounding[2][time_index]);
         lsm_fab_vars[LsmVar_SLM::qref]->setVal(qv);
         lsm_fab_vars[LsmVar_SLM::pref]->setVal(pres / 100.0);
-        lsm_fab_vars[LsmVar_SLM::dref]->setVal(getRhogivenThetaPress(theta, pres, R_d / Cp_d, qv));
+        //lsm_fab_vars[LsmVar_SLM::dref]->setVal(getRhogivenThetaPress(theta, pres, R_d / Cp_d, qv));
+        lsm_fab_vars[LsmVar_SLM::dref]->setVal(pres / (rair * sounding[2][time_index]));
+
         lsm_fab_vars[LsmVar_SLM::uref]->setVal(sounding[4][time_index]);
         lsm_fab_vars[LsmVar_SLM::vref]->setVal(sounding[5][time_index]);
 
@@ -351,7 +353,9 @@ void SLM::time_interp_from_ref()
         lsm_fab_vars[LsmVar_SLM::tref]->setVal(t_interp);
         lsm_fab_vars[LsmVar_SLM::qref]->setVal(qv);
         lsm_fab_vars[LsmVar_SLM::pref]->setVal(pres / 100.0);
-        lsm_fab_vars[LsmVar_SLM::dref]->setVal(getRhogivenThetaPress(theta, pres, R_d / Cp_d, qv));
+        //lsm_fab_vars[LsmVar_SLM::dref]->setVal(getRhogivenThetaPress(theta, pres, R_d / Cp_d, qv));
+
+        lsm_fab_vars[LsmVar_SLM::dref]->setVal(pres / (rair * t_interp));
         lsm_fab_vars[LsmVar_SLM::uref]->setVal(u_interp);
         lsm_fab_vars[LsmVar_SLM::vref]->setVal(v_interp);
 
@@ -1241,9 +1245,9 @@ SLM::AdvanceSLM ()
                 //resistances(i, j);
 
                 // Sensible heat fluxes
-                shf_canop_arr(i, j, 0) = (t_canop_arr(i, j, 0) - t_sfc) * rhow * Cp_d / r_b_arr(i, j, 0) * vege_YES_arr(i, j, 0);
-                shf_soil_arr(i, j, 0) = (soilt_arr(i, j, d_khi_lsm) - t_sfc) * rhow * Cp_d / r_d_arr(i, j, 0);
-                shf_air_arr(i, j, 0) = (t_sfc - tref_arr(i, j, 0)) * rhow * Cp_d / r_a_arr(i, j, 0);
+                shf_canop_arr(i, j, 0) = (t_canop_arr(i, j, 0) - t_sfc) * rhow * cp / r_b_arr(i, j, 0) * vege_YES_arr(i, j, 0);
+                shf_soil_arr(i, j, 0) = (soilt_arr(i, j, d_khi_lsm) - t_sfc) * rhow * cp / r_d_arr(i, j, 0);
+                shf_air_arr(i, j, 0) = (t_sfc - tref_arr(i, j, 0)) * rhow * cp / r_a_arr(i, j, 0);
 
                 if (vegetype_arr(i, j, 0) == 0)
                 {
@@ -1255,7 +1259,7 @@ SLM::AdvanceSLM ()
                 }
 
                 // Calculate temperature scale for z0hsfc
-                tstar_arr(i, j, 0) = -1.0 * shf_air_arr(i, j, 0) / rhow / Cp_d / ustar_arr(i, j, 0);
+                tstar_arr(i, j, 0) = -1.0 * shf_air_arr(i, j, 0) / rhow / cp / ustar_arr(i, j, 0);
 
                 // Calculate latent heat fluxes
                 //vapor_fluxes(i, j); // -- computes r_soil
@@ -1343,9 +1347,9 @@ SLM::AdvanceSLM ()
                 q_cas_arr(i, j, 0) = qref_arr(i, j, 0) * cond_vref + qsat_canop*cond_vcnp + q_gr*cond_vundercnp;
 
                 // Output variables
-                tsurf_arr(i, j, 0) = t_skin_arr(i, j, 0); // TODO: ts in SLM is input and output - check how this should be coupled back to ERF
-                flbq_arr(i, j, 0) = lhf_air_arr(i, j, 0) / (lcond*rhow);
-                flbt_arr(i, j, 0) = shf_air_arr(i, j, 0) / (Cp_d*rhow);
+                tsurf_arr(i, j, d_khi_lsm) = t_skin_arr(i, j, 0); // TODO: ts in SLM is input and output - check how this should be coupled back to ERF
+                flbq_arr(i, j, d_khi_lsm) = lhf_air_arr(i, j, 0) / (lcond*rhow);
+                flbt_arr(i, j, d_khi_lsm) = shf_air_arr(i, j, 0) / (Cp_d*rhow);
                 // Collect 2D stat variables
                 // collect_2D_stat_vars(i, j);
             }
@@ -1670,20 +1674,20 @@ void SLM::transfer_coeff(const amrex::MFIter &mfi)
         // disp = disp_hgt
 
         amrex::Real tsp = t_sfc * std::pow(1000.0/pref_arr(i, j, 0), rair / cp);
-        amrex::Real thp = tref_arr(i, j, d_khi_lsm) * std::pow(1000.0 / pref_arr(i, j, 0), rair / cp);
+        amrex::Real thp = tref_arr(i, j, 0) * std::pow(1000.0 / pref_arr(i, j, 0), rair / cp);
 
         amrex::Real vel;
         // Add additional velocity depending on the stratification
         if ((thp - tsp) >= 0.0)
         {
-            vel = sqrt(std::pow(ur_arr(i, j, d_khi_lsm), 2) + std::pow(vr_arr(i, j, d_khi_lsm), 2) + 0.1*0.1);
+            vel = sqrt(std::pow(ur_arr(i, j, 0), 2) + std::pow(vr_arr(i, j, 0), 2) + 0.1*0.1);
         }
         else
         {
-            vel = sqrt(std::pow(ur_arr(i, j, d_khi_lsm), 2) + std::pow(vr_arr(i, j, d_khi_lsm), 2) + 1.0);
+            vel = sqrt(std::pow(ur_arr(i, j, 0), 2) + std::pow(vr_arr(i, j, 0), 2) + 1.0);
         }
 
-        amrex::Real r = 9.81 / tsp * (thp * (1.0 + epsv * qr_arr(i, j, d_khi_lsm)) - tsp * (1.0 + epsv * q_sfc)) * (d_zref - disp_hgt_arr(i, j, 0)) / (vel*vel);
+        amrex::Real r = 9.81 / tsp * (thp * (1.0 + epsv * qr_arr(i, j, 0)) - tsp * (1.0 + epsv * q_sfc)) * (d_zref - disp_hgt_arr(i, j, 0)) / (vel*vel);
         r = std::max(-10.0, std::min(r, 0.19));
 
         // initial guess
@@ -1784,12 +1788,12 @@ void SLM::transfer_coeff(const amrex::MFIter &mfi)
 
         amrex::Real vel_m = vel;
         // amrex::Real RiB = r; // TODO: not used?
-        amrex::Real taux_sfc = -1.0 * mom_trans_coef * vel_m * ur_arr(i, j, d_khi_lsm) * (pref_arr(i, j, 0) * 100.0 / 287.0 / tref_arr(i, j, d_khi_lsm));
-        amrex::Real tauy_sfc = -1.0 * mom_trans_coef * vel_m * vr_arr(i, j, d_khi_lsm) * (pref_arr(i, j, 0) * 100.0 / 287.0 / tref_arr(i, j, d_khi_lsm));
+        amrex::Real taux_sfc = -1.0 * mom_trans_coef * vel_m * ur_arr(i, j, 0) * (100.0 * pref_arr(i, j, 0) / 287.0 / tref_arr(i, j, 0));
+        amrex::Real tauy_sfc = -1.0 * mom_trans_coef * vel_m * vr_arr(i, j, 0) * (100.0 * pref_arr(i, j, 0) / 287.0 / tref_arr(i, j, 0));
 
         // Output variables
-        flbu_arr(i, j, 0) = taux_sfc;
-        flbv_arr(i, j, 0) = tauy_sfc;
+        flbu_arr(i, j, d_khi_lsm) = taux_sfc;
+        flbv_arr(i, j, d_khi_lsm) = tauy_sfc;
     });
 }
 
@@ -2023,9 +2027,11 @@ void SLM::vapor_fluxes(const amrex::MFIter &mfi)
         // Specific humidity at top soil
         if (soilt_arr(i, j, d_khi_lsm) > tfriz)
         {
-            erf_qsatw(soilt_arr(i, j, d_khi_lsm), pref_arr(i, j, 0), q_gr);
-            if (mws_arr(i, j, 0) == 0.0)
+            if (mws_arr(i, j, 0) > 0.0)
             {
+                erf_qsatw(soilt_arr(i, j, d_khi_lsm), pref_arr(i, j, 0), q_gr);
+            } else {
+                erf_qsatw(soilt_arr(i, j, d_khi_lsm), pref_arr(i, j, 0), q_gr);
                 q_gr *= fh_calc(soilt_arr(i, j, d_khi_lsm), m_pot_sat_arr(i, j, d_khi_lsm), soilw_arr(i, j, d_khi_lsm), Bconst_arr(i, j, d_khi_lsm));
             }
         }
@@ -2217,7 +2223,7 @@ void SLM::soil_water(const amrex::MFIter &mfi)
         {
             drain = 0.0;
         }
-        else
+        else if(mw_arr(i, j, 0) > mw_mx_arr(i, j, 0))
         {
             // when water holding storage exceeds its maximum, no precipitation is intercepted
             drain = precip;
@@ -2229,6 +2235,7 @@ void SLM::soil_water(const amrex::MFIter &mfi)
         amrex::Real precip_sfc = precip_array(i, j, 0) - precip + drain;
 
         // Update output variables
+        prsfc_arr(i, j, 0) = precip_sfc;
         slm_diag_arr(i, j, 0, SLM_Diag::precip_sfc) = precip_sfc;
         slm_diag_arr(i, j, 0, SLM_Diag::drain) = drain;
         slm_diag_arr(i, j, 0, SLM_Diag::precip) = precip;
@@ -2598,7 +2605,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 amrex::Real SLM::fh_calc(const amrex::Real &t, const amrex::Real &mps, const amrex::Real &sw, const amrex::Real &B)
 {
     amrex::Real moist_pot1 = std::max(-100000.0, mps / (std::pow(std::max(0.0001, sw), B)) / 1000.0);
-    return std::min(1.0, std::exp(moist_pot1*CONST_GRAV/R_v/t));
+    return std::min(1.0, std::exp(moist_pot1*CONST_GRAV/461.0/t));
 }
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
