@@ -38,7 +38,7 @@ SLM::writeSLM_NetCDF(const MultiFab& mf, const Vector<std::string>& varnames, co
         // Write out SLM 3D fields
         for (int var = 0; var < LsmVar_SLM::NumVars; ++var) {
             if (const_vars.find(var) != const_vars.end()) continue;
-            writeMFtoNC(ncf, lsm_fab_vars[var].get(), LsmVarName_Full[var], time);
+            writeMFtoNC(ncf, lsm_fab_vars[var].get(), LsmVarName_Full[var], time, true); // write ghost cells
         }
 
         // Write out SLM 2D fields

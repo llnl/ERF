@@ -32,7 +32,7 @@ SLM::Init (const MultiFab& cons_in,
 
     LsmVarMap.resize(m_lsm_size);
     LsmVarMap = {
-      LsmVar_SLM::theta,         LsmVar_SLM::tsurf,        LsmVar_SLM::tv,
+      LsmVar_SLM::tsurf,         LsmVar_SLM::ustar,        LsmVar_SLM::tstar, LsmVar_SLM::tv,
       LsmVar_SLM::mv,            LsmVar_SLM::soilt,        LsmVar_SLM::soilw,
       LsmVar_SLM::sand,          LsmVar_SLM::clay,         LsmVar_SLM::s_depth,
       LsmVar_SLM::flbu,          LsmVar_SLM::flbv,         LsmVar_SLM::flbq,
@@ -44,7 +44,7 @@ SLM::Init (const MultiFab& cons_in,
 
     LsmVarName.resize(m_lsm_size);
     LsmVarName = {
-      "theta",          "tsurf",         "tveg",          "mv",
+      "tsurf",          "ustar",         "tstar",         "tveg",          "mv",
       "tsoil",          "wsoil",         "sand",          "clay",
       "soil_thickness", "surface_u",     "surface_v",     "surface_vapor",
       "surface_heat",   "precip_soil",   "ref_precip",    "SW_dw_dir_vis",
@@ -139,8 +139,8 @@ SLM::Init (const MultiFab& cons_in,
 
     tau_soil.define(ba_lsm_2d, dm, 1, ng_2d);
     mw_inc.define(ba_lsm_2d, dm, 1, ng_2d);
-    ustar.define(ba_lsm_2d, dm, 1, ng_2d);
-    tstar.define(ba_lsm_2d, dm, 1, ng_2d);
+    //ustar.define(ba_lsm_2d, dm, 1, ng_2d);
+    //tstar.define(ba_lsm_2d, dm, 1, ng_2d);
 
     evapo_dry.define(ba_lsm_2d, dm, 1, ng_2d);
 
@@ -177,8 +177,10 @@ SLM::Init (const MultiFab& cons_in,
     r_b.setVal(0.0);
     r_c.setVal(0.0);
     r_d.setVal(0.0);
-    ustar.setVal(0.1);
-    tstar.setVal(0.0);
+    //ustar.setVal(0.1);
+    //tstar.setVal(0.0);
+    lsm_fab_vars[LsmVar_SLM::ustar]->setVal(0.1);
+    lsm_fab_vars[LsmVar_SLM::ustar]->setVal(0.0);
 
     // Initialize SLM from inputs if specified
     init_from_file();
@@ -186,6 +188,8 @@ SLM::Init (const MultiFab& cons_in,
     landtype.setVal(landtype0);
     LAI.setVal(LAI0);
     mws_mx.setVal(mws_mx0);
+
+    net_rad.setVal(0.0);
 
     slm_init();
 }
@@ -280,22 +284,20 @@ void SLM::init_from_file()
 
         sstxy.setVal(sst[1][time_index]);
 
-        // TODO: these are set here only for testing!
-        shf_soil.setVal(0.0);
-        lhf_soil.setVal(0.0);
-
-
-        r_a.setVal(1.0e9);
-        r_b.setVal(1.0e4);
-        r_c.setVal(1.0e4);
-        r_d.setVal(1.0e4);
-
-        mw.setVal(0.0);
-        mws.setVal(0.0);
-
-        mw_inc.setVal(0.0);
-        evapo_dry.setVal(0.0);
     }
+    shf_soil.setVal(0.0);
+    lhf_soil.setVal(0.0);
+
+    r_a.setVal(1.0e9);
+    r_b.setVal(1.0e4);
+    r_c.setVal(1.0e4);
+    r_d.setVal(1.0e4);
+
+    mw.setVal(0.0);
+    mws.setVal(0.0);
+
+    mw_inc.setVal(0.0);
+    evapo_dry.setVal(0.0);
 }
 
 void SLM::time_interp_from_ref()
@@ -428,8 +430,8 @@ void SLM::slm_init()
 
     IR_emis_soil.setVal(0.98);
 
-    auto theta = lsm_fab_vars[LsmVar_SLM::theta];
-    for ( MFIter mfi(*theta, TileNoZ()); mfi.isValid(); ++mfi) {
+    auto tsurf = lsm_fab_vars[LsmVar_SLM::tsurf];
+    for ( MFIter mfi(*tsurf, TileNoZ()); mfi.isValid(); ++mfi) {
         const auto& box3d = mfi.tilebox();
 
         auto landmask_arr = landmask.const_array(mfi);
@@ -867,8 +869,8 @@ void SLM::init_soil_tw()
     amrex::Gpu::copy(Gpu::hostToDevice, m_dz_lsm.begin(), m_dz_lsm.end(), d_dz_lsm_vec.begin());
     Real *d_dz_lsm = d_dz_lsm_vec.data();
 
-    auto theta = lsm_fab_vars[LsmVar_SLM::theta];
-    for ( MFIter mfi(*theta, TileNoZ()); mfi.isValid(); ++mfi) {
+    auto tsurf = lsm_fab_vars[LsmVar_SLM::tsurf];
+    for ( MFIter mfi(*tsurf, TileNoZ()); mfi.isValid(); ++mfi) {
         const auto& box3d = mfi.tilebox();
 
         auto landmask_arr = landmask.const_array(mfi);
@@ -1061,54 +1063,15 @@ void SLM::init_slm_vars()
 
                 // specific humidity in canopy air space
                 q_cas_arr(i, j, 0) = 0.5*(qref_arr(i, j, 0) + q_gr);
+
+                amrex::Print() << " i = " << i << " j = " << j << " k = 0 : t_canop = " << t_canop_arr(i, j, 0) << " t_cas = " << t_cas_arr(i, j, 0) << " tsurf = " << tsurf_arr(i, j, 0) << " qcas = " << q_cas_arr(i, j, 0) << " qref = " << qref_arr(i, j, 0) << std::endl;
+
             }
         });
     }
 }
 
-/* Extrapolate surface temperature and store in ghost cell */
-void
-SLM::ComputeTsurf ()
-{
-    // Expose for GPU copy
-    int khi = khi_lsm;
 
-    for ( MFIter mfi(*(lsm_fab_vars[LsmVar_SLM::theta])); mfi.isValid(); ++mfi) {
-        auto box2d = mfi.tilebox(); box2d.makeSlab(2,khi);
-
-        auto theta_array = lsm_fab_vars[LsmVar_SLM::theta]->array(mfi);
-
-        ParallelFor( box2d, [=] AMREX_GPU_DEVICE (int i, int j, int )
-        {
-            theta_array(i,j,khi+1) = 1.5*theta_array(i,j,khi) - 0.5*theta_array(i,j,khi-1);
-        });
-    }
-}
-
-/* Compute the diffusive fluxes */
-void
-SLM::ComputeFluxes ()
-{
-    // Expose for GPU copy
-    int khi = khi_lsm;
-    Real Dsoil = m_d_soil;
-    Real dzInv = m_lsm_geom.InvCellSize(2);
-
-    for ( MFIter mfi(*(lsm_fab_flux[LsmVar_SLM::theta])); mfi.isValid(); ++mfi) {
-        auto box3d = mfi.tilebox();
-
-        // Do not overwrite the flux at the top (comes from MOST BC)
-        if (box3d.bigEnd(2) == khi+1) box3d.setBig(2,khi);
-
-        auto theta_array = lsm_fab_vars[LsmVar_SLM::theta]->array(mfi);
-        auto theta_flux  = lsm_fab_flux[LsmVar_SLM::theta]->array(mfi);
-
-        ParallelFor( box3d, [=] AMREX_GPU_DEVICE (int i, int j, int k)
-        {
-            theta_flux(i,j,k) = Dsoil * ( theta_array(i,j,k) - theta_array(i,j,k-1) ) * dzInv;
-        });
-    }
-}
 
 /* Advance the solution with a simple explicit update (should use tridiagonal solve) */
 void
@@ -1151,8 +1114,10 @@ SLM::AdvanceSLM ()
         auto m_pot_sat_arr = lsm_fab_vars[LsmVar_SLM::m_pot_sat]->const_array(mfi);
         auto Bconst_arr = lsm_fab_vars[LsmVar_SLM::Bconst]->const_array(mfi);
 
-        auto ustar_arr = ustar.const_array(mfi);
-        auto tstar_arr = tstar.array(mfi);
+        //auto ustar_arr = ustar.const_array(mfi);
+        //auto tstar_arr = tstar.array(mfi);
+        auto ustar_arr = lsm_fab_vars[LsmVar_SLM::ustar]->const_array(mfi);
+        auto tstar_arr = lsm_fab_vars[LsmVar_SLM::tstar]->array(mfi);
 
         auto BAI_arr = BAI.const_array(mfi);
         auto ztop_arr = ztop.const_array(mfi);
@@ -1569,8 +1534,10 @@ void SLM::transfer_coeff(const amrex::MFIter &mfi)
     auto m_pot_sat_arr = lsm_fab_vars[LsmVar_SLM::m_pot_sat]->const_array(mfi);
     auto Bconst_arr = lsm_fab_vars[LsmVar_SLM::Bconst]->const_array(mfi);
 
-    auto ustar_arr = ustar.array(mfi);
-    auto tstar_arr = tstar.const_array(mfi);
+    //auto ustar_arr = ustar.array(mfi);
+    //auto tstar_arr = tstar.const_array(mfi);
+    auto ustar_arr = lsm_fab_vars[LsmVar_SLM::ustar]->array(mfi);
+    auto tstar_arr = lsm_fab_vars[LsmVar_SLM::tstar]->const_array(mfi);
 
     auto tref_arr  = lsm_fab_vars[LsmVar_SLM::tref]->const_array(mfi);
     auto ur_arr  = lsm_fab_vars[LsmVar_SLM::uref]->const_array(mfi);
@@ -1819,8 +1786,10 @@ void SLM::resistances(const amrex::MFIter &mfi)
     auto LAI_arr = LAI.const_array(mfi);
     auto t_cas_arr = t_cas.const_array(mfi);
     auto q_cas_arr = q_cas.const_array(mfi);
-    auto ustar_arr = ustar.const_array(mfi);
-    auto tstar_arr = tstar.const_array(mfi);
+    //auto ustar_arr = ustar.const_array(mfi);
+    //auto tstar_arr = tstar.const_array(mfi);
+    auto ustar_arr = lsm_fab_vars[LsmVar_SLM::ustar]->const_array(mfi);
+    auto tstar_arr = lsm_fab_vars[LsmVar_SLM::tstar]->const_array(mfi);
 
     auto w_s_WP_arr = lsm_fab_vars[LsmVar_SLM::w_s_WP]->const_array(mfi);
     auto w_s_FC_arr = lsm_fab_vars[LsmVar_SLM::w_s_FC]->const_array(mfi);
@@ -2626,10 +2595,10 @@ void SLM::Copy_State_to_Lsm(const MultiFab& cons_in, const MultiFab& u_in, const
 {
     int khi = khi_lsm;
 
-    auto theta = lsm_fab_vars[LsmVar_SLM::theta];
+    auto tsurf = lsm_fab_vars[LsmVar_SLM::tsurf];
 
     // Get the temperature, density, pressure at the reference level
-    for ( MFIter mfi(*theta, TileNoZ()); mfi.isValid(); ++mfi) {
+    for ( MFIter mfi(*tsurf, TileNoZ()); mfi.isValid(); ++mfi) {
         const auto& box3d = mfi.tilebox();
 
         // Create a box with the same i,j bounds, but only at z = 0
@@ -2643,7 +2612,7 @@ void SLM::Copy_State_to_Lsm(const MultiFab& cons_in, const MultiFab& u_in, const
         auto tref_array  = lsm_fab_vars[LsmVar_SLM::tref]->array(mfi);
         auto rho_array   = lsm_fab_vars[LsmVar_SLM::dref]->array(mfi);
         auto pres_array  = lsm_fab_vars[LsmVar_SLM::pref]->array(mfi);
-
+        auto qref_array  = lsm_fab_vars[LsmVar_SLM::qref]->array(mfi);
         auto slm_u       = lsm_fab_vars[LsmVar_SLM::uref]->array(mfi);
         auto slm_v       = lsm_fab_vars[LsmVar_SLM::vref]->array(mfi);
 
@@ -2656,8 +2625,17 @@ void SLM::Copy_State_to_Lsm(const MultiFab& cons_in, const MultiFab& u_in, const
                                                   states_array(i,j,k,RhoTheta_comp),
                                                   qv);
 
+            qref_array(i,j,k) = qv;
             slm_u(i,j,k) = u_array(i,j,k);
             slm_v(i,j,k) = v_array(i,j,k);
+            // TODO: this is for plotting purposes.. state arrays are at k=0 which is ghost cell for SLM values
+            //  SLM AMREX plotfile does not write ghost cells, but NetCDF does - fix?
+            rho_array(i, j, khi) = rho_array(i, j, 0);
+            pres_array(i, j, khi) = pres_array(i, j, 0);
+            tref_array(i, j, khi) = tref_array(i, j, 0);
+            qref_array(i, j, khi) = qref_array(i, j, 0);
+            slm_u(i, j, khi) = u_array(i, j, 0);
+            slm_v(i, j, khi) = v_array(i, j, 0);
         });
     }
 }
@@ -2666,9 +2644,11 @@ void
 SLM::set_flux_inputs(const amrex::MultiFab* sw_lw_fluxes_in,
                      const amrex::MultiFab* zenith_in)
 {
-    auto theta = lsm_fab_vars[LsmVar_SLM::theta];
+    int khi = khi_lsm;
 
-    for ( MFIter mfi(*theta, TileNoZ()); mfi.isValid(); ++mfi) {
+    auto tsurf = lsm_fab_vars[LsmVar_SLM::tsurf];
+
+    for ( MFIter mfi(*tsurf, TileNoZ()); mfi.isValid(); ++mfi) {
         const auto& box3d = mfi.tilebox();
 
         // Create a box with the same i,j bounds, but only at z = 0
@@ -2694,8 +2674,19 @@ SLM::set_flux_inputs(const amrex::MultiFab* sw_lw_fluxes_in,
             slm_diff_sw_vis(i, j, k) = sw_lw_fluxes_arr(i, j, k, 2);
             slm_diff_sw_nir(i, j, k) = sw_lw_fluxes_arr(i, j, k, 3);
 
-            slm_lw(i, j, k) = sw_lw_fluxes_arr(i, j, k, 4);
-            slm_zenith(i, j, k) = zenith_array(i, j, k, 0);
+            slm_lw(i, j, k) = sw_lw_fluxes_arr(i, j, k, 5);
+            //slm_zenith(i, j, k) = zenith_array(i, j, k, 0);
+            slm_zenith(i, j, k) = 1.0;
+
+
+            // TODO: this is for plotting purposes.. state arrays are at k=0 which is ghost cell for SLM values
+            //  SLM AMREX plotfile does not write ghost cells, but NetCDF does - fix?
+            slm_dir_sw_vis(i, j, khi) = slm_dir_sw_vis(i, j, 0);
+            slm_dir_sw_nir(i, j, khi) = slm_dir_sw_nir(i, j, 0);
+            slm_diff_sw_vis(i, j, khi) = slm_diff_sw_vis(i, j, 0);
+            slm_diff_sw_nir(i, j, khi) = slm_diff_sw_nir(i, j, 0);
+            slm_lw(i, j, khi) = slm_lw(i, j, 0);
+            slm_zenith(i, j, khi) = slm_zenith(i, j, 0);
         });
     }
 }
@@ -2703,9 +2694,11 @@ SLM::set_flux_inputs(const amrex::MultiFab* sw_lw_fluxes_in,
 void
 SLM::set_precip_input(const amrex::MultiFab* precip_in)
 {
-    auto theta = lsm_fab_vars[LsmVar_SLM::theta];
+    int khi = khi_lsm;
 
-    for ( MFIter mfi(*theta, TileNoZ()); mfi.isValid(); ++mfi) {
+    auto tsurf = lsm_fab_vars[LsmVar_SLM::tsurf];
+
+    for ( MFIter mfi(*tsurf, TileNoZ()); mfi.isValid(); ++mfi) {
         const auto& box3d = mfi.tilebox();
 
         // Create a box with the same i,j bounds, but only at z = 0
@@ -2719,6 +2712,10 @@ SLM::set_precip_input(const amrex::MultiFab* precip_in)
         ParallelFor(b2d, [=] AMREX_GPU_DEVICE (int i, int j, int k)
         {
             slm_precip(i, j, k) = precip_array(i, j, k, 0);
+
+            // TODO: this is for plotting purposes.. state arrays are at k=0 which is ghost cell for SLM values
+            //  SLM AMREX plotfile does not write ghost cells, but NetCDF does - fix?
+            slm_precip(i, j, khi) = slm_precip(i, j, 0);
         });
     }
 }
@@ -2727,11 +2724,15 @@ void
 SLM::set_terrain_inputs(const amrex::Vector<std::unique_ptr<amrex::MultiFab>>& sst_in,
                         const amrex::Vector<std::unique_ptr<amrex::iMultiFab>>& lmask_in)
 {
-    auto theta = lsm_fab_vars[LsmVar_SLM::theta];
+    if (!first_step)
+    {
+        return;
+    }
+    auto tsurf = lsm_fab_vars[LsmVar_SLM::tsurf];
 
     if (sst_in[0] && lmask_in[0]) {
         // Set SLM SST and land mask input from ERF
-        for ( MFIter mfi(*theta, TileNoZ()); mfi.isValid(); ++mfi) {
+        for ( MFIter mfi(*tsurf, TileNoZ()); mfi.isValid(); ++mfi) {
             const auto& box3d = mfi.tilebox();
 
             // Create a box with the same i,j bounds, but only at z = 0
@@ -2870,8 +2871,8 @@ void SLM::writeSLM_Data(const std::string plotfile_type, const amrex::Real time,
     mf_data.push_back(&lhf_canop);
     mf_data.push_back(&lhf_soil);
 
-    mf_data.push_back(&ustar);
-    mf_data.push_back(&tstar);
+    //mf_data.push_back(&ustar);
+    //mf_data.push_back(&tstar);
 
     mf_data.push_back(&r_a);
     mf_data.push_back(&r_b);
@@ -2929,8 +2930,8 @@ void SLM::writeSLM_Data(const std::string plotfile_type, const amrex::Real time,
     varnames.push_back("lhf_canop");
     varnames.push_back("lhf_soil");
 
-    varnames.push_back("ustar");
-    varnames.push_back("tstar");
+    //varnames.push_back("ustar");
+    //varnames.push_back("tstar");
 
     varnames.push_back("r_a");
     varnames.push_back("r_b");
@@ -2942,6 +2943,10 @@ void SLM::writeSLM_Data(const std::string plotfile_type, const amrex::Real time,
 
     if (plotfile_type == "amrex") {
         amrex::WriteSingleLevelPlotfile(plotfilename, fab, varnames, lsm_2d_geom, time, level_step);
+#ifdef ERF_USE_NETCDF
+        // Temporarily write NetCDF always
+        writeSLM_NetCDF(fab, varnames, time, plot_prefix, level_step);
+#endif
 #ifdef ERF_USE_NETCDF
     } else if (plotfile_type == "netcdf" || plotfile_type == "NetCDF") {
         writeSLM_NetCDF(fab, varnames, time, plot_prefix, level_step);

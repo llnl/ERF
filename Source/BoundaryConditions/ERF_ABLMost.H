@@ -271,6 +271,14 @@ public:
             m_lsm_flux_lev[lev][n] = lsm_flux[n];
         }
 
+        if (lsm_data.size() > 1 && lsm_data[1])
+        {
+            // If the LSM has more than theta defined, use ustar and tstar from LSM
+            //use_lsm_most = true; // enable SLM -> MOST coupling
+            use_lsm_most = false; // disable SLM -> MOST coupling
+            amrex::Print() << "  MOST: Using ustar and tstar from LSM" << std::endl;
+        }
+
         // Check if there is a user-specified roughness file to be read
         std::string fname;
         bool read_z0 = false;
@@ -548,6 +556,7 @@ private:
     amrex::Real depth{30.0};
     amrex::Vector<amrex::FArrayBox> z_0;
     bool m_var_z0{false};
+    bool use_lsm_most = false;
 
     bool use_moisture;
 

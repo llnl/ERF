@@ -250,7 +250,15 @@ ERF::init_stuff (int lev, const BoxArray& ba, const DistributionMapping& dm,
 
     // Additional inputs for LSM
     if (solverChoice.lsm_type != LandSurfaceType::None) {
-        precip[lev] = std::make_unique<MultiFab>(ba, dm, 1, ngrow_state);
+
+        BoxList m_bl = ba.boxList();
+        for (auto& b : m_bl) {
+            int kmin = b.smallEnd(2);
+            b.setRange(2,kmin);
+        }
+        BoxArray m_ba(std::move(m_bl));
+
+        precip[lev] = std::make_unique<MultiFab>(m_ba, dm, 1, ngrow_state);
         precip[lev]->setVal(0.0);
     }
 
@@ -333,7 +341,7 @@ ERF::init_stuff (int lev, const BoxArray& ba, const DistributionMapping& dm,
         }
         BoxArray m_ba(std::move(m_bl));
 
-        sw_lw_fluxes[lev] = std::make_unique<MultiFab>(m_ba, dm, 5, ngrow_state); // SW direct (2), SW diffuse (2), LW
+        sw_lw_fluxes[lev] = std::make_unique<MultiFab>(m_ba, dm, 6, ngrow_state); // SW direct (2), SW diffuse (2), SW Net, LW
         solar_zenith[lev] = std::make_unique<MultiFab>(m_ba, dm, 2, ngrow_state);
 
         sw_lw_fluxes[lev]->setVal(0.);

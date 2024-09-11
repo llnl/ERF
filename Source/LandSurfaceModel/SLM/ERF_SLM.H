@@ -22,7 +22,9 @@
 namespace LsmVar_SLM {
    enum {
       // independent variables
-      theta = 0,
+      tsurf = 0,           // surface temperature
+      ustar,               // ustar for MOST
+      tstar,               // tstar for MOST
       // inputs from ERF
       tref,            // temperature at reference level
       qref,            // specific humidity at ref
@@ -37,7 +39,7 @@ namespace LsmVar_SLM {
       swdsnirdxyref,   // downwelling SW radiation, diffuse near-IR flux
       lwref,           // downwelling LW radiation
       coszrsxy,        // zenith angle
-      tsurf,           // surface temperature
+      //tsurf,           // surface temperature
       // model variables
       tv,              // vegetation temperature
       mv,              // vegetation moisture storage
@@ -157,18 +159,8 @@ public:
             first_step = false;
         }
 
-        this->ComputeFluxes();
         this->AdvanceSLM();
-        this->ComputeTsurf();
     }
-
-    // Compute surface temperature
-    void
-    ComputeTsurf ();
-
-    // Compute diffusive fluxes
-    void
-    ComputeFluxes ();
 
     // Advance the lsm state vars
     void
@@ -452,7 +444,7 @@ private:
 
     amrex::MultiFab mw_inc;
 
-    amrex::MultiFab ustar, tstar;
+    //amrex::MultiFab ustar, tstar;
 
     //amrex::Real mom_trans_coef; // surface momentum transfer coef.
     //amrex::Real heat_trans_coef; // surface heat transfer coef.
@@ -514,8 +506,8 @@ private:
     int ncfid = -1;
 
     static constexpr const char* LsmVarName_Full[] = {
-      "theta", "ref_t", "ref_q", "ref_p", "ref_d", "ref_u", "ref_v", "ref_precip",
-      "SW_dw_dir_vis", "SW_dw_dir_nir", "SW_dw_dif_vis", "SW_dw_dif_nir", "LW_dw", "zenith", "tsurf",
+      "tsurf", "ustar", "tstar", "ref_t", "ref_q", "ref_p", "ref_d", "ref_u", "ref_v", "ref_precip",
+      "SW_dw_dir_vis", "SW_dw_dir_nir", "SW_dw_dif_vis", "SW_dw_dif_nir", "LW_dw", "zenith",
       "tveg", "mv", "tsoil", "wsoil", "sand", "clay", "soil_thickness", "node_z", "interface_z",
       "soilw_nudge", "soilt_nudge", "sw_over_sat", "soil_relax_hgt", "rootF", "w_s_FC", "w_s_WP",
       "sst_capa", "sst_cond", "poro_soil", "theta_FC", "theta_WP", "m_pot_sat", "Bconst", "ks",
