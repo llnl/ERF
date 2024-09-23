@@ -1,5 +1,5 @@
-#include "prob.H"
-#include <SLM.H>
+#include "ERF_prob.H"
+#include <ERF_SLM.H>
 
 using namespace amrex;
 

@@ -17,7 +17,7 @@
 #include <ERF_IndexDefines.H>
 #include <ERF_DataStruct.H>
 
-#include <NCInterface.H>
+#include <ERF_NCInterface.H>
 
 namespace LsmVar_SLM {
    enum {

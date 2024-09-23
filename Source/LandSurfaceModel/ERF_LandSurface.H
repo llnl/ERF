@@ -6,7 +6,7 @@
 #include <ERF_NullSurf.H>
 #include <ERF_SLM.H>
 #include <ERF_MM5.H>
-#include <LSM_Types.H>
+#include <ERF_LSM_Types.H>
 
 #if ERF_USE_NOAH
 #include <ERF_NOAH.H>

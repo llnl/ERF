@@ -5,7 +5,7 @@
 #include <AMReX_Geometry.H>
 #include <ERF_DataStruct.H>
 
-#include <LSM_Types.H>
+#include <ERF_LSM_Types.H>
 
 class NullSurf {
 

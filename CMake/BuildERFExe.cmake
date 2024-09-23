@@ -232,7 +232,7 @@ function(build_erf_lib erf_lib_name)
        ${SRC_DIR}/WindFarmParametrization/SimpleActuatorDisk/ERF_AdvanceSimpleAD.cpp
        ${SRC_DIR}/WindFarmParametrization/GeneralActuatorDisk/ERF_AdvanceGeneralAD.cpp
        ${SRC_DIR}/LandSurfaceModel/SLM/ERF_SLM.cpp
-       ${SRC_DIR}/LandSurfaceModel/SLM/SLM_IO.cpp
+       ${SRC_DIR}/LandSurfaceModel/SLM/ERF_SLM_IO.cpp
        ${SRC_DIR}/LandSurfaceModel/MM5/ERF_MM5.cpp
   )
 

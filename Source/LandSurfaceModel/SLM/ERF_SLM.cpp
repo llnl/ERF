@@ -1,7 +1,7 @@
 #include <ERF_SLM.H>
-#include "EOS.H"
-#include "TileNoZ.H"
-#include "Microphysics_Utils.H"
+#include "ERF_EOS.H"
+#include "ERF_TileNoZ.H"
+#include "ERF_Microphysics_Utils.H"
 
 #include <AMReX_PlotFileUtil.H>
 

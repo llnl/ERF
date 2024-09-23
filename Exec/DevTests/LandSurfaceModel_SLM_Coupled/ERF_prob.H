@@ -1,31 +1,31 @@
-#ifndef _PROB_H_
-#define _PROB_H_
+#ifndef ERF_PROB_H_
+#define ERF_PROB_H_
 
 #include <string>
 
 #include "AMReX_REAL.H"
 
-#include "prob_common.H"
+#include "ERF_prob_common.H"
 
 struct ProbParm : ProbParmDefaults {
-    amrex::Real rho_0 = 1.0;
-    amrex::Real T_0   = 300.0;
-    amrex::Real u_0   = 0.0;
-    amrex::Real v_0   = 0.0;
-    amrex::Real w_0   = 0.0;
-
-    int SLM_num_ref_inputs = 1;
-    std::string SLM_ref_sounding_file;
-    std::string SLM_ref_flux_file;
-    std::string SLM_ref_sst_file;
+  amrex::Real T_0 = 300.0; // surface temperature == mean potential temperature
+  amrex::Real U_0 = 10.0;
+  amrex::Real V_0 = 0.0;
+  amrex::Real x_c = 0.0; // center of thermal perturbation
+  amrex::Real z_c = 3200.0;
+  amrex::Real x_r = 1000.0;
+  amrex::Real z_r = 1000.0;
+  amrex::Real T_pert = 5.0; // perturbation temperature
+  // overridden physical constants
+  amrex::Real C_p = 1004.0;
 }; // namespace ProbParm
 
 class Problem : public ProblemBase
 {
 public:
-    Problem(const amrex::Real* /*problo*/, const amrex::Real* /*probhi*/);
+    Problem();
 
-#include "Prob/init_constant_density_hse.H"
+#include "Prob/ERF_init_density_hse_dry.H"
 
     void init_custom_pert (
         const amrex::Box&  bx,
@@ -47,20 +47,17 @@ public:
         amrex::Array4<amrex::Real const> const& mf_v,
         const SolverChoice& sc) override;
 
-    void read_SLM_inputs();
-    void read_SLM_sounding_file(const std::string &fname);
-    void read_SLM_flux_file(const std::string &fname);
-    void read_SLM_sst_file(const std::string &fname);
+    void erf_init_rayleigh (
+        amrex::Vector<amrex::Vector<amrex::Real> >& rayleigh_ptrs,
+        amrex::Geometry      const& geom,
+        std::unique_ptr<amrex::MultiFab>& z_phys_nd,
+        amrex::Real zdamp) override;
 
 protected:
-    std::string name() override { return "LandSurfaceModel_SLM"; }
+    std::string name() override { return "Supercell"; }
 
 private:
     ProbParm parms;
-
-    std::vector<std::vector<amrex::Real>> sounding;
-    std::vector<std::vector<amrex::Real>> fluxes;
-    std::vector<std::vector<amrex::Real>> sst;
 };
 
 #endif

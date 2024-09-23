@@ -1,6 +1,6 @@
-#include "SLM.H"
+#include "ERF_SLM.H"
 
-#include "NCInterface.H"
+#include "ERF_NCInterface.H"
 
 using namespace amrex;
 
