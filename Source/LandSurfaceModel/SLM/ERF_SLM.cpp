@@ -32,8 +32,8 @@ SLM::Init (const MultiFab& cons_in,
 
     LsmVarMap.resize(m_lsm_size);
     LsmVarMap = {
-      LsmVar_SLM::tsurf,         LsmVar_SLM::ustar,        LsmVar_SLM::tstar, LsmVar_SLM::tv,
-      LsmVar_SLM::mv,            LsmVar_SLM::soilt,        LsmVar_SLM::soilw,
+      LsmVar_SLM::tsurf,         LsmVar_SLM::ustar,        LsmVar_SLM::tstar,       LsmVar_SLM::qstar,
+      LsmVar_SLM::tv,            LsmVar_SLM::mv,           LsmVar_SLM::soilt,       LsmVar_SLM::soilw,
       LsmVar_SLM::sand,          LsmVar_SLM::clay,         LsmVar_SLM::s_depth,
       LsmVar_SLM::flbu,          LsmVar_SLM::flbv,         LsmVar_SLM::flbq,
       LsmVar_SLM::flbt,          LsmVar_SLM::prsfc,        LsmVar_SLM::precipref,
@@ -43,14 +43,19 @@ SLM::Init (const MultiFab& cons_in,
       LsmVar_SLM::qref,          LsmVar_SLM::pref,         LsmVar_SLM::node_z};
 
     LsmVarName.resize(m_lsm_size);
-    LsmVarName = {
-      "tsurf",          "ustar",         "tstar",         "tveg",          "mv",
-      "tsoil",          "wsoil",         "sand",          "clay",
-      "soil_thickness", "surface_u",     "surface_v",     "surface_vapor",
-      "surface_heat",   "precip_soil",   "ref_precip",    "SW_dw_dir_vis",
-      "SW_dw_dir_nir",  "SW_dw_dif_vis", "SW_dw_dif_nir", "LW_dw",
-      "ref_t",          "ref_u",         "ref_v",         "ref_d",
-      "ref_q",          "ref_p",         "node_z"};
+    LsmVarName = {"tsurf",         "ustar",          "tstar",
+                  "qstar",         "tveg",           "mv",
+                  "tsoil",         "wsoil",          "sand",
+                  "clay",          "soil_thickness", "surface_u",
+                  "surface_v",     "surface_vapor",  "surface_heat",
+                  "precip_soil",   "ref_precip",     "SW_dw_dir_vis",
+                  "SW_dw_dir_nir", "SW_dw_dif_vis",  "SW_dw_dif_nir",
+                  "LW_dw",         "ref_t",          "ref_u",
+                  "ref_v",         "ref_d",          "ref_q",
+                  "ref_p",         "node_z"};
+
+    AMREX_ALWAYS_ASSERT(LsmVarMap.size() == LsmVarName.size());
+    AMREX_ALWAYS_ASSERT(LsmVarMap.size() == m_lsm_size);
 
     // NOTE: All boxes in ba extend from zlo to zhi, so this transform is valid.
     //       If that were to change, the dm and new ba are no longer valid and
@@ -139,8 +144,6 @@ SLM::Init (const MultiFab& cons_in,
 
     tau_soil.define(ba_lsm_2d, dm, 1, ng_2d);
     mw_inc.define(ba_lsm_2d, dm, 1, ng_2d);
-    //ustar.define(ba_lsm_2d, dm, 1, ng_2d);
-    //tstar.define(ba_lsm_2d, dm, 1, ng_2d);
 
     evapo_dry.define(ba_lsm_2d, dm, 1, ng_2d);
 
@@ -177,10 +180,9 @@ SLM::Init (const MultiFab& cons_in,
     r_b.setVal(0.0);
     r_c.setVal(0.0);
     r_d.setVal(0.0);
-    //ustar.setVal(0.1);
-    //tstar.setVal(0.0);
     lsm_fab_vars[LsmVar_SLM::ustar]->setVal(0.1);
-    lsm_fab_vars[LsmVar_SLM::ustar]->setVal(0.0);
+    lsm_fab_vars[LsmVar_SLM::tstar]->setVal(0.0);
+    lsm_fab_vars[LsmVar_SLM::qstar]->setVal(0.0);
 
     // Initialize SLM from inputs if specified
     init_from_file();
@@ -1114,10 +1116,9 @@ SLM::AdvanceSLM ()
         auto m_pot_sat_arr = lsm_fab_vars[LsmVar_SLM::m_pot_sat]->const_array(mfi);
         auto Bconst_arr = lsm_fab_vars[LsmVar_SLM::Bconst]->const_array(mfi);
 
-        //auto ustar_arr = ustar.const_array(mfi);
-        //auto tstar_arr = tstar.array(mfi);
         auto ustar_arr = lsm_fab_vars[LsmVar_SLM::ustar]->const_array(mfi);
         auto tstar_arr = lsm_fab_vars[LsmVar_SLM::tstar]->array(mfi);
+        auto qstar_arr = lsm_fab_vars[LsmVar_SLM::qstar]->array(mfi);
 
         auto BAI_arr = BAI.const_array(mfi);
         auto ztop_arr = ztop.const_array(mfi);
@@ -1315,6 +1316,8 @@ SLM::AdvanceSLM ()
                 tsurf_arr(i, j, d_khi_lsm) = t_skin_arr(i, j, 0); // TODO: ts in SLM is input and output - check how this should be coupled back to ERF
                 flbq_arr(i, j, d_khi_lsm) = lhf_air_arr(i, j, 0) / (lcond*rhow);
                 flbt_arr(i, j, d_khi_lsm) = shf_air_arr(i, j, 0) / (Cp_d*rhow);
+
+                qstar_arr(i, j, 0) = -1.0 * lhf_air_arr(i, j, 0) / (lcond*rhow) / ustar_arr(i, j, 0);
                 // Collect 2D stat variables
                 // collect_2D_stat_vars(i, j);
             }
@@ -1534,8 +1537,6 @@ void SLM::transfer_coeff(const amrex::MFIter &mfi)
     auto m_pot_sat_arr = lsm_fab_vars[LsmVar_SLM::m_pot_sat]->const_array(mfi);
     auto Bconst_arr = lsm_fab_vars[LsmVar_SLM::Bconst]->const_array(mfi);
 
-    //auto ustar_arr = ustar.array(mfi);
-    //auto tstar_arr = tstar.const_array(mfi);
     auto ustar_arr = lsm_fab_vars[LsmVar_SLM::ustar]->array(mfi);
     auto tstar_arr = lsm_fab_vars[LsmVar_SLM::tstar]->const_array(mfi);
 
@@ -1786,8 +1787,6 @@ void SLM::resistances(const amrex::MFIter &mfi)
     auto LAI_arr = LAI.const_array(mfi);
     auto t_cas_arr = t_cas.const_array(mfi);
     auto q_cas_arr = q_cas.const_array(mfi);
-    //auto ustar_arr = ustar.const_array(mfi);
-    //auto tstar_arr = tstar.const_array(mfi);
     auto ustar_arr = lsm_fab_vars[LsmVar_SLM::ustar]->const_array(mfi);
     auto tstar_arr = lsm_fab_vars[LsmVar_SLM::tstar]->const_array(mfi);
 

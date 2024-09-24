@@ -141,12 +141,15 @@ ABLMost::update_fluxes (const int& lev,
 
             auto u_star_arr = u_star[lev]->array(mfi);
             auto t_star_arr = t_star[lev]->array(mfi);
+            auto q_star_arr = t_star[lev]->array(mfi);
 
             AMREX_ASSERT(m_lsm_data_lev[lev][1]);
             AMREX_ASSERT(m_lsm_data_lev[lev][2]);
+            AMREX_ASSERT(m_lsm_data_lev[lev][3]);
 
             auto lsm_ustar_arr = m_lsm_data_lev[lev][1]->const_array(mfi);
             auto lsm_tstar_arr = m_lsm_data_lev[lev][2]->const_array(mfi);
+            auto lsm_qstar_arr = m_lsm_data_lev[lev][3]->const_array(mfi);
 
             // TODO: LSM does not carry lateral ghost cells.
             //       This copies the valid box into the ghost cells.
@@ -167,6 +170,7 @@ ABLMost::update_fluxes (const int& lev,
                 if (time > 0.0) {
                     u_star_arr(i, j, k) = lsm_ustar_arr(li, lj, k);
                     t_star_arr(i, j, k) = lsm_tstar_arr(li, lj, k);
+                    q_star_arr(i, j, k) = lsm_qstar_arr(li, lj, k);
 
                     amrex::Print() << " ABLMost: i = " << i << " j = " << j << " k = " << k << ": SLM- setting ustar = " << u_star_arr(i, j, k) << " tstar = " << t_star_arr(i, j, k) << std::endl;
                 }
@@ -176,6 +180,7 @@ ABLMost::update_fluxes (const int& lev,
         // Fill interior ghost cells
         u_star[lev]->FillBoundary(m_geom[lev].periodicity());
         t_star[lev]->FillBoundary(m_geom[lev].periodicity());
+        q_star[lev]->FillBoundary(m_geom[lev].periodicity());
     }
 }
 
@@ -590,6 +595,10 @@ ABLMost::get_lsm_tsurf (const int& lev)
         auto lmask_arr  = (m_lmask_lev[lev][0]) ? m_lmask_lev[lev][0]->array(mfi) :
                                                   Array4<int> {};
         const auto lsm_arr = m_lsm_data_lev[lev][0]->const_array(mfi);
+        // get the top-most index of the LSM to use as the surface temperature
+        // this is -1 for SLM, but could be different for other models?
+        const auto &lsm_box = m_lsm_data_lev[lev][0]->box(mfi.index());
+        const int lsm_khi = lsm_box.bigEnd(2);
 
         ParallelFor(gtbx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept
         {
@@ -598,8 +607,8 @@ ABLMost::get_lsm_tsurf (const int& lev)
                 int li = amrex::min(amrex::max(i, i_lo), i_hi);
                 int lj = amrex::min(amrex::max(j, j_lo), j_hi);
                 // TODO: fix - using t_surf from SLM causing nans in MOST
-                //amrex::Print() << " ABLMost::get_lsm_tsurf i = " << i << " j = " << j << " k = " << k << ": OLD t_surf = " << t_surf_arr(i, j, k) << " NEW SLM t_surf = " << lsm_arr(li, lj, k) << std::endl;
-                //t_surf_arr(i,j,k) = lsm_arr(li,lj,k);
+                amrex::Print() << " ABLMost::get_lsm_tsurf i = " << i << " j = " << j << " k = " << k << ": OLD t_surf = " << t_surf_arr(i, j, k) << " NEW SLM t_surf = " << lsm_arr(li, lj, lsm_khi) << std::endl;
+                t_surf_arr(i,j,k) = lsm_arr(li,lj,lsm_khi);
             }
         });
     }

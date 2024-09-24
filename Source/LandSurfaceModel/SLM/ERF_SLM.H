@@ -25,6 +25,7 @@ namespace LsmVar_SLM {
       tsurf = 0,           // surface temperature
       ustar,               // ustar for MOST
       tstar,               // tstar for MOST
+      qstar,               // qstar for MOST
       // inputs from ERF
       tref,            // temperature at reference level
       qref,            // specific humidity at ref
@@ -295,7 +296,7 @@ public:
 
 private:
     // number of lsm variables (theta)
-    int m_lsm_size = 27;
+    int m_lsm_size = 29;
 
     // LsmVar map (state indices -> LsmVar enum)
     amrex::Vector<int> LsmVarMap;
@@ -506,7 +507,7 @@ private:
     int ncfid = -1;
 
     static constexpr const char* LsmVarName_Full[] = {
-      "tsurf", "ustar", "tstar", "ref_t", "ref_q", "ref_p", "ref_d", "ref_u", "ref_v", "ref_precip",
+      "tsurf", "ustar", "tstar", "qstar", "ref_t", "ref_q", "ref_p", "ref_d", "ref_u", "ref_v", "ref_precip",
       "SW_dw_dir_vis", "SW_dw_dir_nir", "SW_dw_dif_vis", "SW_dw_dif_nir", "LW_dw", "zenith",
       "tveg", "mv", "tsoil", "wsoil", "sand", "clay", "soil_thickness", "node_z", "interface_z",
       "soilw_nudge", "soilt_nudge", "sw_over_sat", "soil_relax_hgt", "rootF", "w_s_FC", "w_s_WP",

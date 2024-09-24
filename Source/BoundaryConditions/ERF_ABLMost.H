@@ -274,8 +274,8 @@ public:
         if (lsm_data.size() > 1 && lsm_data[1])
         {
             // If the LSM has more than theta defined, use ustar and tstar from LSM
-            //use_lsm_most = true; // enable SLM -> MOST coupling
-            use_lsm_most = false; // disable SLM -> MOST coupling
+            use_lsm_most = true; // enable SLM -> MOST coupling
+            //use_lsm_most = false; // disable SLM -> MOST coupling
             amrex::Print() << "  MOST: Using ustar and tstar from LSM" << std::endl;
         }
 
