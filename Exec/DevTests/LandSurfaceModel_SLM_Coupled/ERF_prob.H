@@ -27,9 +27,9 @@ struct ProbParm : ProbParmDefaults {
     // divergence-free initial perturbations
     amrex::Real pert_deltaU = 0.0;
     amrex::Real pert_deltaV = 0.0;
-    amrex::Real pert_periods_U = 5.0;
-    amrex::Real pert_periods_V = 5.0;
-    amrex::Real pert_ref_height = 100.0;
+    amrex::Real pert_periods_U = 0.0;
+    amrex::Real pert_periods_V = 0.0;
+    amrex::Real pert_ref_height = 200.0;
 
     //==============================================
     // USER-DEFINED INPUTS

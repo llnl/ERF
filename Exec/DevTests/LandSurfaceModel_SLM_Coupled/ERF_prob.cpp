@@ -121,8 +121,8 @@ Problem::init_custom_pert (
         // Add temperature perturbations -- we want to keep pressure constant
         //     so these effectively end up as density perturbations
         //
-        if ((z <= parms_d.pert_ref_height) && (parms_d.T_0_Pert_Mag != 0.0)) {
-
+        //if ((z <= parms_d.pert_ref_height) && (parms_d.T_0_Pert_Mag != 0.0)) {
+        if ((z <= parms_d.pert_ref_height)) {
             Real rhotheta  = state(i,j,k,RhoTheta_comp);
             Real rho       = state(i,j,k,Rho_comp);
             Real qv        = state(i,j,k,RhoQ1_comp) / rho;
@@ -130,8 +130,9 @@ Problem::init_custom_pert (
             Real P         = getPgivenRTh(rhotheta,qv);
 
             Real rand_double = amrex::Random(engine); // Between 0.0 and 1.0
-            Real Tpert    = (rand_double*2.0 - 1.0)*parms_d.T_0_Pert_Mag;
-            Real Tnew     = Told + Tpert;
+            //Real Tpert    = (rand_double*2.0 - 1.0)*parms_d.T_0_Pert_Mag;
+            Real Tpert    = (1.0 - 2.0*rand_double);
+            Real Tnew     = Told + 0.1*Tpert*(1.0 - z / parms_d.pert_ref_height);
 
             Real theta_new = getThgivenPandT(Tnew,P,rdOcp);
             Real rhonew    = getRhogivenThetaPress(theta_new,P,rdOcp,qv);

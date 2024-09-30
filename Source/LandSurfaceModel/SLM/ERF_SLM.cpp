@@ -171,6 +171,17 @@ SLM::Init (const MultiFab& cons_in,
     slm_diag.define(ba_lsm_2d, dm, SLM_Diag::NumVars, ng_2d);
     slm_diag.setVal(0.0);
 
+    r_soil.setVal(0.0);
+    lhf_air.setVal(0.0);
+    lhf_canop.setVal(0.0);
+    shf_air.setVal(0.0);
+    shf_canop.setVal(0.0);
+    t_canop.setVal(0.0);
+    t_cas.setVal(0.0);
+    t_skin.setVal(0.0);
+    q_cas.setVal(0.0);
+    wet_canop.setVal(0.0);
+
     // Initialize 1D arrays
     soilw_inc.resize({klo_lsm},  {khi_lsm});
     alpha.resize({klo_lsm},  {khi_lsm});
@@ -206,10 +217,33 @@ void SLM::init_from_file()
 
     pp.query("landtype0", landtype0);
     pp.query("LAI0", LAI0);
-    pp.query("clay0", clay0);
-    pp.query("sand0", sand0);
-    pp.query("sw0", sw0);
-    pp.query("st0", st0);
+
+    auto const get_layer_prop = [&pp](std::string name, const int nz, amrex::Vector<amrex::Real> &prop)
+    {
+        int nval = pp.countval(name.c_str());
+
+        if (nval == 1)
+        {
+            // read single val and fill prop array over all soil layers
+            amrex::Real tmp;
+            pp.query(name.c_str(), tmp);
+            prop.resize(nz);
+            std::fill(prop.begin(), prop.end(), tmp);
+        } else {
+            pp.queryarr(name.c_str(), prop);
+            AMREX_ALWAYS_ASSERT_WITH_MESSAGE(prop.size() == nz, " Expected " + name + " to have " + std::to_string(nz) + " values!");
+        }
+    };
+
+    get_layer_prop("clay0", m_nz_lsm, clay0);
+    get_layer_prop("sand0", m_nz_lsm, sand0);
+    get_layer_prop("sw0", m_nz_lsm, sw0);
+    get_layer_prop("st0", m_nz_lsm, st0);
+
+    for (int i = 0; i < m_nz_lsm; i++)
+    {
+        amrex::Print() << " " << i << ": soilt = " << st0[i] << " soilw = " << sw0[i] << " clay = " << clay0[i] << " sand = " << sand0[i] << std::endl;
+    }
 
     pp.query("tabs_s", tabs_s);
     pp.query("t00", t00);
@@ -219,6 +253,80 @@ void SLM::init_from_file()
     pp.query("Rc_max", Rc_max);
     pp.query("T_opt", T_opt);
     pp.query("zref", zref);
+
+    pp.query("rad_input_file", rad_input_file);
+    if (rad_input_file != "") {
+#ifndef ERF_USE_NETCDF
+        amrex::Abort("ERF needs to be compiled with NetCDF to use the SLM rad_input_file option!");
+#endif
+#ifdef ERF_USE_NETCDF
+        ncutils::NCFile rad_forcing_ncf = ncutils::NCFile::open(rad_input_file, NC_NOWRITE);
+
+        ncutils::NCVar rad_time = rad_forcing_ncf.var("time");
+        num_rad_times = rad_time.shape()[0];
+        rad_times.resize(num_rad_times);
+        rad_time.get(rad_times.dataPtr(), {0}, {static_cast<unsigned long>(num_rad_times)});
+
+        for (int i = 0; i < num_rad_times; i++)
+        {
+            rad_times[i] -= rad_times[0]; // shift relative to first time
+        }
+
+        ncutils::NCDim rad_x = rad_forcing_ncf.dim("x");
+        ncutils::NCDim rad_y = rad_forcing_ncf.dim("y");
+
+        amrex::Print() << " Read radiation forcing file '" << rad_input_file << "'" << std::endl;
+        amrex::Print() << "   rad forcing file has " << num_rad_times << " time values, x = " << rad_x.len() << " y = " << rad_y.len() << std::endl;
+        AMREX_ALWAYS_ASSERT_WITH_MESSAGE(m_lsm_geom.Domain().length(0) == rad_x.len() && m_lsm_geom.Domain().length(1) == rad_y.len(), "Radiation input file must have same X and Y dimensions!");
+
+        BoxList bl_rad = ba_lsm_2d.boxList();
+        for (auto& b : bl_rad) {
+            b.setSmall(2, 0);
+            b.setBig(2, num_rad_times - 1);
+        }
+        BoxArray ba_rad = BoxArray(std::move(bl_rad));
+        IntVect ng_2d(0, 0, 0);
+
+        // rad_input has 6 components: SWVIS, SWNIR, SWVISD, SWNIRD, COSZRS, LWDS
+        rad_input_data.define(ba_rad, landmask.distributionMap, 6, ng_2d);
+        rad_input_data.setVal(0.0);
+
+        for(int comp = 0; comp < rad_input_data.nComp(); ++comp) {
+
+            ncutils::NCVar rad_var = rad_forcing_ncf.var(rad_names[comp]);
+            amrex::Print() << " Reading radiation input var " << rad_var.name() << std::endl;
+
+            for ( MFIter mfi(rad_input_data); mfi.isValid(); ++mfi) {
+                const auto& box = mfi.fabbox();
+
+                auto *dataPtr = rad_input_data.get(mfi).dataPtr(comp);
+                AMREX_ALWAYS_ASSERT(dataPtr != nullptr);
+
+                std::vector<size_t> starts = {0,
+                                              static_cast<unsigned long>(box.loVect()[1]),
+                                              static_cast<unsigned long>(box.loVect()[0])};
+                std::vector<size_t> counts = {static_cast<unsigned long>(num_rad_times),
+                                              static_cast<unsigned long>(box.length()[1]),
+                                              static_cast<unsigned long>(box.length()[0])};
+
+                amrex::Print() << "  -- reading {" << counts[0] << "," << counts[1] << "," << counts[2] << "} at index {" << starts[0] << "," << starts[1] << "," << starts[2] << "}" << std::endl;
+                rad_var.get(dataPtr, starts, counts);
+            }
+        }
+
+        /*
+         for ( MFIter mfi(rad_input_data); mfi.isValid(); ++mfi)
+         {
+            const auto& box = mfi.fabbox();
+            auto rad_arr = rad_input_data.const_array(mfi);
+            ParallelFor(box, rad_names.size(), [=] AMREX_GPU_DEVICE (int i, int j, int k, int n)
+            {
+                amrex::Print() << "   i = " << i << " j = " << j << " k = " << k << " n = " << n << " RADVAR = " << rad_arr(i, j, k, n) << std::endl;
+            });
+         }
+         */
+#endif
+    }
 
     if (set_from_file)
     {
@@ -853,19 +961,15 @@ void SLM::init_landtype()
 void SLM::init_soil_tw()
 {
     // TODO - read from input file
-    const Real d_clay0 = clay0;
-    const Real d_sand0 = sand0;
-    const Real d_st0 = st0;
-    const Real d_sw0 = sw0;
+    const amrex::Vector<amrex::Real> d_clay0 = clay0;
+    const amrex::Vector<amrex::Real> d_sand0 = sand0;
+    const amrex::Vector<amrex::Real> d_st0 = st0;
+    const amrex::Vector<amrex::Real> d_sw0 = sw0;
     const Real d_tabs_s = tabs_s;
     const Real d_t00 = t00;
 
     const int d_khi_lsm = khi_lsm;
     const int d_klo_lsm = klo_lsm;
-
-    //const std::vector<Real> d_dz_lsm = m_dz_lsm;
-    //const amrex::Gpu::DeviceVector d_dz_lsm(m_dz_lsm);
-    //const amrex::Vector<Real> d_dz_lsm(m_dz_lsm);
 
     amrex::Gpu::DeviceVector<Real> d_dz_lsm_vec(m_dz_lsm.size());
     amrex::Gpu::copy(Gpu::hostToDevice, m_dz_lsm.begin(), m_dz_lsm.end(), d_dz_lsm_vec.begin());
@@ -898,10 +1002,10 @@ void SLM::init_soil_tw()
 
                 // TODO: replace this with input from file
                 s_depth_arr(i, j, k) = d_dz_lsm[(k*-1)+d_khi_lsm];
-                clay_arr(i, j, k) = d_clay0;
-                sand_arr(i, j, k) = d_sand0;
-                soilt_arr(i, j, k) = d_st0;
-                soilw_arr(i, j, k) = d_sw0;
+                clay_arr(i, j, k) = d_clay0[(k*-1)+d_khi_lsm];
+                sand_arr(i, j, k) = d_sand0[(k*-1)+d_khi_lsm];
+                soilt_arr(i, j, k) = d_st0[(k*-1)+d_khi_lsm];
+                soilw_arr(i, j, k) = d_sw0[(k*-1)+d_khi_lsm];
 
                 soil_relax_hgt_arr(i, j, k) = 0.0;
 
@@ -2647,6 +2751,62 @@ SLM::set_flux_inputs(const amrex::MultiFab* sw_lw_fluxes_in,
 
     auto tsurf = lsm_fab_vars[LsmVar_SLM::tsurf];
 
+    if (rad_input_file != "")
+    {
+        int tindex = 0;
+        for (int k = 0; k < num_ref_inputs - 1; k++)
+        {
+            if (time >= rad_times[k] && time <= rad_times[k+1])
+            {
+                tindex = k;
+                break;
+            }
+        }
+        amrex::Real t0 = rad_times[tindex];
+        amrex::Real t1 = rad_times[tindex+1];
+
+        for ( MFIter mfi(rad_input_data); mfi.isValid(); ++mfi) {
+            const auto& box3d = mfi.tilebox();
+
+            // Create a box with the same i,j bounds, but only at z = 0
+            amrex::Box b2d = box3d;
+            b2d.setRange(2, 0);
+
+            auto rad_arr = rad_input_data.const_array(mfi);
+
+            auto slm_dir_sw_vis  = lsm_fab_vars[LsmVar_SLM::swdsvisxyref]->array(mfi);
+            auto slm_dir_sw_nir  = lsm_fab_vars[LsmVar_SLM::swdsnirxyref]->array(mfi);
+            auto slm_diff_sw_vis = lsm_fab_vars[LsmVar_SLM::swdsvisdxyref]->array(mfi);
+            auto slm_diff_sw_nir = lsm_fab_vars[LsmVar_SLM::swdsnirdxyref]->array(mfi);
+
+            auto slm_lw          = lsm_fab_vars[LsmVar_SLM::lwref]->array(mfi);
+            auto slm_zenith      = lsm_fab_vars[LsmVar_SLM::coszrsxy]->array(mfi);
+
+            ParallelFor(b2d, [=] AMREX_GPU_DEVICE (int i, int j, int k)
+            {
+                slm_dir_sw_vis(i, j, k) = linear_interp(t0, t1, time, rad_arr(i, j, tindex, 0), rad_arr(i, j, tindex+1, 0));
+                slm_dir_sw_nir(i, j, k) = linear_interp(t0, t1, time, rad_arr(i, j, tindex, 1), rad_arr(i, j, tindex+1, 1));
+
+                slm_diff_sw_vis(i, j, k) = linear_interp(t0, t1, time, rad_arr(i, j, tindex, 2), rad_arr(i, j, tindex+1, 2));
+                slm_diff_sw_nir(i, j, k) = linear_interp(t0, t1, time, rad_arr(i, j, tindex, 3), rad_arr(i, j, tindex+1, 3));
+
+                slm_zenith(i, j, k) = linear_interp(t0, t1, time, rad_arr(i, j, tindex, 4), rad_arr(i, j, tindex+1, 4));
+                slm_lw(i, j, k) = linear_interp(t0, t1, time, rad_arr(i, j, tindex, 5), rad_arr(i, j, tindex+1, 5));
+
+
+                // TODO: this is for plotting purposes.. state arrays are at k=0 which is ghost cell for SLM values
+                //  SLM AMREX plotfile does not write ghost cells, but NetCDF does - fix?
+                slm_dir_sw_vis(i, j, khi) = slm_dir_sw_vis(i, j, 0);
+                slm_dir_sw_nir(i, j, khi) = slm_dir_sw_nir(i, j, 0);
+                slm_diff_sw_vis(i, j, khi) = slm_diff_sw_vis(i, j, 0);
+                slm_diff_sw_nir(i, j, khi) = slm_diff_sw_nir(i, j, 0);
+                slm_lw(i, j, khi) = slm_lw(i, j, 0);
+                slm_zenith(i, j, khi) = slm_zenith(i, j, 0);
+            });
+        }
+        return;
+    }
+
     for ( MFIter mfi(*tsurf, TileNoZ()); mfi.isValid(); ++mfi) {
         const auto& box3d = mfi.tilebox();
 
@@ -2753,7 +2913,7 @@ SLM::set_terrain_inputs(const amrex::Vector<std::unique_ptr<amrex::MultiFab>>& s
     } else {
         // If no terrain is setup, initialize SST to reference temperature and set default land mask
         landmask.setVal(1);
-        lsm_fab_vars[LsmVar_SLM::tsurf]->setVal(st0);
+        lsm_fab_vars[LsmVar_SLM::tsurf]->setVal(st0[0]);
     }
 }
 
@@ -2939,6 +3099,8 @@ void SLM::writeSLM_Data(const std::string plotfile_type, const amrex::Real time,
     varnames.push_back("r_soil");
 
     varnames.push_back("wet_canop");
+
+    AMREX_ALWAYS_ASSERT(varnames.size() == output_size);
 
     if (plotfile_type == "amrex") {
         amrex::WriteSingleLevelPlotfile(plotfilename, fab, varnames, lsm_2d_geom, time, level_step);

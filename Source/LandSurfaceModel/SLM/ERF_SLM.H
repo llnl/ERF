@@ -161,6 +161,8 @@ public:
         }
 
         this->AdvanceSLM();
+
+        time+=m_dt;
     }
 
     // Advance the lsm state vars
@@ -353,16 +355,18 @@ private:
     // Thermal diffusivity
     amrex::Real m_d_soil = m_k_soil / m_cp_soil; // [m^2/s]
 
+    std::string soil_file; // file for reading in initial soil values at each later
+    std::string rad_input_file;
 
     // Input variables
     // TODO: move these to inputs parsing
     int landtype0 = 16; // landtype over whole domain
 
     amrex::Real LAI0 = 0.0; // default leaf area index
-    amrex::Real clay0 = 34.0; // uniform clay content (%)
-    amrex::Real sand0 = 10.0; // uniform sand content (%)
-    amrex::Real sw0 = 0.50; // uniform soil wetness (fraction)
-    amrex::Real st0 = 300.0; // uniform soil temperature (K)
+    amrex::Vector<amrex::Real> clay0; // uniform clay content (%)
+    amrex::Vector<amrex::Real> sand0; // uniform sand content (%)
+    amrex::Vector<amrex::Real> sw0; // uniform soil wetness (fraction)
+    amrex::Vector<amrex::Real> st0; // uniform soil temperature (K)
 
     amrex::Real tabs_s = 0.0; // surface temperature (K)
     amrex::Real t00 = 300.0; // constant offset for sstxy
@@ -551,6 +555,12 @@ private:
         "evapo_wet",
         "grflux"
     };
+
+    amrex::MultiFab rad_input_data;
+    int num_rad_times = 0;
+    amrex::Vector<amrex::Real> rad_times;
+    inline static const std::vector<std::string> rad_names = {
+      "S_SWVIS", "S_SWNIR", "S_SWVISD", "S_SWNIRD", "S_COSZRS", "S_LWDS"};
 
 #endif
 };

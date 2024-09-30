@@ -2,8 +2,8 @@
 #stop_time = 3600    #  1 hour
 #stop_time = 4800    #  1.5 hours
 #stop_time = 7200    #  2 hours
-stop_time = 21600   #  6 hours
-max_step = 3600
+stop_time = 43200   #  12 hours
+#max_step = 3600
 
 amrex.fpe_trap_invalid = 1
 
@@ -32,8 +32,8 @@ zhi.type = "SlipWall"
 #zhi.theta_grad = 0.00365
 
 # TIME STEP CONTROL
-#erf.fixed_dt           = 0.3 # fixed time step depending on grid resolution
-erf.fixed_dt           = 1.0 # fixed time step depending on grid resolution
+erf.fixed_dt           = 0.3 # fixed time step depending on grid resolution
+#erf.fixed_dt           = 1.0 # fixed time step depending on grid resolution
 erf.fixed_mri_dt_ratio = 4
 erf.use_mono_adv       = true
     
@@ -49,12 +49,15 @@ amr.max_level       = 0       # maximum level number allowed
 
 # CHECKPOINT FILES
 erf.check_file      = chk     # root name of checkpoint file
-erf.check_int       = 2000    # number of timesteps between checkpoints
+erf.check_int       = -1    # number of timesteps between checkpoints
 
 # PLOTFILES
 erf.plot_file_1     = plt     # prefix of plotfile name
-erf.plot_int_1      = 1    # number of timesteps between plotfiles
+erf.plot_int_1      = 30    # number of timesteps between plotfiles
 erf.plot_vars_1     = density rhotheta x_velocity y_velocity z_velocity pressure temp theta qt qp qv qc qsat
+
+erf.plotfile_type = "amrex"
+erf.plot_lsm = true
 
 # SOLVER CHOICE
 erf.alpha_T = 0.0
@@ -74,19 +77,6 @@ erf.moistscal_horiz_adv_type = WENO5
 erf.moistscal_vert_adv_type  = WENO5
 
 erf.use_terrain = false
-
-# erf.terrain_z_levels =  0.00000     25.00000    75.00000    127.84810   186.71687 \
-#                         252.29221   325.33817   406.70581   497.34317   598.30627 \
-#                         710.77155   836.04932   975.59924   1131.04724  1304.20447 \
-#                         1497.08850  1711.94665  1951.28235  2217.88403  2514.85815 \
-#                         2845.66480  3214.15820  3624.63184  4081.86841  4581.86816 \
-#                         5081.86816  5581.86816  6081.86816  6581.86816  7081.86816 \
-#                         7581.86816  8081.86816  8581.86816  9081.86816  9581.86816 \
-#                         10081.86816 10581.86816 11081.86816 11581.86816 12081.86816 \
-#                         12581.86816 13081.86816 13581.86816 14081.86816 14581.86816 \
-#                         15081.86816 15581.86816 16081.86816 16581.86719 17081.86719 \
-#                         17581.86719 18081.86719 18581.86719 19081.86719 19581.86719 \
-#                         20000.00000
 
 erf.moisture_model  = "SAM"
 erf.buoyancy_type   = 1
@@ -114,12 +104,44 @@ erf.add_custom_geostrophic_profile     = true
 erf.add_custom_w_subsidence            = true
 erf.custom_forcing_uses_primitive_vars = true
 
-erf.rayleigh_damp_U = true
-erf.rayleigh_damp_V = true
-erf.rayleigh_damp_W = true
-erf.rayleigh_damp_T = true
-erf.rayleigh_dampcoef = 0.2 # [1/s] following FastEddy
-erf.rayleigh_zdamp = 500. # from Beare et al. 2006, "most models applied gravity wave damping above 300 m"
+#erf.rayleigh_damp_U = true
+#erf.rayleigh_damp_V = true
+#erf.rayleigh_damp_W = true
+#erf.rayleigh_damp_T = true
+#erf.rayleigh_dampcoef = 0.2 # [1/s] following FastEddy
+#erf.rayleigh_zdamp = 500. # from Beare et al. 2006, "most models applied gravity wave damping above 300 m"
+
+
+erf.land_surface_model = "SLM"
+
+# ------------------------
+# SLM configuration
+# ------------------------
+# number of soil layers
+slm.nsoil = 9
+# soil thickness (in m) for each layer (from top layer to bottom)
+slm.soil_dz = 0.01 0.02 0.04 0.08 0.16 0.32 0.37 0.50 1.00
+
+# initial values used over entire grid
+slm.landtype0 = 10     # evergreen forest
+slm.LAI0 = 2.0        # default leaf area index
+slm.clay0 = 13.0      # uniform clay content (%)
+slm.sand0 = 17.0      # uniform sand content (%)
+slm.sw0 = 0.6000000 0.6030075 0.6090226 0.6210526 0.6451128 0.6932331 0.7624060 0.8496241 1.0000000        # uniform soil wetness fraction
+slm.st0 = 300.1500000 300.1374948 300.1124843 300.0624635 299.9624217 299.7623382 299.4747182 299.1120669 298.4868060             # uniform soil temperature (K)
+slm.tabs_s = 0.0      # surface temperature (K)
+slm.t00 = 300.0       # constant offset for sstxy
+
+slm.z0_soil = 0.0387  # baresoil roughness length
+slm.mws_mx0 = 50.0    # maximum puddle water storage (mm)
+slm.Rc_max  = 5000.0  # maximum stomatal resistance
+slm.T_opt   = 298.0   # optimum temperature for transpiration
+slm.zref    = 25.0    # height of reference level (m)
+
+slm.SLM_use_inputs = false
+
+#slm.rad_input_file = "CASS_512x512x156_50m_50m_1s_rad_coszrs_combined.nc"
+slm.rad_input_file = "CASS_32x32x156_50m_50m_1s_rad_coszrs_combined.nc"
 
 # Higher values of perturbations lead to instability
 # Instability seems to be coming from BC
