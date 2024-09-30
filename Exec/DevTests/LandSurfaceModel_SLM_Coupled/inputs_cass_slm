@@ -10,11 +10,11 @@ amrex.fpe_trap_invalid = 1
 fabarray.mfiter_tile_size = 1024 1024 1024
 
 # PROBLEM SIZE & GEOMETRY
-#geometry.prob_extent =  25600. 25600. 7800.
-#amr.n_cell           =  512    512    156    # dx=dy=dz=50 m
+geometry.prob_extent =  25600. 25600. 7800.
+amr.n_cell           =  512    512    156    # dx=dy=dz=50 m
 
-geometry.prob_extent =  1600. 1600. 7800.
-amr.n_cell           =  32    32    156    # dx=dy=dz=50 m
+#geometry.prob_extent =  1600. 1600. 7800.
+#amr.n_cell           =  32    32    156    # dx=dy=dz=50 m
 
 geometry.is_periodic = 1 1 0
 
@@ -53,8 +53,8 @@ erf.check_int       = -1    # number of timesteps between checkpoints
 
 # PLOTFILES
 erf.plot_file_1     = plt     # prefix of plotfile name
-erf.plot_int_1      = 30    # number of timesteps between plotfiles
-erf.plot_vars_1     = density rhotheta x_velocity y_velocity z_velocity pressure temp theta qt qp qv qc qsat
+erf.plot_int_1      = 200    # number of timesteps between plotfiles
+erf.plot_vars_1     = density rhoadv_0 rhotheta x_velocity y_velocity z_velocity pressure temp theta qt qp qv qc qi qsat scalar
 
 erf.plotfile_type = "amrex"
 erf.plot_lsm = true
@@ -140,8 +140,8 @@ slm.zref    = 25.0    # height of reference level (m)
 
 slm.SLM_use_inputs = false
 
-#slm.rad_input_file = "CASS_512x512x156_50m_50m_1s_rad_coszrs_combined.nc"
-slm.rad_input_file = "CASS_32x32x156_50m_50m_1s_rad_coszrs_combined.nc"
+slm.rad_input_file = "CASS_512x512x156_50m_50m_1s_rad_coszrs_combined.nc"
+#slm.rad_input_file = "CASS_32x32x156_50m_50m_1s_rad_coszrs_combined.nc"
 
 # Higher values of perturbations lead to instability
 # Instability seems to be coming from BC

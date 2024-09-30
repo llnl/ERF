@@ -289,7 +289,7 @@ Problem::update_rhotheta_sources (const Real& time,
         {
             // apply tls forcing
             src[k] = t_int_lsf[itime_curr][k] * coeff_curr + t_int_lsf[itime_next][k] * coeff_next;
-            amrex::Print() << " rhotheta forcing: k = " << k << ": tls_curr = " << t_int_lsf[itime_curr][k] << " tls_next = " << t_int_lsf[itime_next][k] << " src = " << src[k] << " src_scaled = " << src[k] * inv_scale << std::endl;
+            //amrex::Print() << " rhotheta forcing: k = " << k << ": tls_curr = " << t_int_lsf[itime_curr][k] << " tls_next = " << t_int_lsf[itime_next][k] << " src = " << src[k] << " src_scaled = " << src[k] * inv_scale << std::endl;
             src[k] *= inv_scale;
         } else {
             src[k] = 0.0;
@@ -345,7 +345,7 @@ Problem::update_rhoqt_sources (const Real& time,
         {
             // apply qls forcing
             qsrc[k] = q_int_lsf[itime_curr][k] * coeff_curr + q_int_lsf[itime_next][k] * coeff_next;
-            amrex::Print() << " rhoqt forcing: k = " << k << ": qls_curr = " << q_int_lsf[itime_curr][k] << " qls_next = " << q_int_lsf[itime_next][k] << " src = " << qsrc[k] << " src_scaled = " << qsrc[k] * inv_scale << std::endl;
+            //amrex::Print() << " rhoqt forcing: k = " << k << ": qls_curr = " << q_int_lsf[itime_curr][k] << " qls_next = " << q_int_lsf[itime_next][k] << " src = " << qsrc[k] << " src_scaled = " << qsrc[k] * inv_scale << std::endl;
             qsrc[k] *= inv_scale;
         } else {
             qsrc[k] = 0.0;
@@ -402,7 +402,7 @@ Problem::update_w_subsidence (const Real& time,
         {
             // apply wls forcing
             wbar[k] = w_int_lsf[itime_curr][k] * coeff_curr + w_int_lsf[itime_next][k] * coeff_next;
-            amrex::Print() << " wsub forcing: k = " << k << ": wls_curr = " << w_int_lsf[itime_curr][k] << " wls_next = " << w_int_lsf[itime_next][k] << " src = " << wbar[k] << " src_scaled = " << wbar[k] * inv_scale << std::endl;
+            //amrex::Print() << " wsub forcing: k = " << k << ": wls_curr = " << w_int_lsf[itime_curr][k] << " wls_next = " << w_int_lsf[itime_next][k] << " src = " << wbar[k] << " src_scaled = " << wbar[k] * inv_scale << std::endl;
             wbar[k] *= inv_scale;
         } else {
             wbar[k] = 0.0;
@@ -465,11 +465,11 @@ Problem::update_geostrophic_profile (const Real& time,
         {
             // apply uls and vls forcing
             u_geos[k] = u_int_lsf[itime_curr][k] * coeff_curr + u_int_lsf[itime_next][k] * coeff_next;
-            amrex::Print() << " u forcing: k = " << k << ": uls_curr = " << u_int_lsf[itime_curr][k] << " uls_next = " << u_int_lsf[itime_next][k] << " src = " << u_geos[k] << " src_scaled = " << u_geos[k] * inv_scale << std::endl;
+            //amrex::Print() << " u forcing: k = " << k << ": uls_curr = " << u_int_lsf[itime_curr][k] << " uls_next = " << u_int_lsf[itime_next][k] << " src = " << u_geos[k] << " src_scaled = " << u_geos[k] * inv_scale << std::endl;
             u_geos[k] *= inv_scale;
 
             v_geos[k] = v_int_lsf[itime_curr][k] * coeff_curr + v_int_lsf[itime_next][k] * coeff_next;
-            amrex::Print() << " v forcing: k = " << k << ": vls_curr = " << v_int_lsf[itime_curr][k] << " vls_next = " << v_int_lsf[itime_next][k] << " src = " << v_geos[k] << " src_scaled = " << v_geos[k] * inv_scale << std::endl;
+            //amrex::Print() << " v forcing: k = " << k << ": vls_curr = " << v_int_lsf[itime_curr][k] << " vls_next = " << v_int_lsf[itime_next][k] << " src = " << v_geos[k] << " src_scaled = " << v_geos[k] * inv_scale << std::endl;
             v_geos[k] *= inv_scale;
         } else {
             u_geos[k] = 0.0;

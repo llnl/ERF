@@ -165,14 +165,14 @@ ABLMost::update_fluxes (const int& lev,
                 int li = amrex::min(amrex::max(i, i_lo), i_hi);
                 int lj = amrex::min(amrex::max(j, j_lo), j_hi);
 
-                amrex::Print() << " ABLMost: i = " << i << " j = " << j << " k = " << k << ": SLM- OLD ustar = " << u_star_arr(i, j, k) << " tstar = " << t_star_arr(i, j, k) << std::endl;
+                //amrex::Print() << " ABLMost: i = " << i << " j = " << j << " k = " << k << ": SLM- OLD ustar = " << u_star_arr(i, j, k) << " tstar = " << t_star_arr(i, j, k) << " qstar = " << q_star_arr(i, j, k) << std::endl;
 
                 if (time > 0.0) {
                     u_star_arr(i, j, k) = lsm_ustar_arr(li, lj, k);
                     t_star_arr(i, j, k) = lsm_tstar_arr(li, lj, k);
                     q_star_arr(i, j, k) = lsm_qstar_arr(li, lj, k);
 
-                    amrex::Print() << " ABLMost: i = " << i << " j = " << j << " k = " << k << ": SLM- setting ustar = " << u_star_arr(i, j, k) << " tstar = " << t_star_arr(i, j, k) << std::endl;
+                    //amrex::Print() << " ABLMost: i = " << i << " j = " << j << " k = " << k << ": SLM- setting ustar = " << u_star_arr(i, j, k) << " tstar = " << t_star_arr(i, j, k) << " qstar = " << q_star_arr(i, j, k) << std::endl;
                 }
             });
         }
@@ -607,7 +607,7 @@ ABLMost::get_lsm_tsurf (const int& lev)
                 int li = amrex::min(amrex::max(i, i_lo), i_hi);
                 int lj = amrex::min(amrex::max(j, j_lo), j_hi);
                 // TODO: fix - using t_surf from SLM causing nans in MOST
-                amrex::Print() << " ABLMost::get_lsm_tsurf i = " << i << " j = " << j << " k = " << k << ": OLD t_surf = " << t_surf_arr(i, j, k) << " NEW SLM t_surf = " << lsm_arr(li, lj, lsm_khi) << std::endl;
+                //amrex::Print() << " ABLMost::get_lsm_tsurf i = " << i << " j = " << j << " k = " << k << ": OLD t_surf = " << t_surf_arr(i, j, k) << " NEW SLM t_surf = " << lsm_arr(li, lj, lsm_khi) << std::endl;
                 t_surf_arr(i,j,k) = lsm_arr(li,lj,lsm_khi);
             }
         });
