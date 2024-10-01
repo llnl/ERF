@@ -269,7 +269,7 @@ void SLM::init_from_file()
 
         for (int i = 0; i < num_rad_times; i++)
         {
-            rad_times[i] -= rad_times[0]; // shift relative to first time
+            rad_times[i] = (rad_times[i] - rad_times[0]) * 86400.0; // shift relative to first time
         }
 
         ncutils::NCDim rad_x = rad_forcing_ncf.dim("x");
