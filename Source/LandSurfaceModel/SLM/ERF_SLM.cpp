@@ -267,9 +267,10 @@ void SLM::init_from_file()
         rad_times.resize(num_rad_times);
         rad_time.get(rad_times.dataPtr(), {0}, {static_cast<unsigned long>(num_rad_times)});
 
+        amrex::Real start_rad_time = rad_times[0];
         for (int i = 0; i < num_rad_times; i++)
         {
-            rad_times[i] = (rad_times[i] - rad_times[0]) * 86400.0; // shift relative to first time
+            rad_times[i] = (rad_times[i] - start_rad_time) * 86400.0; // shift relative to first time
         }
 
         ncutils::NCDim rad_x = rad_forcing_ncf.dim("x");
@@ -2741,15 +2742,6 @@ void SLM::Copy_State_to_Lsm(const MultiFab& cons_in, const MultiFab& u_in, const
             slm_v(i, j, khi) = v_array(i, j, 0);
         });
     }
-}
-
-void
-SLM::set_flux_inputs(const amrex::MultiFab* sw_lw_fluxes_in,
-                     const amrex::MultiFab* zenith_in)
-{
-    int khi = khi_lsm;
-
-    auto tsurf = lsm_fab_vars[LsmVar_SLM::tsurf];
 
     if (rad_input_file != "")
     {
@@ -2764,6 +2756,8 @@ SLM::set_flux_inputs(const amrex::MultiFab* sw_lw_fluxes_in,
         }
         amrex::Real t0 = rad_times[tindex];
         amrex::Real t1 = rad_times[tindex+1];
+
+        amrex::Print() << " SLM: time = " << time << ", interpolating fluxes at index " << tindex << " (t0 = " << t0 << " t1 = " << t1 << ")" << std::endl;
 
         for ( MFIter mfi(rad_input_data); mfi.isValid(); ++mfi) {
             const auto& box3d = mfi.tilebox();
@@ -2806,6 +2800,15 @@ SLM::set_flux_inputs(const amrex::MultiFab* sw_lw_fluxes_in,
         }
         return;
     }
+}
+
+void
+SLM::set_flux_inputs(const amrex::MultiFab* sw_lw_fluxes_in,
+                     const amrex::MultiFab* zenith_in)
+{
+    int khi = khi_lsm;
+
+    auto tsurf = lsm_fab_vars[LsmVar_SLM::tsurf];
 
     for ( MFIter mfi(*tsurf, TileNoZ()); mfi.isValid(); ++mfi) {
         const auto& box3d = mfi.tilebox();
