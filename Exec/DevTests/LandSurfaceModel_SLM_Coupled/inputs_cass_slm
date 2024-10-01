@@ -105,7 +105,7 @@ erf.nudging_from_input_sounding = true
 erf.tau_nudging = 3600.0
 erf.nudging_t_z1 = 5500.0
 erf.nudging_t_z2 = 17000.0
-erf.nudging_q_z1 = 5000.0
+erf.nudging_q_z1 = 5500.0
 erf.nudging_q_z2 = 5500.0
 
 erf.add_custom_rhotheta_forcing        = true
