@@ -605,7 +605,7 @@ Problem::read_forcing_file (const std::string lsf_file,
 
             z_in.push_back(z);
             p_in.push_back(p * 100.0);
-            t_in.push_back(tls);
+            t_in.push_back(getThgivenPandT(tls, p*100.0, R_d/Cp_d));
             q_in.push_back(qls);
             u_in.push_back(uls);
             v_in.push_back(vls);

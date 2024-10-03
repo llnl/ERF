@@ -2746,7 +2746,7 @@ void SLM::Copy_State_to_Lsm(const MultiFab& cons_in, const MultiFab& u_in, const
     if (rad_input_file != "")
     {
         int tindex = 0;
-        for (int k = 0; k < num_ref_inputs - 1; k++)
+        for (int k = 1; k < num_rad_times - 1; k++)
         {
             if (time >= rad_times[k] && time <= rad_times[k+1])
             {

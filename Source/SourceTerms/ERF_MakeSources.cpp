@@ -412,9 +412,7 @@ void make_sources (int level,
             {
                 Real z = zlo + (k+0.5)*dz;
                 if (z >= t_z1 && z <= t_z2) {
-                    Real gamaz = CONST_GRAV / Cp_d * z;
-                    Real nudge = (coeff_n*theta_inp_sound_n[k] + coeff_np1*theta_inp_sound_np1[k]) - (dptr_t_plane(k)/dptr_r_plane(k)) - gamaz;
-
+                    Real nudge = (coeff_n*theta_inp_sound_n[k] + coeff_np1*theta_inp_sound_np1[k]) - (dptr_t_plane(k)/dptr_r_plane(k));
                     nudge *= tau_inv;
                     cell_src(i, j, k, n) += cell_data(i, j, k, nr) * nudge;
                 }
@@ -432,7 +430,7 @@ void make_sources (int level,
             {
                 Real z = zlo + (k+0.5)*dz;
                 if (z >= q_z1 && z <= q_z2) {
-                    Real nudge = (coeff_n*qv_inp_sound_n[k] + coeff_np1*qv_inp_sound_np1[k]) - (dptr_qv_plane(k));
+                    Real nudge = (coeff_n*qv_inp_sound_n[k] + coeff_np1*qv_inp_sound_np1[k]) - (dptr_qv_plane(k)/dptr_r_plane(k));
                     nudge *= tau_inv;
                     cell_src(i, j, k, nq) += cell_data(i, j, k, nr) * nudge;
                 }
