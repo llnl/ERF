@@ -339,15 +339,20 @@ void make_mom_sources (int level,
         // 4. Add height-dependent GEOSTROPHIC forcing
         // *****************************************************************************
         if (geo_wind_profile) {
+            Real tau_inv = Real(1.0) / input_sounding_data.tau_nudging;
             ParallelFor(tbx, [=] AMREX_GPU_DEVICE (int i, int j, int k)
             {
                 Real rho_on_u_face = 0.5 * ( cell_data(i,j,k,Rho_comp) + cell_data(i-1,j,k,Rho_comp) );
-                xmom_src_arr(i, j, k) -= coriolis_factor * rho_on_u_face * dptr_v_geos[k] * sinphi;
+                //xmom_src_arr(i, j, k) -= coriolis_factor * rho_on_u_face * dptr_v_geos[k] * sinphi;
+                Real nudge_u = tau_inv * (dptr_u_geos[k] - (dptr_u_plane(k) / dptr_r_plane(k)));
+                xmom_src_arr(i, j, k) += rho_on_u_face * nudge_u;
             });
             ParallelFor(tby, [=] AMREX_GPU_DEVICE (int i, int j, int k)
             {
                 Real rho_on_v_face = 0.5 * ( cell_data(i,j,k,Rho_comp) + cell_data(i,j-1,k,Rho_comp) );
-                ymom_src_arr(i, j, k) += coriolis_factor * rho_on_v_face * dptr_u_geos[k] * sinphi;
+                //ymom_src_arr(i, j, k) += coriolis_factor * rho_on_v_face * dptr_u_geos[k] * sinphi;
+                Real nudge_v = tau_inv * (dptr_v_geos[k] - (dptr_v_plane(k) / dptr_r_plane(k)));
+                ymom_src_arr(i, j, k) += rho_on_v_face * nudge_v;
             });
         } // geo_wind_profile
 
@@ -426,6 +431,7 @@ void make_mom_sources (int level,
         // *************************************************************************************
         // 6. Add nudging towards value specified in input sounding
         // *************************************************************************************
+        /*
         if (solverChoice.nudging_from_input_sounding)
         {
             int itime_n    = 0;
@@ -469,6 +475,7 @@ void make_mom_sources (int level,
                 ymom_src_arr(i, j, k) += cell_data(i, j, k, nr) * nudge_v;
             });
         }
+        */
 
         // *****************************************************************************
         // 7. Add NUMERICAL DIFFUSION terms
