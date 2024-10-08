@@ -315,14 +315,13 @@ ERF::init_stuff (int lev, const BoxArray& ba, const DistributionMapping& dm,
     std::cout<<dm_onegrid<<std::endl;
 #endif
 
-
-#if defined(ERF_USE_RRTMGP)
     //*********************************************************
     // Radiation heating source terms
     //*********************************************************
     qheating_rates[lev] = std::make_unique<MultiFab>(ba, dm, 2, ngrow_state);
     qheating_rates[lev]->setVal(0.);
 
+#if defined(ERF_USE_RRTMGP)
     //*********************************************************
     // Radiation fluxes for coupling to LSM
     //*********************************************************

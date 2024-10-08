@@ -35,9 +35,9 @@ void make_sources (int level,
                    const  MultiFab & S_prim,
                           MultiFab & source,
                    std::unique_ptr<MultiFab>& z_phys_cc,
-#ifdef ERF_USE_RRTMGP
+//#ifdef ERF_USE_RRTMGP
                    const MultiFab* qheating_rates,
-#endif
+//#endif
                           MultiFab* terrain_blank,
                    const Geometry geom,
                    const SolverChoice& solverChoice,
@@ -193,20 +193,21 @@ void make_sources (int level,
         const Array4<const Real>& t_blank_arr = (terrain_blank) ? terrain_blank->const_array(mfi) :
                                                                Array4<const Real>{};
 
-#ifdef ERF_USE_RRTMGP
+//#ifdef ERF_USE_RRTMGP
         // *************************************************************************************
         // 2. Add radiation source terms to (rho theta)
         // *************************************************************************************
-        {
+        if (solverChoice.do_radiation) {
             auto const& qheating_arr = qheating_rates->const_array(mfi);
+            const int nr = Rho_comp;
+            const int n = RhoTheta_comp;
             ParallelFor(bx, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
             {
                 // Short-wavelength and long-wavelength radiation source terms
-                //cell_src(i,j,k,RhoTheta_comp) += qheating_arr(i,j,k,0) + qheating_arr(i,j,k,1);
+                cell_src(i,j,k,n) += cell_data(i, j, k, nr) * (qheating_arr(i,j,k,0) + qheating_arr(i,j,k,1));
             });
         }
-
-#endif
+//#endif
 
         // *************************************************************************************
         // 3. Add Rayleigh damping for (rho theta)
@@ -391,11 +392,14 @@ void make_sources (int level,
             }
             if (itime_n == n_sounding_times-1) {
                 itime_np1 = itime_n;
+                //amrex::Print() << " item_n == n_sounding_times-1: itime_n = " << itime_n << " itime_np1 = " << itime_np1 << std::endl;
             } else {
                 itime_np1 = itime_n+1;
                 coeff_np1 = (time                                               - input_sounding_data.input_sounding_time[itime_n]) /
                             (input_sounding_data.input_sounding_time[itime_np1] - input_sounding_data.input_sounding_time[itime_n]);
                 coeff_n   = Real(1.0) - coeff_np1;
+                //amrex::Print() << " else: itime_n = " << itime_n << " itime_np1 = " << itime_np1 << " coeff_np1 = " << coeff_np1 << " coeff_n = " << coeff_n << std::endl;
+
             }
 
             const Real* theta_inp_sound_n   = input_sounding_data.theta_inp_sound_d[itime_n].dataPtr();
@@ -407,12 +411,16 @@ void make_sources (int level,
             const Real t_z1 = solverChoice.nudging_t_z1;
             const Real t_z2 = solverChoice.nudging_t_z2;
 
+            //amrex::Print() << " theta_inp_sound_n[0] = " << theta_inp_sound_n[0] << " theta_inp_sound_np1[0] = " << theta_inp_sound_np1[0] << std::endl;
 
             ParallelFor(bx, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
             {
-                Real z = zlo + (k+0.5)*dz;
+                //Real z = zlo + (k+0.5)*dz;
+                Real z = (z_cc_arr) ? z_cc_arr(i,j,k) : zlo + (k+0.5)*dz;
                 if (z >= t_z1 && z <= t_z2) {
                     Real nudge = (coeff_n*theta_inp_sound_n[k] + coeff_np1*theta_inp_sound_np1[k]) - (dptr_t_plane(k)/dptr_r_plane(k));
+                    //if (i == 0 && j == 0)
+                    //    amrex::Print() << "   nudge i = " << i << " j = " << j << " k = " << k << ": theta_n = " << theta_inp_sound_n[k] << " theta_np1 = " << theta_inp_sound_np1[k] << " t / r plane(k) = " << dptr_t_plane(k) / dptr_r_plane(k) << ": nudge = " << nudge << " nudge*tau = " << nudge*tau_inv << " gamaz = " << gamaz << std::endl;
                     nudge *= tau_inv;
                     cell_src(i, j, k, n) += cell_data(i, j, k, nr) * nudge;
                 }
@@ -426,11 +434,19 @@ void make_sources (int level,
 
             const Real q_z1 = solverChoice.nudging_q_z1;
             const Real q_z2 = solverChoice.nudging_q_z2;
+
+            //amrex::Print() << " qv_inp_sound_n[0] = " << qv_inp_sound_n[0] << " qv_inp_sound_np1[0] = " << qv_inp_sound_np1[0] << std::endl;
+
             ParallelFor(bx, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
             {
-                Real z = zlo + (k+0.5)*dz;
+                //Real z = zlo + (k+0.5)*dz;
+                Real z = (z_cc_arr) ? z_cc_arr(i,j,k) : zlo + (k+0.5)*dz;
+                //if (i == 0 && j == 0)
+                //amrex::Print() << " make sources i = " << i << i << " j = " << j << " k = " << k << " z[k] = " << z << std::endl;
                 if (z >= q_z1 && z <= q_z2) {
                     Real nudge = (coeff_n*qv_inp_sound_n[k] + coeff_np1*qv_inp_sound_np1[k]) - (dptr_qv_plane(k)/dptr_r_plane(k));
+                    //if (i == 0 && j == 0)
+                    //    amrex::Print() << "   nudge i = " << i << " j = " << j << " k = " << k << ": q_n = " << qv_inp_sound_n[k] << " qv_np1 = " << qv_inp_sound_np1[k] << " q plane(k) = " << dptr_qv_plane(k) << ": nudge = " << nudge << " nudge*tau = " << nudge*tau_inv << std::endl;
                     nudge *= tau_inv;
                     cell_src(i, j, k, nq) += cell_data(i, j, k, nr) * nudge;
                 }

@@ -385,6 +385,9 @@ struct SolverChoice {
         pp.query("nudging_t_z1", nudging_t_z1);
         pp.query("nudging_t_z2", nudging_t_z2);
 
+        pp.query("do_radiation", do_radiation);
+        pp.query("radiation_qsrc_file", qrad_file);
+
         have_geo_wind_profile = (!abl_geo_wind_table.empty() || custom_geostrophic_profile);
         AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!(!abl_geo_wind_table.empty() && custom_geostrophic_profile),
             "Should not have both abl_geo_wind_table and custom_geostrophic_profile set.");
@@ -786,6 +789,10 @@ struct SolverChoice {
     // if Kessler, then it will be set to RhoQ3
     // if     SAM, then it will be set to RhoQ4
     int RhoQr_comp {-1};
+
+    // Radiation model params
+    bool do_radiation {false};
+    std::string qrad_file;
 
     std::string windfarm_loc_table, windfarm_spec_table, windfarm_spec_table_extra;
     std::string windfarm_blade_table, windfarm_airfoil_tables;

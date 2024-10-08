@@ -250,6 +250,41 @@ void ERF::advance_dycore(int level,
                                   fine_geom, z_phys_nd[level]);
     }
 
+    if (solverChoice.do_radiation)
+    {
+        int curr = 0;
+        int next = 0;
+        amrex::Real coeff_curr = 1.0;
+        amrex::Real coeff_next = 0.0;
+
+        // find the time index of forcing data to use
+        for (int nt = 1; nt < rad_times.size(); nt++)
+        {
+            if (old_time > rad_times[nt])
+            {
+                curr = nt;
+            }
+        }
+
+        if (curr == rad_times.size() - 1)
+        {
+            // use last set if time > last forcing time
+            next = rad_times.size();
+        } else {
+            next = curr + 1;
+            coeff_next = (old_time - rad_times[curr]) / (rad_times[next] - rad_times[curr]);
+            coeff_curr = (1.0 - coeff_next);
+        }
+
+        MultiFab::Copy(  *qheating_rates[level], *qrad_forcings[curr], 0, 0, 1, 0);
+        MultiFab::Copy(  *qheating_rates[level], *qrad_forcings[next], 0, 1, 1, 0);
+
+        qheating_rates[level]->mult(coeff_curr, 0, 1, 0);
+        qheating_rates[level]->mult(coeff_next, 1, 1, 0);
+
+        Print() << "  QSRC curr time = " << curr << " next time = " << next << " (ccurr = " << coeff_curr << " cnext = " << coeff_next << ")" << std::endl;
+    }
+
     // ***********************************************************************************************
     // Convert old velocity available on faces to old momentum on faces to be used in time integration
     // ***********************************************************************************************

@@ -28,9 +28,9 @@ void make_sources (int level, int nrk,
                    const amrex::MultiFab& S_prim,
                          amrex::MultiFab& cc_source,
                    std::unique_ptr<amrex::MultiFab>& z_phys_cc,
-#if defined(ERF_USE_RRTMGP)
+//#if defined(ERF_USE_RRTMGP)
                    const amrex::MultiFab* qheating_rates,
-#endif
+//#endif
                    amrex::MultiFab* terrain_blank,
                    const amrex::Geometry geom,
                    const SolverChoice& solverChoice,

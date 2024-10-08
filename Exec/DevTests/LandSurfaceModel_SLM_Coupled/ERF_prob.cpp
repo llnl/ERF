@@ -84,7 +84,7 @@ Problem::init_custom_pert (
     Array4<Real      > const& z_vel_pert,
     Array4<Real      > const& r_hse,
     Array4<Real      > const& /*p_hse*/,
-    Array4<Real const> const& /*z_nd*/,
+    Array4<Real const> const& z_nd,
     Array4<Real const> const& z_cc,
     GeometryData const& geomdata,
     Array4<Real const> const& /*mf_m*/,
@@ -98,7 +98,13 @@ Problem::init_custom_pert (
 
     // interpolate the LSF data now using the geometry
     amrex::Vector<amrex::Real> zlevels_stag;
-    //reduce_to_max_per_height(zlevels_stag, z_cc);
+    for (int k = 0; k < geomdata.Domain().bigEnd()[2] + 2; k++)
+    {
+        int i = bx.smallEnd(0);
+        int j = bx.smallEnd(1);
+        zlevels_stag.push_back(z_cc(i, j, k));
+        amrex::Print() << "  Z LEVELS STAG (z_cc) = " << zlevels_stag.back() <<  "  z_nd = " << z_nd(i, j, k) << std::endl;
+    }
     interp_forcing(geomdata, zlevels_stag, times_lsf, z_lsf, t_lsf, q_lsf, u_lsf, v_lsf, w_lsf);
 
     ParallelForRNG(bx, [=, parms_d=parms] AMREX_GPU_DEVICE(int i, int j, int k, const RandomEngine& engine) noexcept
@@ -384,6 +390,13 @@ Problem::update_w_subsidence (const Real& time,
         reduce_to_max_per_height(zlevels, z_phys_cc);
     }
 
+    /*
+    for (int k = 0; k < zlevels.size(); k++)
+    {
+        Print() << " k = " << k << " zlevel = " << zlevels[k] << std::endl;
+    }
+    */
+
     int itime_curr = 0;
     int itime_next = 0;
     amrex::Real coeff_curr = 1.0;
@@ -456,7 +469,7 @@ Problem::update_geostrophic_profile (const Real& time,
     // Only apply temperature source below nominal inversion height
     for (int k = 0; k <= khi; k++) {
         const Real z_cc = (z_phys_cc) ? zlevels[k] : prob_lo[2] + (k+0.5)* dx[2];
-        const Real u_geo_wind = -10.0 + z_cc * 0.0018;
+        //const Real u_geo_wind = -10.0 + z_cc * 0.0018;
 
         //u_geos[k] =  u_geo_wind; // 0; // -coriolis_factor * v_geo_wind
         //v_geos[k] =  0 ; // coriolis *  u_geo_wind;

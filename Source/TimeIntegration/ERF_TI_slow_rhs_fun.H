@@ -60,9 +60,9 @@
 
         // Construct the source terms for the cell-centered (conserved) variables
         make_sources(level, nrk, slow_dt, old_stage_time, S_data, S_prim, cc_src, z_phys_cc[level],
-#if defined(ERF_USE_RRTMGP)
+//#if defined(ERF_USE_RRTMGP)
                      qheating_rates[level].get(),
-#endif
+//#endif
                      terrain_blank, fine_geom, solverChoice,
                      mapfac_u[level], mapfac_v[level], mapfac_m[level],
                      dptr_rhotheta_src, dptr_rhoqt_src,
@@ -457,9 +457,9 @@
         }
 
         make_sources(level, nrk, slow_dt, old_stage_time, S_data, S_prim, cc_src, z_phys_cc[level],
-#if defined(ERF_USE_RRTMGP)
+//#if defined(ERF_USE_RRTMGP)
                      qheating_rates[level].get(),
-#endif
+//#endif
                      terrain_blank, fine_geom, solverChoice,
                      mapfac_u[level], mapfac_v[level], mapfac_m[level],
                      dptr_rhotheta_src, dptr_rhoqt_src,

@@ -90,6 +90,67 @@ void ERF::MakeNewLevelFromScratch (int lev, Real time, const BoxArray& ba_in,
         lsm_flux[lev][mvar] = lsm.Get_Flux_Ptr(lev,mvar);
     }
 
+#ifdef ERF_USE_NETCDF
+    if (solverChoice.do_radiation)
+    {
+        ncutils::NCFile rad_forcing_ncf = ncutils::NCFile::open(solverChoice.qrad_file, NC_NOWRITE);
+        ncutils::NCVar rad_time = rad_forcing_ncf.var("time");
+        num_rad_times = rad_time.shape()[0];
+        rad_times.resize(num_rad_times);
+        rad_time.get(rad_times.dataPtr(), {0}, {static_cast<unsigned long>(num_rad_times)});
+
+        amrex::Real start_rad_time = rad_times[0];
+        for (int i = 0; i < num_rad_times; i++)
+        {
+            rad_times[i] = (rad_times[i] - start_rad_time) * 86400.0; // shift relative to first time
+            amrex::Print() << " Radiation QRADSRC time " << i << " = " << rad_times[i] << std::endl;
+        }
+
+        ncutils::NCDim rad_x = rad_forcing_ncf.dim("x");
+        ncutils::NCDim rad_y = rad_forcing_ncf.dim("y");
+        ncutils::NCDim rad_z = rad_forcing_ncf.dim("z");
+
+        amrex::Print() << " Read radiation QSRC forcing file '" << solverChoice.qrad_file << "'" << std::endl;
+        amrex::Print() << "   rad forcing file has " << num_rad_times << " time values, x = " << rad_x.len() << " y = " << rad_y.len() << " z = " << rad_z.len() << std::endl;
+        AMREX_ALWAYS_ASSERT_WITH_MESSAGE(geom[lev].Domain().length(0) == rad_x.len() && geom[lev].Domain().length(1) == rad_y.len(), "Radiation input file must have same X and Y dimensions!");
+
+        qrad_forcings.resize(num_rad_times);
+        for (int i = 0; i < num_rad_times; i++)
+        {
+            qrad_forcings[i] = std::make_unique<MultiFab>(ba, dm, 1, IntVect(0,0,0));
+            qrad_forcings[i]->setVal(0.0);
+        }
+        
+        ncutils::NCVar rad_var = rad_forcing_ncf.var("QRAD");
+
+        for(int t = 0; t < num_rad_times; ++t) {
+            amrex::Print() << " Reading radiation qrsc at time " << t << std::endl;
+            for (MFIter mfi(*qrad_forcings[t]); mfi.isValid(); ++mfi) {
+                const auto& box = mfi.fabbox();
+
+                auto *dataPtr = qrad_forcings[t]->get(mfi).dataPtr();
+                AMREX_ALWAYS_ASSERT(dataPtr != nullptr);
+
+                std::vector<size_t> starts = {static_cast<unsigned long>(t),
+                                              static_cast<unsigned long>(box.loVect()[2]),
+                                              static_cast<unsigned long>(box.loVect()[1]),
+                                              static_cast<unsigned long>(box.loVect()[0])};
+                std::vector<size_t> counts = {static_cast<unsigned long>(1),
+                                              static_cast<unsigned long>(box.length()[2]),
+                                              static_cast<unsigned long>(box.length()[1]),
+                                              static_cast<unsigned long>(box.length()[0])};
+
+                amrex::Print() << "  -- reading {" << counts[0] << "," << counts[1] << "," << counts[2] << "," << counts[3] << "} at index {" << starts[0] << "," << starts[1] << "," << starts[2] << "," << starts[3] << "}" << std::endl;
+                rad_var.get(dataPtr, starts, counts);
+            }
+
+            qrad_forcings[t]->mult((1.0/86400.0), 0); // QRAD from file is in K/day, convert to K/sec
+        }
+
+        rad_forcing_ncf.close();
+    }
+#endif
+
     // ********************************************************************************************
     // Build the data structures for calculating diffusive/turbulent terms
     // ********************************************************************************************

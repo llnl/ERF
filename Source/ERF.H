@@ -790,7 +790,6 @@ private:
 
 #if defined(ERF_USE_RRTMGP)
     amrex::Vector<std::unique_ptr<Radiation>> rad;
-    amrex::Vector<std::unique_ptr<amrex::MultiFab>> qheating_rates;  // radiation heating rate source terms
 
     // Containers for additional SLM inputs
     amrex::Vector<std::unique_ptr<amrex::MultiFab>> sw_lw_fluxes; // Direct SW (visible, NIR), Diffuse SW (visible, NIR), LW flux
@@ -798,6 +797,11 @@ private:
 
     bool plot_rad = false;
 #endif
+
+    amrex::Vector<std::unique_ptr<amrex::MultiFab>> qheating_rates;  // radiation heating rate source terms
+    int num_rad_times = -1;
+    amrex::Vector<std::unique_ptr<amrex::MultiFab>> qrad_forcings; // qrad src over time
+    amrex::Vector<amrex::Real> rad_times;
 
     // Fillpatcher classes for coarse-fine boundaries
     int cf_width{0};
@@ -999,6 +1003,7 @@ private:
                                                     // moisture vars
                                                     "moist_density", "qt", "qv", "qc", "qi", "qp", "qrain", "qsnow", "qgraup", "qsat",
                                                     "rain_accum", "snow_accum", "graup_accum",
+                                                    "qsrc",
                                                     // Terrain IB mask
                                                     "terrain_IB_mask",
                                                     // EB variables

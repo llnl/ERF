@@ -126,8 +126,8 @@ ERF::ERF_shared ()
     SMark.resize(nlevs_max);
 #endif
 
-#if defined(ERF_USE_RRTMGP)
     qheating_rates.resize(nlevs_max);
+#if defined(ERF_USE_RRTMGP)
     sw_lw_fluxes.resize(nlevs_max);
     solar_zenith.resize(nlevs_max);
 #endif
