@@ -1804,7 +1804,8 @@ void SLM::transfer_coeff(const amrex::MFIter &mfi)
         // make sure (h - disp) is not negative, otherwise z0dym,z0dyh become nan
         AMREX_ALWAYS_ASSERT(d_zref - disp_hgt_arr(i, j, 0) > 0.0);
 
-        amrex::Real zt0 = std::max(0.0001, (70.0*1.5e-5 / ustar_arr(i, j, 0)) * std::exp(-7.2*sqrt(ustar_arr(i, j, 0))*(std::pow(std::abs(tstar_arr(i, j, 0)), 0.25))));
+        amrex::Real tstar_in = -1.0 * tstar_arr(i, j, 0) / ustar_arr(i, j, 0);
+        amrex::Real zt0 = std::max(0.0001, (70.0*1.5e-5 / ustar_arr(i, j, 0)) * std::exp(-7.2*sqrt(ustar_arr(i, j, 0))*(std::pow(std::abs(tstar_in), 0.25))));
 
         amrex::Real zTh = zt0 / (d_zref - disp_hgt_arr(i, j, 0));
         amrex::Real zodym = log(1.0 / z0h);
