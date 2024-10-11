@@ -97,13 +97,19 @@ Problem::init_custom_pert (
     const Real rdOcp   = sc.rdOcp;
 
     // interpolate the LSF data now using the geometry
+    // z_cc is on device!
     amrex::Vector<amrex::Real> zlevels_stag;
-    for (int k = 0; k < geomdata.Domain().bigEnd()[2] + 2; k++)
-    {
-        int i = bx.smallEnd(0);
-        int j = bx.smallEnd(1);
-        zlevels_stag.push_back(z_cc(i, j, k));
-        amrex::Print() << "  Z LEVELS STAG (z_cc) = " << zlevels_stag.back() <<  "  z_nd = " << z_nd(i, j, k) << std::endl;
+    if (sc.use_terrain) {
+        int khi = geomdata.Domain().bigEnd()[2] + 2;
+        amrex::Gpu::DeviceVector<Real> d_zlevels_stag_vec(khi);
+        amrex::Real *d_zlevels_stag = d_zlevels_stag_vec.data();
+        ParallelFor(khi, [=] AMREX_GPU_DEVICE (int k) noexcept {
+            int i = bx.smallEnd(0);
+            int j = bx.smallEnd(1);
+            d_zlevels_stag[k] = z_cc(i, j, k);
+        });
+        zlevels_stag.resize(khi);
+        amrex::Gpu::copy(amrex::Gpu::deviceToHost, d_zlevels_stag_vec.begin(), d_zlevels_stag_vec.end(), zlevels_stag.begin());
     }
     interp_forcing(geomdata, zlevels_stag, times_lsf, z_lsf, t_lsf, q_lsf, u_lsf, v_lsf, w_lsf);
 

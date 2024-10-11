@@ -123,12 +123,17 @@ void ERF::MakeNewLevelFromScratch (int lev, Real time, const BoxArray& ba_in,
         
         ncutils::NCVar rad_var = rad_forcing_ncf.var("QRAD");
 
+        amrex::Arena* Arena_Used = amrex::The_Arena();
+#ifdef AMREX_USE_GPU
+        Arena_Used = amrex::The_Pinned_Arena();
+#endif
+
         for(int t = 0; t < num_rad_times; ++t) {
             amrex::Print() << " Reading radiation qrsc at time " << t << std::endl;
             for (MFIter mfi(*qrad_forcings[t]); mfi.isValid(); ++mfi) {
                 const auto& box = mfi.fabbox();
-
-                auto *dataPtr = qrad_forcings[t]->get(mfi).dataPtr();
+                FArrayBox tmp(box, 1, Arena_Used);
+                auto *dataPtr = tmp.dataPtr();
                 AMREX_ALWAYS_ASSERT(dataPtr != nullptr);
 
                 std::vector<size_t> starts = {static_cast<unsigned long>(t),
@@ -142,6 +147,14 @@ void ERF::MakeNewLevelFromScratch (int lev, Real time, const BoxArray& ba_in,
 
                 amrex::Print() << "  -- reading {" << counts[0] << "," << counts[1] << "," << counts[2] << "," << counts[3] << "} at index {" << starts[0] << "," << starts[1] << "," << starts[2] << "," << starts[3] << "}" << std::endl;
                 rad_var.get(dataPtr, starts, counts);
+
+                //auto *mf_data = qrad_forcings[t]->get(mfi).dataPtr();
+                auto mf_arr = qrad_forcings[t]->array(mfi);
+                auto tmp_arr = tmp.array();
+                ParallelFor(box, [=] AMREX_GPU_DEVICE (int i, int j, int k)
+                {
+                    mf_arr(i, j, k) = tmp_arr(i, j, k);
+                });
             }
 
             qrad_forcings[t]->mult((1.0/86400.0), 0); // QRAD from file is in K/day, convert to K/sec

@@ -269,7 +269,7 @@ void ERF::advance_dycore(int level,
         if (curr == rad_times.size() - 1)
         {
             // use last set if time > last forcing time
-            next = rad_times.size();
+            next = curr;
         } else {
             next = curr + 1;
             coeff_next = (old_time - rad_times[curr]) / (rad_times[next] - rad_times[curr]);

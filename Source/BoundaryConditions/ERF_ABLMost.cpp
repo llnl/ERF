@@ -141,7 +141,7 @@ ABLMost::update_fluxes (const int& lev,
 
             auto u_star_arr = u_star[lev]->array(mfi);
             auto t_star_arr = t_star[lev]->array(mfi);
-            auto q_star_arr = t_star[lev]->array(mfi);
+            auto q_star_arr = q_star[lev]->array(mfi);
 
             AMREX_ASSERT(m_lsm_data_lev[lev][1]);
             AMREX_ASSERT(m_lsm_data_lev[lev][2]);

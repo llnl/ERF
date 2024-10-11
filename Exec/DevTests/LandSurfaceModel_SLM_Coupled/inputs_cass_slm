@@ -13,10 +13,16 @@ fabarray.mfiter_tile_size = 1024 1024 1024
 #geometry.prob_extent =  25600. 25600. 7800.
 #amr.n_cell           =  512    512    156    # dx=dy=dz=50 m
 
-geometry.prob_extent =  12800. 12800. 7800.
-amr.n_cell           =  256    256    156    # dx=dy=dz=50 m
+#geometry.prob_extent =  12800. 12800. 7800.
+#geometry.prob_extent =  12800. 12800. 16025.
+#amr.n_cell           =  256    256    156    # dx=dy=dz=50 m
+
+#geometry.prob_extent =  6400. 6400. 7800.
+geometry.prob_extent =  6400. 6400. 16025.
+amr.n_cell           =  128    128    156    # dx=dy=dz=50 m
 
 #geometry.prob_extent =  1600. 1600. 7800.
+#geometry.prob_extent =  1600. 1600. 16025.
 #amr.n_cell           =  32    32    156    # dx=dy=dz=50 m
 
 geometry.is_periodic = 1 1 0
@@ -28,7 +34,7 @@ erf.most.ustar  = 0.28   # ustar
 erf.most.tstar  = 8.0e-3 # theta flux
 erf.most.qstar  = 5.2e-5 # qv    flux
 erf.most.z0     = 0.1
-erf.most.zref   = 50.0
+erf.most.zref   = 25.0
 
 # NOTE: This should have a qv grad too (use hoextrapcc?!)
 zhi.type = "SlipWall"
@@ -79,7 +85,8 @@ erf.dryscal_vert_adv_type    = Upwind_3rd
 erf.moistscal_horiz_adv_type = WENO5
 erf.moistscal_vert_adv_type  = WENO5
 
-erf.use_terrain = false
+erf.use_terrain = true
+erf.terrain_z_levels = 0 25 75 125 175 225 275 325 375 425 475 525 575 625 675 725 775 825 875 925 975 1025 1075 1125 1175 1225 1275 1325 1375 1425 1475 1525 1575 1625 1675 1725 1775 1825 1875 1925 1975 2025 2075 2125 2175 2225 2275 2325 2375 2425 2475 2525 2575 2625 2675 2725 2775 2825 2875 2925 2975 3025 3075 3125 3175 3225 3275 3325 3375 3425 3475 3525 3575 3625 3675 3725 3775 3825 3875 3925 3975 4025 4075 4125 4175 4225 4275 4325 4375 4425 4475 4525 4575 4625 4675 4725 4775 4825 4875 4925 4975 5025 5100 5175 5250 5325 5400 5475 5550 5625 5700 5775 5850 5925 6000 6075 6150 6225 6300 6375 6450 6525 6625 6725 6825 6925 7025 7125 7225 7325 7425 7525 7625 7725 7825 7925 8025 8275 8525 8775 9025 9275 9525 9775 10025 10525 11025 11525 12025 12525 13025 13525 14025 14525 15025 15525 16025
 
 erf.moisture_model  = "SAM"
 erf.buoyancy_type   = 1
@@ -151,8 +158,11 @@ slm.zref    = 25.0    # height of reference level (m)
 slm.SLM_use_inputs = false
 
 #slm.rad_input_file = "CASS_512x512x156_50m_50m_1s_rad_coszrs_combined.nc"
-slm.rad_input_file = "CASS_256x256x156_50m_50m_1s_rad_coszrs_combined.nc"
+#slm.rad_input_file = "CASS_256x256x156_50m_50m_1s_rad_coszrs_combined.nc"
+slm.rad_input_file = "CASS_128x128x156_50m_50m_1s_rad_coszrs_combined.nc"
 #slm.rad_input_file = "CASS_32x32x156_50m_50m_1s_rad_coszrs_combined.nc"
+erf.do_radiation = true
+erf.radiation_qsrc_file = "CASS_128x128x156_50m_50m_1s_QRAD.nc"
 
 # Higher values of perturbations lead to instability
 # Instability seems to be coming from BC
