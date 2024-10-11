@@ -115,6 +115,29 @@ namespace SLM_Diag {
    };
 }
 
+// refers to device variables used in soil temperature and moisture update
+namespace SLM_DST {
+    enum {
+        st_cond,
+        st_capa,
+        st_eff_cond,
+        alpha,
+        beta,
+        NumVars
+    };
+}
+namespace SLM_DSW {
+    enum {
+        sw_wgt,
+        sh_eff_cond,
+        sh_eff_vel,
+        alpha,
+        beta,
+        sdepth_mm,
+        NumVars
+    };
+}
+
 /* See Chen & Dudhia (2001) https://doi.org/10.1175/1520-0493(2001)129<0569:CAALSH>2.0.CO;2 */
 class SLM : public NullSurf {
 
@@ -444,6 +467,12 @@ private:
 
     amrex::TableData<amrex::Real, 1> alpha;
     amrex::TableData<amrex::Real, 1> beta;
+
+    // Packed MF containing 1D arrays of variables used in soil temperature and soil water
+    //  soilt: st_cond, st_capa, st_eff_cond, alpha, beta
+    //  soilw: st_wgt, sh_eff_cond, sh_eff_vel, alpha, beta, sdepth_mm
+    amrex::MultiFab soilt_vars;
+    amrex::MultiFab soilw_vars;
 
     amrex::MultiFab tau_soil; // soil nudging time in seconds, when dosoiltnudging or dosoilwnudging=true
 

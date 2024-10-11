@@ -167,12 +167,19 @@ void SLM::writeMFtoNC(ncutils::NCFile &nc_file, const MultiFab* mf,
         data = mf_tmp.get();
     }
 
+    amrex::Arena* Arena_Used = amrex::The_Arena();
+#ifdef AMREX_USE_GPU
+    Arena_Used = amrex::The_Pinned_Arena();
+#endif
+
     for(MFIter mfi(*data); mfi.isValid(); ++mfi)
     {
         const auto &box = mfi.fabbox();
+        FArrayBox tmp(box,  data->nComp(), Arena_Used);
         for(int comp = 0; comp < data->nComp(); ++comp)
         {
-            const auto *dataPtr = data->get(mfi).dataPtr(comp);
+            //const auto *dataPtr = data->get(mfi).dataPtr(comp);
+            const auto *dataPtr = tmp.dataPtr(comp);
             AMREX_ALWAYS_ASSERT(dataPtr != nullptr);
 
             // TODO: fix this for multiple levels, parallel, etc
@@ -192,6 +199,13 @@ void SLM::writeMFtoNC(ncutils::NCFile &nc_file, const MultiFab* mf,
                 starts.emplace(starts.begin(), time_index);
                 counts.emplace(counts.begin(), 1);
             }
+
+            auto mf_arr = data->array(mfi, comp);
+            auto tmp_arr = tmp.array(comp);
+                ParallelFor(box, [=] AMREX_GPU_DEVICE (int i, int j, int k)
+                {
+                    tmp_arr(i, j, k) = mf_arr(i, j, k);
+                });
 
             nc_file.var(name).put(dataPtr, starts, counts);
         }

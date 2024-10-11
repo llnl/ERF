@@ -97,6 +97,12 @@ SLM::Init (const MultiFab& cons_in,
         lsm_fab_flux[ivar]->setVal(0.);
     }
 
+    // packed temporary 1D arrays in soil water and soil temperature
+    soilt_vars.define(ba_lsm, dm, SLM_DST::NumVars, 0);
+    soilw_vars.define(ba_lsm, dm, SLM_DSW::NumVars, 0);
+    soilt_vars.setVal(0.0);
+    soilw_vars.setVal(0.0);
+
     // Create local 2D data
     BoxList bl_lsm_2d = ba_lsm.boxList();
     for (auto& b : bl_lsm_2d) {
@@ -292,6 +298,11 @@ void SLM::init_from_file()
         rad_input_data.define(ba_rad, landmask.distributionMap, 6, ng_2d);
         rad_input_data.setVal(0.0);
 
+        amrex::Arena* Arena_Used = amrex::The_Arena();
+#ifdef AMREX_USE_GPU
+            Arena_Used = amrex::The_Pinned_Arena();
+#endif
+
         for(int comp = 0; comp < rad_input_data.nComp(); ++comp) {
 
             ncutils::NCVar rad_var = rad_forcing_ncf.var(rad_names[comp]);
@@ -300,7 +311,8 @@ void SLM::init_from_file()
             for ( MFIter mfi(rad_input_data); mfi.isValid(); ++mfi) {
                 const auto& box = mfi.fabbox();
 
-                auto *dataPtr = rad_input_data.get(mfi).dataPtr(comp);
+                FArrayBox tmp(box, 1, Arena_Used);
+                auto *dataPtr = tmp.dataPtr();
                 AMREX_ALWAYS_ASSERT(dataPtr != nullptr);
 
                 std::vector<size_t> starts = {0,
@@ -312,6 +324,13 @@ void SLM::init_from_file()
 
                 amrex::Print() << "  -- reading {" << counts[0] << "," << counts[1] << "," << counts[2] << "} at index {" << starts[0] << "," << starts[1] << "," << starts[2] << "}" << std::endl;
                 rad_var.get(dataPtr, starts, counts);
+
+                auto mf_arr = rad_input_data.array(mfi, comp);
+                auto tmp_arr = tmp.array();
+                ParallelFor(box, [=] AMREX_GPU_DEVICE (int i, int j, int k)
+                {
+                    mf_arr(i, j, k) = tmp_arr(i, j, k);
+                });
             }
         }
 
@@ -962,10 +981,6 @@ void SLM::init_landtype()
 void SLM::init_soil_tw()
 {
     // TODO - read from input file
-    const amrex::Vector<amrex::Real> d_clay0 = clay0;
-    const amrex::Vector<amrex::Real> d_sand0 = sand0;
-    const amrex::Vector<amrex::Real> d_st0 = st0;
-    const amrex::Vector<amrex::Real> d_sw0 = sw0;
     const Real d_tabs_s = tabs_s;
     const Real d_t00 = t00;
 
@@ -973,8 +988,21 @@ void SLM::init_soil_tw()
     const int d_klo_lsm = klo_lsm;
 
     amrex::Gpu::DeviceVector<Real> d_dz_lsm_vec(m_dz_lsm.size());
+    amrex::Gpu::DeviceVector<Real> d_clay_vec(m_dz_lsm.size());
+    amrex::Gpu::DeviceVector<Real> d_sand_vec(m_dz_lsm.size());
+    amrex::Gpu::DeviceVector<Real> d_st0_vec(m_dz_lsm.size());
+    amrex::Gpu::DeviceVector<Real> d_sw0_vec(m_dz_lsm.size());
+
     amrex::Gpu::copy(Gpu::hostToDevice, m_dz_lsm.begin(), m_dz_lsm.end(), d_dz_lsm_vec.begin());
+    amrex::Gpu::copy(Gpu::hostToDevice, clay0.begin(), clay0.end(), d_clay_vec.begin());
+    amrex::Gpu::copy(Gpu::hostToDevice, sand0.begin(), sand0.end(), d_sand_vec.begin());
+    amrex::Gpu::copy(Gpu::hostToDevice, st0.begin(), st0.end(), d_st0_vec.begin());
+    amrex::Gpu::copy(Gpu::hostToDevice, sw0.begin(), sw0.end(), d_sw0_vec.begin());
     Real *d_dz_lsm = d_dz_lsm_vec.data();
+    Real *d_clay0 = d_clay_vec.data();
+    Real *d_sand0 = d_sand_vec.data();
+    Real *d_st0 = d_st0_vec.data();
+    Real *d_sw0 = d_sw0_vec.data();
 
     auto tsurf = lsm_fab_vars[LsmVar_SLM::tsurf];
     for ( MFIter mfi(*tsurf, TileNoZ()); mfi.isValid(); ++mfi) {
@@ -1171,7 +1199,7 @@ void SLM::init_slm_vars()
                 // specific humidity in canopy air space
                 q_cas_arr(i, j, 0) = 0.5*(qref_arr(i, j, 0) + q_gr);
 
-                amrex::Print() << " i = " << i << " j = " << j << " k = 0 : t_canop = " << t_canop_arr(i, j, 0) << " t_cas = " << t_cas_arr(i, j, 0) << " tsurf = " << tsurf_arr(i, j, 0) << " qcas = " << q_cas_arr(i, j, 0) << " qref = " << qref_arr(i, j, 0) << std::endl;
+                //amrex::Print() << " i = " << i << " j = " << j << " k = 0 : t_canop = " << t_canop_arr(i, j, 0) << " t_cas = " << t_cas_arr(i, j, 0) << " tsurf = " << tsurf_arr(i, j, 0) << " qcas = " << q_cas_arr(i, j, 0) << " qref = " << qref_arr(i, j, 0) << std::endl;
 
             }
         });
@@ -1330,7 +1358,9 @@ SLM::AdvanceSLM ()
                 }
 
                 // Calculate temperature scale for z0hsfc
-                tstar_arr(i, j, 0) = -1.0 * shf_air_arr(i, j, 0) / rhow / cp / ustar_arr(i, j, 0);
+                //tstar_arr(i, j, 0) = -1.0 * shf_air_arr(i, j, 0) / rhow / cp / ustar_arr(i, j, 0);
+                tstar_arr(i, j, 0) = shf_air_arr(i, j, 0) / rhow / cp;
+                tstar_arr(i, j, d_khi_lsm) = tstar_arr(i, j, 0);
 
                 // Calculate latent heat fluxes
                 //vapor_fluxes(i, j); // -- computes r_soil
@@ -1422,7 +1452,9 @@ SLM::AdvanceSLM ()
                 flbq_arr(i, j, d_khi_lsm) = lhf_air_arr(i, j, 0) / (lcond*rhow);
                 flbt_arr(i, j, d_khi_lsm) = shf_air_arr(i, j, 0) / (Cp_d*rhow);
 
-                qstar_arr(i, j, 0) = -1.0 * lhf_air_arr(i, j, 0) / (lcond*rhow) / ustar_arr(i, j, 0);
+                //qstar_arr(i, j, 0) = -1.0 * lhf_air_arr(i, j, 0) / (lcond*rhow) / ustar_arr(i, j, 0);
+                qstar_arr(i, j, 0) = lhf_air_arr(i, j, 0) / (lcond*rhow);
+                qstar_arr(i, j, d_khi_lsm) = qstar_arr(i, j, 0);
                 // Collect 2D stat variables
                 // collect_2D_stat_vars(i, j);
             }
@@ -1867,6 +1899,7 @@ void SLM::transfer_coeff(const amrex::MFIter &mfi)
         // Output variables
         flbu_arr(i, j, d_khi_lsm) = taux_sfc;
         flbv_arr(i, j, d_khi_lsm) = tauy_sfc;
+        ustar_arr(i, j, d_khi_lsm) = ustar_arr(i, j, 0);
     });
 }
 
@@ -2248,20 +2281,7 @@ void SLM::soil_water(const amrex::MFIter &mfi)
 
     auto slm_diag_arr = slm_diag.array(mfi);
 
-    amrex::Gpu::DeviceVector<Real> d_sw_wgt_vec(m_nz_lsm);
-    amrex::Gpu::DeviceVector<Real> d_sh_eff_cond_vec(m_nz_lsm - 1);
-    amrex::Gpu::DeviceVector<Real> d_sh_eff_vel_vec(m_nz_lsm - 1);
-    amrex::Gpu::DeviceVector<Real> d_alpha_vec(m_nz_lsm);
-    amrex::Gpu::DeviceVector<Real> d_beta_vec(m_nz_lsm);
-    amrex::Gpu::DeviceVector<Real> d_s_depth_mm_vec(m_nz_lsm);
-
-    Real *d_sw_wgt = d_sw_wgt_vec.data();
-    Real *d_sh_eff_cond = d_sh_eff_cond_vec.data();
-    Real *d_sh_eff_vel = d_sh_eff_vel_vec.data();
-    Real *d_alpha = d_alpha_vec.data();
-    Real *d_beta = d_beta_vec.data();
-    Real *d_s_depth_mm = d_s_depth_mm_vec.data();
-
+    auto dsw_vars = soilw_vars.array(mfi);
 
     ParallelFor( box, [=] AMREX_GPU_DEVICE (int i, int j, int)
     {
@@ -2271,20 +2291,6 @@ void SLM::soil_water(const amrex::MFIter &mfi)
 
         amrex::Real drain = 0.0, puddle = 0.0;
         amrex::Real aa, bb, cc, dd;
-        /*
-        amrex::Gpu::DeviceVector<amrex::Real> d_sw_wgt(d_nz_lsm);
-
-        amrex::Gpu::DeviceVector<amrex::Real> d_sh_eff_cond(d_nz_lsm - 1);
-        amrex::Gpu::DeviceVector<amrex::Real> d_sh_eff_vel(d_nz_lsm - 1);
-
-        amrex::Gpu::DeviceVector<amrex::Real> d_alpha(d_nz_lsm);
-        amrex::Gpu::DeviceVector<amrex::Real> d_beta(d_nz_lsm);
-
-        // TODO: fix this
-        amrex::Gpu::DeviceVector<amrex::Real> d_s_depth_mm(d_nz_lsm); // cache for converting s_depth to mm
-        */
-
-
         amrex::Real precip = 0.0;
         amrex::Real precip_in = 0.0;
         amrex::Real mws_inc = 0.0;
@@ -2328,7 +2334,7 @@ void SLM::soil_water(const amrex::MFIter &mfi)
         } else {
             for (int k = 0; k < d_nz_lsm; k++) {
                 const int lsm_k = d_khi_lsm - k;
-                d_s_depth_mm[k] = s_depth_arr(i, j, lsm_k) * 1.0e3;
+                dsw_vars(i, j, lsm_k, SLM_DSW::sdepth_mm) = s_depth_arr(i, j, lsm_k) * 1.0e3;
             }
 
             // Calculate precipitation infiltration rate into the first soil layer
@@ -2360,32 +2366,33 @@ void SLM::soil_water(const amrex::MFIter &mfi)
 
                 if (soilt_arr(i, j, lsm_k) >= tfriz && soilt_arr(i, j, lsm_k-1) >= tfriz)
                 {
-                  d_sh_eff_cond[k] =
-                    (d_s_depth_mm[k] * std::pow(
-                                         soilw_arr(i, j, lsm_k),
-                                         Bconst_arr(i, j, lsm_k) + 2.0) +
-                     d_s_depth_mm[k + 1] * std::pow(
-                                             soilw_arr(i, j, lsm_k - 1),
-                                             Bconst_arr(i, j, lsm_k) + 2.0)) /
-                    (d_s_depth_mm[k] + d_s_depth_mm[k + 1]) *
-                    ks_arr(i, j, lsm_k) * Bconst_arr(i, j, lsm_k) *
-                    std::abs(m_pot_sat_arr(i, j, lsm_k)) /
-                    poro_soil_arr(i, j, lsm_k);
+                    const amrex::Real sd_lo = dsw_vars(i, j, lsm_k - 1, SLM_DSW::sdepth_mm);
+                    const amrex::Real sd    = dsw_vars(i, j, lsm_k    , SLM_DSW::sdepth_mm);
+                    const amrex::Real dz = sd + sd_lo;
 
-                  d_sh_eff_vel[k] =
-                    (d_s_depth_mm[k] * std::pow(
-                                         soilw_arr(i, j, lsm_k),
-                                         2.0 * Bconst_arr(i, j, lsm_k) + 2.0) +
-                     d_s_depth_mm[k + 1] *
-                       std::pow(
-                         soilw_arr(i, j, lsm_k - 1),
-                         2.0 * Bconst_arr(i, j, lsm_k) + 2.0)) /
-                    (d_s_depth_mm[k] + d_s_depth_mm[k + 1]) *
-                    ks_arr(i, j, lsm_k) / poro_soil_arr(i, j, lsm_k);
+                    dsw_vars(i, j, lsm_k, SLM_DSW::sh_eff_cond) =
+                      (sd * std::pow(
+                              soilw_arr(i, j, lsm_k),
+                              Bconst_arr(i, j, lsm_k) + 2.0) +
+                       sd_lo * std::pow(
+                                 soilw_arr(i, j, lsm_k - 1),
+                                 Bconst_arr(i, j, lsm_k) + 2.0)) /
+                      dz * ks_arr(i, j, lsm_k) * Bconst_arr(i, j, lsm_k) *
+                      std::abs(m_pot_sat_arr(i, j, lsm_k)) /
+                      poro_soil_arr(i, j, lsm_k);
+
+                    dsw_vars(i, j, lsm_k, SLM_DSW::sh_eff_vel) =
+                      (sd * std::pow(
+                              soilw_arr(i, j, lsm_k),
+                              2.0 * Bconst_arr(i, j, lsm_k) + 2.0) +
+                       sd_lo * std::pow(
+                                 soilw_arr(i, j, lsm_k - 1),
+                                 2.0 * Bconst_arr(i, j, lsm_k) + 2.0)) /
+                      dz * ks_arr(i, j, lsm_k) / poro_soil_arr(i, j, lsm_k);
                 } else {
                     // no water movement between two layers, one of which is frozen
-                    d_sh_eff_cond[k] = 0.0;
-                    d_sh_eff_vel[k] = 0.0;
+                    dsw_vars(i, j, lsm_k, SLM_DSW::sh_eff_cond) = 0.0;
+                    dsw_vars(i, j, lsm_k, SLM_DSW::sh_eff_vel) = 0.0;
                 }
             }
 
@@ -2398,19 +2405,19 @@ void SLM::soil_water(const amrex::MFIter &mfi)
                 const int lsm_k = d_khi_lsm - k;
                 if (soilw_arr(i, j, lsm_k) < w_s_WP_arr(i, j, lsm_k))
                 {
-                    d_sw_wgt[k] = 0.0;
+                    dsw_vars(i, j, lsm_k, SLM_DSW::sw_wgt) = 0.0;
                 } else {
-                    d_sw_wgt[k] = 1.0;
+                    dsw_vars(i, j, lsm_k, SLM_DSW::sw_wgt) = 1.0;
                 }
             }
 
             aa = 0.0;
-            cc = -2.0 * d_sh_eff_cond[0]*dt/(d_s_depth_mm[0]*(d_s_depth_mm[0] + d_s_depth_mm[1]));
-            bb = 1.0 - cc + d_sh_eff_vel[0]*dt/d_s_depth_mm[0];
-            dd = soilw_arr(i, j, d_khi_lsm) - (lhf_soil_arr(i, j, 0)/lcond + rootF_arr(i, j, d_khi_lsm)*evapo_dry_arr(i, j, 0)*d_sw_wgt[0] - precip_in)*dt / poro_soil_arr(i, j, d_khi_lsm) / d_s_depth_mm[0];
+            cc = -2.0 * dsw_vars(i, j, d_khi_lsm, SLM_DSW::sh_eff_cond)*dt/(dsw_vars(i, j, d_khi_lsm, SLM_DSW::sdepth_mm)*(dsw_vars(i, j, d_khi_lsm, SLM_DSW::sdepth_mm) + dsw_vars(i, j, d_khi_lsm - 1, SLM_DSW::sdepth_mm)));
+            bb = 1.0 - cc + dsw_vars(i, j, d_khi_lsm, SLM_DSW::sh_eff_vel)*dt/dsw_vars(i, j, d_khi_lsm, SLM_DSW::sdepth_mm);
+            dd = soilw_arr(i, j, d_khi_lsm) - (lhf_soil_arr(i, j, 0)/lcond + rootF_arr(i, j, d_khi_lsm)*evapo_dry_arr(i, j, 0)*dsw_vars(i, j, d_khi_lsm, SLM_DSW::sw_wgt) - precip_in)*dt / poro_soil_arr(i, j, d_khi_lsm) / dsw_vars(i, j, d_khi_lsm, SLM_DSW::sdepth_mm);
 
-            d_alpha[0] = cc / bb;
-            d_beta[0] = dd / bb;
+            dsw_vars(i, j, d_khi_lsm, SLM_DSW::alpha) = cc / bb;
+            dsw_vars(i, j, d_khi_lsm, SLM_DSW::beta) = dd / bb;
 
             // For 2-(nsoil-1) layer:
             for (int k = 1; k < d_nz_lsm - 1; k++) {
@@ -2423,39 +2430,54 @@ void SLM::soil_water(const amrex::MFIter &mfi)
                 //   k - 1   ->  k + 1
                 //   k + 1   ->  k - 1
                 //   nsoil   ->  d_klo_lsm
-                const int lsm_k = d_khi_lsm - k;
+                const int lsm_k = d_khi_lsm - k; // lsm_k = -2 to -nsoil+1
 
-                aa = -1.0 * dt / d_s_depth_mm[k] *
-                     (d_sh_eff_vel[k - 1] +
-                      d_sh_eff_cond[k - 1] * 2.0 /
-                        (d_s_depth_mm[k - 1] + d_s_depth_mm[k]));
-                cc = -1.0 * dt / d_s_depth_mm[k] * 2.0 * d_sh_eff_cond[k] / (d_s_depth_mm[k] + d_s_depth_mm[k+1]);
-                bb = 1.0 - cc + dt / d_s_depth_mm[k]*d_sh_eff_vel[k] + 2.0 * dt / d_s_depth_mm[k] * d_sh_eff_cond[k-1]/(d_s_depth_mm[k-1] + d_s_depth_mm[k]);
-                dd = soilw_arr(i, j, lsm_k) - rootF_arr(i, j, lsm_k)*evapo_dry_arr(i, j, 0)*d_sw_wgt[k] * dt / poro_soil_arr(i, j, lsm_k) / d_s_depth_mm[k]; // current time step
+                const amrex::Real sd_lo = dsw_vars(i, j, lsm_k - 1, SLM_DSW::sdepth_mm);
+                const amrex::Real sd    = dsw_vars(i, j, lsm_k    , SLM_DSW::sdepth_mm);
+                const amrex::Real sd_up = dsw_vars(i, j, lsm_k + 1, SLM_DSW::sdepth_mm);
 
-                d_alpha[k] = cc / (bb - aa * d_alpha[k-1]);
-                d_beta[k] = (dd - aa * d_beta[k-1]) / (bb - aa * d_alpha[k-1]);
+                const amrex::Real sh_eff_cond    = dsw_vars(i, j, lsm_k    , SLM_DSW::sh_eff_cond);
+                const amrex::Real sh_eff_cond_up = dsw_vars(i, j, lsm_k + 1, SLM_DSW::sh_eff_cond);
+
+                const amrex::Real sh_eff_vel    = dsw_vars(i, j, lsm_k    , SLM_DSW::sh_eff_vel);
+                const amrex::Real sh_eff_vel_up = dsw_vars(i, j, lsm_k + 1, SLM_DSW::sh_eff_vel);
+
+                aa = -1.0 * dt / sd * (sh_eff_vel_up + sh_eff_cond_up * 2.0 / (sd_up + sd));
+                cc = -1.0 * dt / sd * 2.0 * sh_eff_cond / (sd + sd_lo);
+                bb = 1.0 - cc + dt / sd * sh_eff_vel + 2.0 * dt / sd * sh_eff_cond_up / (sd_up + sd);
+                dd = soilw_arr(i, j, lsm_k) - rootF_arr(i, j, lsm_k) * evapo_dry_arr(i, j, 0) * dsw_vars(i, j, lsm_k, SLM_DSW::sw_wgt) * dt / poro_soil_arr(i, j, lsm_k) / sd; // current time step
+
+                dsw_vars(i, j, lsm_k, SLM_DSW::alpha) = cc / (bb - aa * dsw_vars(i, j, lsm_k + 1, SLM_DSW::alpha));
+                dsw_vars(i, j, lsm_k, SLM_DSW::beta) = (dd - aa * dsw_vars(i, j, lsm_k + 1, SLM_DSW::beta)) / (bb - aa * dsw_vars(i, j, lsm_k + 1, SLM_DSW::alpha));
             }
 
             // For bottom layer:
-            aa = -1.0 * dt / d_s_depth_mm[d_nz_lsm-1] * (d_sh_eff_vel[d_nz_lsm-2] + d_sh_eff_cond[d_nz_lsm-2]*2.0 / (d_s_depth_mm[d_nz_lsm-2]+d_s_depth_mm[d_nz_lsm-1]));
+            aa = -1.0 * dt / dsw_vars(i, j, d_klo_lsm, SLM_DSW::sdepth_mm) *
+                 (dsw_vars(i, j, d_klo_lsm + 1, SLM_DSW::sh_eff_vel) +
+                  dsw_vars(i, j, d_klo_lsm + 1, SLM_DSW::sh_eff_cond) * 2.0 /
+                    (dsw_vars(i, j, d_klo_lsm + 1, SLM_DSW::sdepth_mm) +
+                     dsw_vars(i, j, d_klo_lsm, SLM_DSW::sdepth_mm)));
             cc = 0.0;
-            bb = 1.0 + (dt / d_s_depth_mm[d_nz_lsm-1] * 2.0 * d_sh_eff_cond[d_nz_lsm-2] / (d_s_depth_mm[d_nz_lsm-2] + d_s_depth_mm[d_nz_lsm-1]));
+            bb =
+              1.0 + (dt / dsw_vars(i, j, d_klo_lsm, SLM_DSW::sdepth_mm) * 2.0 *
+                     dsw_vars(i, j, d_klo_lsm + 1, SLM_DSW::sh_eff_cond) /
+                     (dsw_vars(i, j, d_klo_lsm + 1, SLM_DSW::sdepth_mm) +
+                      dsw_vars(i, j, d_klo_lsm, SLM_DSW::sdepth_mm)));
 
             // drainage when it exceeds 1.0 mm/s
-            amrex::Real drainage_flux = std::max(soilw_arr(i, j, d_klo_lsm) - 1.0, 0.0)*poro_soil_arr(i, j, d_klo_lsm)*d_s_depth_mm[d_nz_lsm-1]/dt;
-            dd = soilw_arr(i, j, d_klo_lsm) - (rootF_arr(i, j, d_klo_lsm)*evapo_dry_arr(i, j, 0)*d_sw_wgt[d_nz_lsm-1] + drainage_flux) * dt / poro_soil_arr(i, j, d_klo_lsm) / d_s_depth_mm[d_nz_lsm-1];
+            amrex::Real drainage_flux = std::max(soilw_arr(i, j, d_klo_lsm) - 1.0, 0.0)*poro_soil_arr(i, j, d_klo_lsm)*dsw_vars(i, j, d_klo_lsm, SLM_DSW::sdepth_mm)/dt;
+            dd = soilw_arr(i, j, d_klo_lsm) - (rootF_arr(i, j, d_klo_lsm)*evapo_dry_arr(i, j, 0)*dsw_vars(i, j, d_klo_lsm, SLM_DSW::sw_wgt) + drainage_flux) * dt / poro_soil_arr(i, j, d_klo_lsm) / dsw_vars(i, j, d_klo_lsm, SLM_DSW::sdepth_mm);
 
             slm_diag_arr(i, j, 0, SLM_Diag::drain_flux) = drainage_flux;
 
-            d_alpha[d_nz_lsm-1] = 0.0;
-            d_beta[d_nz_lsm-1] = (dd - aa * d_beta[d_nz_lsm-2]) / (bb - aa * d_alpha[d_nz_lsm-2]);
+            dsw_vars(i, j, d_klo_lsm, SLM_DSW::alpha) = 0.0;
+            dsw_vars(i, j, d_klo_lsm, SLM_DSW::beta) = (dd - aa * dsw_vars(i, j, d_klo_lsm + 1, SLM_DSW::beta)) / (bb - aa * dsw_vars(i, j, d_klo_lsm + 1, SLM_DSW::alpha));
 
             // (n+1) time step soil wetness:
-            soilw_arr(i, j, d_klo_lsm) = d_beta[d_nz_lsm-1];
+            soilw_arr(i, j, d_klo_lsm) = dsw_vars(i, j, d_klo_lsm, SLM_DSW::beta);
             for (int k = d_nz_lsm - 2; k >= 0; k--) {
                 const int lsm_k = d_khi_lsm - k;
-                soilw_arr(i, j, lsm_k) = std::max(0.0, d_beta[k] - d_alpha[k] * soilw_arr(i, j, lsm_k - 1));
+                soilw_arr(i, j, lsm_k) = std::max(0.0, dsw_vars(i, j, lsm_k, SLM_DSW::beta) - dsw_vars(i, j, lsm_k, SLM_DSW::alpha) * soilw_arr(i, j, lsm_k - 1));
             }
 
             bool fix = false;
@@ -2477,7 +2499,7 @@ void SLM::soil_water(const amrex::MFIter &mfi)
                     const int lsm_kk = d_khi_lsm - kk;
                     if (soilw_arr(i, j, lsm_kk) > 1.0)
                     {
-                        dd = dd + (soilw_arr(i, j, lsm_kk) - 1.0)*poro_soil_arr(i, j, lsm_kk)*d_s_depth_mm[kk];
+                        dd = dd + (soilw_arr(i, j, lsm_kk) - 1.0)*poro_soil_arr(i, j, lsm_kk)*dsw_vars(i, j, lsm_kk, SLM_DSW::sdepth_mm);
                         soilw_arr(i, j, lsm_kk) = 1.0;
                     }
                 }
@@ -2487,8 +2509,8 @@ void SLM::soil_water(const amrex::MFIter &mfi)
                     const int lsm_kk = d_khi_lsm - kk;
                     if (soilw_arr(i, j, lsm_kk) < 1.0)
                     {
-                        cc = std::min(dd, (1.0 - soilw_arr(i, j, lsm_kk))*poro_soil_arr(i, j, lsm_kk)*d_s_depth_mm[kk]);
-                        soilw_arr(i, j, lsm_kk) += cc / (poro_soil_arr(i, j, lsm_kk)*d_s_depth_mm[kk]);
+                        cc = std::min(dd, (1.0 - soilw_arr(i, j, lsm_kk))*poro_soil_arr(i, j, lsm_kk)*dsw_vars(i, j, lsm_kk, SLM_DSW::sdepth_mm));
+                        soilw_arr(i, j, lsm_kk) += cc / (poro_soil_arr(i, j, lsm_kk)*dsw_vars(i, j, lsm_kk, SLM_DSW::sdepth_mm));
                         dd -= cc;
                         if (dd < 0.0)
                         {
@@ -2528,17 +2550,7 @@ void SLM::soil_temperature(const amrex::MFIter &mfi)
     auto net_rad_arr = net_rad.const_array(mfi);
     auto slm_diag_arr = slm_diag.array(mfi);
 
-    amrex::Gpu::DeviceVector<Real> d_st_cond_vec(m_nz_lsm);
-    amrex::Gpu::DeviceVector<Real> d_st_capa_vec(m_nz_lsm);
-    amrex::Gpu::DeviceVector<Real> d_st_eff_cond_vec(m_nz_lsm);
-    amrex::Gpu::DeviceVector<Real> d_alpha_vec(m_nz_lsm);
-    amrex::Gpu::DeviceVector<Real> d_beta_vec(m_nz_lsm);
-
-    Real *d_st_cond = d_st_cond_vec.data();
-    Real *d_st_capa = d_st_capa_vec.data();
-    Real *d_st_eff_cond = d_st_eff_cond_vec.data();
-    Real *d_alpha = d_alpha_vec.data();
-    Real *d_beta = d_beta_vec.data();
+    auto dst_vars = soilt_vars.array(mfi);
 
     // TODO: Refactor this whole loop for GPU
     ParallelFor( box, [=] AMREX_GPU_DEVICE (int i, int j, int)
@@ -2549,23 +2561,14 @@ void SLM::soil_temperature(const amrex::MFIter &mfi)
 
         amrex::Real temp, k_dry, k_sat, Ke;
 
-        /*
-        // TODO: FIX -- these vectors cannot be indexed by soil k level!
-        amrex::Gpu::DeviceVector<amrex::Real> d_st_cond(d_nz_lsm);
-        amrex::Gpu::DeviceVector<amrex::Real> d_st_capa(d_nz_lsm);
-        amrex::Gpu::DeviceVector<amrex::Real> d_st_eff_cond(d_nz_lsm);
-
-        amrex::Gpu::DeviceVector<amrex::Real> d_alpha(d_nz_lsm);
-        amrex::Gpu::DeviceVector<amrex::Real> d_beta(d_nz_lsm);
-        */
-
         amrex::Real grflux0 = -1.0 * (net_rad_arr(i, j, 0, SLM_NetRad::net_rad2) - shf_soil_arr(i, j, 0) - lhf_soil_arr(i, j, 0));
         slm_diag_arr(i, j, 0, SLM_Diag::grflux) = grflux0;
         if (landtype_arr(i, j, 0) == 15) {
             // ice
             for (int k = 0; k < d_nz_lsm; k++) {
-                d_st_cond[k] = 1.6; // thermal conductivity of ice
-                d_st_capa[k] = 917.0 * 2030.0; // ice heat capacity
+                const int lsm_k = d_khi_lsm - k;
+                dst_vars(i, j, lsm_k, SLM_DST::st_cond) = 1.6; // thermal conductivity of ice
+                dst_vars(i, j, lsm_k, SLM_DST::st_capa) = 917.0 * 2030.0; // ice heat capacity
             }
         } else {
             for (int k = 0; k < d_nz_lsm; k++) {
@@ -2589,17 +2592,17 @@ void SLM::soil_temperature(const amrex::MFIter &mfi)
                 Ke = log10(std::max(0.1, soilw_arr(i, j, lsm_k))) + 1.0;
 
                 // Total soil thermal conductivity at each node_z
-                d_st_cond[k] = Ke*(k_sat - k_dry) + k_dry;
+                dst_vars(i, j, lsm_k, SLM_DST::st_cond) = Ke * (k_sat - k_dry) + k_dry;
 
                 // Soil volumetric heaet capacity at each node_z depth
                 if (soilt_arr(i, j, lsm_k) > tfriz) {
-                    d_st_capa[k] =
+                    dst_vars(i, j, lsm_k, SLM_DST::st_capa) =
                         (1.0 - poro_soil_arr(i, j, lsm_k)) *
                         sst_capa_arr(i, j, lsm_k) +
                         (998.0 * 4182.0) * soilw_arr(i, j, lsm_k) *
                         poro_soil_arr(i, j, lsm_k); // water heat capacity
                 } else {
-                    d_st_capa[k] =
+                    dst_vars(i, j, lsm_k, SLM_DST::st_capa) =
                         (1.0 - poro_soil_arr(i, j, lsm_k)) *
                         sst_capa_arr(i, j, lsm_k) +
                         (917.0 * 2030.0) * soilw_arr(i, j, lsm_k) *
@@ -2612,10 +2615,10 @@ void SLM::soil_temperature(const amrex::MFIter &mfi)
             const int lsm_k = d_khi_lsm - k;
 
             // calculate effective conductivity at the adjacent soil layer interface
-            d_st_eff_cond[k] =
-                (d_st_cond[k + 1] * s_depth_arr(i, j, lsm_k - 1) +
-                d_st_cond[k] * s_depth_arr(i, j, lsm_k)) /
-                (s_depth_arr(i, j, lsm_k - 1) + s_depth_arr(i, j, lsm_k));
+            dst_vars(i, j, lsm_k, SLM_DST::st_eff_cond) =
+                (dst_vars(i, j, lsm_k - 1, SLM_DST::st_cond) * s_depth_arr(i, j, lsm_k - 1) +
+                 dst_vars(i, j, lsm_k, SLM_DST::st_cond) * s_depth_arr(i, j, lsm_k)) /
+                 (s_depth_arr(i, j, lsm_k - 1) + s_depth_arr(i, j, lsm_k));
         }
 
         // from FDE by the implicit, Thomas algorithm is applied
@@ -2625,12 +2628,16 @@ void SLM::soil_temperature(const amrex::MFIter &mfi)
         //   dd: current soil temperature + (additional source/sink on soil top)
         // For first layer:
         amrex::Real aa = 0.0;
-        amrex::Real cc = -2.0 * d_st_eff_cond[0]*dt/d_st_capa[0]/(s_depth_arr(i, j, d_khi_lsm)*(s_depth_arr(i, j, d_khi_lsm) + s_depth_arr(i, j, d_khi_lsm - 1)));
+        amrex::Real cc =
+          -2.0 * dst_vars(i, j, d_khi_lsm, SLM_DST::st_eff_cond) * dt /
+          dst_vars(i, j, d_khi_lsm, SLM_DST::st_capa) /
+          (s_depth_arr(i, j, d_khi_lsm) *
+           (s_depth_arr(i, j, d_khi_lsm) + s_depth_arr(i, j, d_khi_lsm - 1)));
         amrex::Real bb = 1.0 - cc;
-        amrex::Real dd = soilt_arr(i, j, d_khi_lsm) - grflux0 * dt / s_depth_arr(i, j, d_khi_lsm) / d_st_capa[0];
+        amrex::Real dd = soilt_arr(i, j, d_khi_lsm) - grflux0 * dt / s_depth_arr(i, j, d_khi_lsm) / dst_vars(i, j, d_khi_lsm, SLM_DST::st_capa);
 
-        d_alpha[0] = cc / bb;
-        d_beta[0] = dd / bb;
+        dst_vars(i, j, d_khi_lsm, SLM_DST::alpha) = cc / bb;
+        dst_vars(i, j, d_khi_lsm, SLM_DST::beta) = dd / bb;
 
         // For 2-(nsoil-1) layer:
         for (int k = 1; k < d_nz_lsm - 1; k++) {
@@ -2645,31 +2652,33 @@ void SLM::soil_temperature(const amrex::MFIter &mfi)
             //   nsoil   ->  d_klo_lsm
             const int lsm_k = d_khi_lsm - k;
 
-            aa = -2.0 * d_st_eff_cond[k-1] * dt / s_depth_arr(i, j, lsm_k) /  d_st_capa[k] / (s_depth_arr(i, j, lsm_k+1) + s_depth_arr(i, j, lsm_k));
-            cc = -2.0 * d_st_eff_cond[k] * dt / s_depth_arr(i, j, lsm_k) / d_st_capa[k] / (s_depth_arr(i, j, lsm_k) + s_depth_arr(i, j, lsm_k-1));
+            const amrex::Real st_eff_cond_up = dst_vars(i, j, lsm_k + 1, SLM_DST::st_eff_cond);
+            const amrex::Real st_eff_cond    = dst_vars(i, j, lsm_k    , SLM_DST::st_eff_cond);
+            const amrex::Real st_capa        = dst_vars(i, j, lsm_k,     SLM_DST::st_capa);
+
+            aa = -2.0 * st_eff_cond_up * dt / s_depth_arr(i, j, lsm_k) / st_capa / (s_depth_arr(i, j, lsm_k+1) + s_depth_arr(i, j, lsm_k));
+            cc = -2.0 * st_eff_cond * dt / s_depth_arr(i, j, lsm_k) / st_capa / (s_depth_arr(i, j, lsm_k) + s_depth_arr(i, j, lsm_k-1));
             bb = 1.0 - cc - aa;
             dd = soilt_arr(i, j, lsm_k); // current time step
 
-            d_alpha[k] = cc / (bb - aa * d_alpha[k-1]);
-            d_beta[k] = (dd - aa * d_beta[k-1]) / (bb - aa * d_alpha[k-1]);
+            dst_vars(i, j, lsm_k, SLM_DST::alpha) = cc / (bb - aa * dst_vars(i, j, lsm_k + 1, SLM_DST::alpha));
+            dst_vars(i, j, lsm_k, SLM_DST::beta) = (dd - aa * dst_vars(i, j, lsm_k + 1, SLM_DST::beta)) / (bb - aa * dst_vars(i, j, lsm_k + 1, SLM_DST::alpha));
         }
 
         // For bottom layer:
-        aa = -2.0 * d_st_eff_cond[d_nz_lsm-2] * dt / s_depth_arr(i, j, d_klo_lsm) /
-                d_st_capa[d_nz_lsm-1] /
-                (s_depth_arr(i, j, d_klo_lsm + 1) + s_depth_arr(i, j, d_klo_lsm));
+        aa = -2.0 * dst_vars(i, j, d_klo_lsm + 1, SLM_DST::st_eff_cond) * dt / s_depth_arr(i, j, d_klo_lsm) / dst_vars(i, j, d_klo_lsm + 1, SLM_DST::st_capa) / (s_depth_arr(i, j, d_klo_lsm + 1) + s_depth_arr(i, j, d_klo_lsm));
         cc = 0.0;
         bb = 1.0 - aa;
         dd = soilt_arr(i, j, d_klo_lsm);
 
-        d_alpha[d_nz_lsm-1] = 0.0;
-        d_beta[d_nz_lsm-1] = (dd - aa * d_beta[d_nz_lsm-2]) / (bb - aa * d_alpha[d_nz_lsm-2]);
+        dst_vars(i, j, d_klo_lsm, SLM_DST::alpha)  = 0.0;
+        dst_vars(i, j, d_klo_lsm, SLM_DST::beta) = (dd - aa * dst_vars(i, j, d_klo_lsm + 1, SLM_DST::beta)) / (bb - aa * dst_vars(i, j, d_klo_lsm + 1, SLM_DST::alpha));
 
         // (n+1) time step soil temperature:
-        soilt_arr(i, j, d_klo_lsm) = d_beta[d_nz_lsm-1];
+        soilt_arr(i, j, d_klo_lsm) = dst_vars(i, j, d_klo_lsm, SLM_DST::beta);
         for (int k = d_nz_lsm - 2; k >= 0; k--) {
             const int lsm_k = d_khi_lsm - k;
-            soilt_arr(i, j, lsm_k) = d_beta[k] - d_alpha[k] * soilt_arr(i, j, lsm_k - 1);
+            soilt_arr(i, j, lsm_k) = dst_vars(i, j, lsm_k, SLM_DST::beta) - dst_vars(i, j, lsm_k, SLM_DST::alpha) * soilt_arr(i, j, lsm_k - 1);
         }
     });
 }
@@ -2746,19 +2755,28 @@ void SLM::Copy_State_to_Lsm(const MultiFab& cons_in, const MultiFab& u_in, const
     if (rad_input_file != "")
     {
         int tindex = 0;
-        for (int k = 1; k < num_rad_times - 1; k++)
+        int tindex_next = 0;
+        for (int k = 1; k < num_rad_times; k++)
         {
-            if (time >= rad_times[k] && time <= rad_times[k+1])
+            if (time > rad_times[k])
             {
                 tindex = k;
-                break;
             }
         }
-        amrex::Real t0 = rad_times[tindex];
-        amrex::Real t1 = rad_times[tindex+1];
+
+        if (tindex == num_rad_times - 1)
+        {
+            tindex_next = tindex;
+        } else {
+            tindex_next = tindex + 1;
+        }
+
+        const amrex::Real t0 = rad_times[tindex];
+        const amrex::Real t1 = rad_times[tindex_next];
 
         amrex::Print() << " SLM: time = " << time << ", interpolating fluxes at index " << tindex << " (t0 = " << t0 << " t1 = " << t1 << ")" << std::endl;
 
+        const amrex::Real d_time = time;
         for ( MFIter mfi(rad_input_data); mfi.isValid(); ++mfi) {
             const auto& box3d = mfi.tilebox();
 
@@ -2778,14 +2796,14 @@ void SLM::Copy_State_to_Lsm(const MultiFab& cons_in, const MultiFab& u_in, const
 
             ParallelFor(b2d, [=] AMREX_GPU_DEVICE (int i, int j, int k)
             {
-                slm_dir_sw_vis(i, j, k) = linear_interp(t0, t1, time, rad_arr(i, j, tindex, 0), rad_arr(i, j, tindex+1, 0));
-                slm_dir_sw_nir(i, j, k) = linear_interp(t0, t1, time, rad_arr(i, j, tindex, 1), rad_arr(i, j, tindex+1, 1));
+                slm_dir_sw_vis(i, j, k) = linear_interp(t0, t1, d_time, rad_arr(i, j, tindex, 0), rad_arr(i, j, tindex_next, 0));
+                slm_dir_sw_nir(i, j, k) = linear_interp(t0, t1, d_time, rad_arr(i, j, tindex, 1), rad_arr(i, j, tindex_next, 1));
 
-                slm_diff_sw_vis(i, j, k) = linear_interp(t0, t1, time, rad_arr(i, j, tindex, 2), rad_arr(i, j, tindex+1, 2));
-                slm_diff_sw_nir(i, j, k) = linear_interp(t0, t1, time, rad_arr(i, j, tindex, 3), rad_arr(i, j, tindex+1, 3));
+                slm_diff_sw_vis(i, j, k) = linear_interp(t0, t1, d_time, rad_arr(i, j, tindex, 2), rad_arr(i, j, tindex_next, 2));
+                slm_diff_sw_nir(i, j, k) = linear_interp(t0, t1, d_time, rad_arr(i, j, tindex, 3), rad_arr(i, j, tindex_next, 3));
 
-                slm_zenith(i, j, k) = linear_interp(t0, t1, time, rad_arr(i, j, tindex, 4), rad_arr(i, j, tindex+1, 4));
-                slm_lw(i, j, k) = linear_interp(t0, t1, time, rad_arr(i, j, tindex, 5), rad_arr(i, j, tindex+1, 5));
+                slm_zenith(i, j, k) = linear_interp(t0, t1, d_time, rad_arr(i, j, tindex, 4), rad_arr(i, j, tindex_next, 4));
+                slm_lw(i, j, k) = linear_interp(t0, t1, d_time, rad_arr(i, j, tindex, 5), rad_arr(i, j, tindex_next, 5));
 
 
                 // TODO: this is for plotting purposes.. state arrays are at k=0 which is ghost cell for SLM values
