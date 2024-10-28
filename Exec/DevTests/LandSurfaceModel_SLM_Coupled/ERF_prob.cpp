@@ -485,11 +485,11 @@ Problem::update_geostrophic_profile (const Real& time,
             // apply uls and vls forcing
             u_geos[k] = u_int_lsf[itime_curr][k] * coeff_curr + u_int_lsf[itime_next][k] * coeff_next;
             //amrex::Print() << " u forcing: k = " << k << ": uls_curr = " << u_int_lsf[itime_curr][k] << " uls_next = " << u_int_lsf[itime_next][k] << " src = " << u_geos[k] << " src_scaled = " << u_geos[k] * inv_scale << std::endl;
-            u_geos[k] *= inv_scale;
+            //u_geos[k] *= inv_scale;
 
             v_geos[k] = v_int_lsf[itime_curr][k] * coeff_curr + v_int_lsf[itime_next][k] * coeff_next;
             //amrex::Print() << " v forcing: k = " << k << ": vls_curr = " << v_int_lsf[itime_curr][k] << " vls_next = " << v_int_lsf[itime_next][k] << " src = " << v_geos[k] << " src_scaled = " << v_geos[k] * inv_scale << std::endl;
-            v_geos[k] *= inv_scale;
+            //v_geos[k] *= inv_scale;
         } else {
             u_geos[k] = 0.0;
             v_geos[k] = 0.0;
@@ -621,6 +621,15 @@ Problem::read_forcing_file (const std::string lsf_file,
             // this is defining a level at the current time
             amrex::Real z, p, tls, qls, uls, vls, wls;
             iss >> z >> p >> tls >> qls >> uls >> vls >> wls;
+
+            if (z_in.size() == 1)
+	        {
+                u_in[0] = uls;
+                v_in[0] = vls;
+                w_in[0] = wls;
+                t_in[0] = getThgivenPandT(tls, p*100.0, R_d/Cp_d);
+                q_in[0] = qls;
+            }
 
             z_in.push_back(z);
             p_in.push_back(p * 100.0);

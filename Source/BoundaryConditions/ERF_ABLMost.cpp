@@ -455,7 +455,7 @@ ABLMost::compute_most_bcs (const int& lev,
                         if (is_land && lsm_flux_arr && vbx.contains(i,j,k)) {
                             lsm_flux_arr(i,j,klo) = Tflux;
                         }
-                        else if ((k == klo-1) && vbx.contains(i,j,k) && exp_most) {
+                        if ((k == klo-1) && vbx.contains(i,j,k) && exp_most) {
                             hfx3_arr(i,j,klo) = Tflux;
                         }
                     }

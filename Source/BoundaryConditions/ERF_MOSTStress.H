@@ -1887,7 +1887,8 @@ struct custom_flux
         amrex::Real deltaz  = dz * (zlo - k);
 
         // NOTE: this is rho*<q'w'> = -K dqdz
-        amrex::Real moflux  = (std::abs(qstar) > eps) ? rho * qstar : 0.0;
+        //amrex::Real moflux  = (std::abs(qstar) > eps) ? rho * qstar : 0.0;
+        amrex::Real moflux  = (std::abs(qstar) > eps) ? qstar : 0.0;
 
         if (exp_most) {
             // surface gradient equal to gradient at first zface
@@ -1943,7 +1944,8 @@ struct custom_flux
         amrex::Real deltaz  = dz * (zlo - k);
 
         // NOTE: this is rho*<T'w'> = -K dTdz
-        amrex::Real moflux  = (std::abs(tstar) > eps) ? rho * tstar : 0.0;
+        //amrex::Real moflux  = (std::abs(tstar) > eps) ? rho * tstar : 0.0;
+        amrex::Real moflux  = (std::abs(tstar) > eps) ? tstar : 0.0;
 
         if (exp_most) {
             // surface gradient equal to gradient at first zface
