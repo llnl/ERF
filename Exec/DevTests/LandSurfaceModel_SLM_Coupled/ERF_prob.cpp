@@ -550,6 +550,7 @@ Problem::read_forcing_file (const std::string lsf_file,
     amrex::Real curr_time = 0.0;
     amrex::Real start_time = 0.0; // first time in file, in days, other inputs are relative to this time
 
+    amrex::Real pres0;
     while(std::getline(ifs, line)) {
         std::istringstream iss(line);
 
@@ -565,7 +566,7 @@ Problem::read_forcing_file (const std::string lsf_file,
             iss >> s_time >> s_lev >> s_pres0;
             amrex::Real time = std::stod(s_time);
             int nlev = std::stoi(s_lev);
-            amrex::Real pres0 = std::stod(s_pres0);
+            pres0 = std::stod(s_pres0);
 
             // convert time to seconds (relative to first time), and pres from mb to Pa
             if (nt == 0)
@@ -627,13 +628,15 @@ Problem::read_forcing_file (const std::string lsf_file,
                 u_in[0] = uls;
                 v_in[0] = vls;
                 w_in[0] = wls;
-                t_in[0] = getThgivenPandT(tls, p*100.0, R_d/Cp_d);
+                //t_in[0] = getThgivenPandT(tls, p*100.0, R_d/Cp_d);
+                t_in[0] = tls*std::pow(pres0/(p*100.0), R_d/Cp_d);
                 q_in[0] = qls;
             }
 
             z_in.push_back(z);
             p_in.push_back(p * 100.0);
-            t_in.push_back(getThgivenPandT(tls, p*100.0, R_d/Cp_d));
+            //t_in.push_back(getThgivenPandT(tls, p*100.0, R_d/Cp_d));
+            t_in.push_back(tls*std::pow(pres0/(p*100.0), R_d/Cp_d));
             q_in.push_back(qls);
             u_in.push_back(uls);
             v_in.push_back(vls);

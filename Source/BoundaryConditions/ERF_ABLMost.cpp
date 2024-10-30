@@ -429,6 +429,9 @@ ABLMost::compute_most_bcs (const int& lev,
         auto lsm_flux_arr = (m_lsm_flux_lev[lev][0]) ? m_lsm_flux_lev[lev][0]->array(mfi) :
                                                        Array4<Real> {};
 
+       auto lsm_flbu_arr = (m_lsm_data_lev[lev][11]) ? m_lsm_data_lev[lev][11]->array(mfi) :Array4<Real> {};
+       auto lsm_flbv_arr = (m_lsm_data_lev[lev][12]) ? m_lsm_data_lev[lev][12]->array(mfi) :Array4<Real> {};
+
         for (int var_idx = 0; var_idx < Vars::NumTypes; ++var_idx)
         {
             const Box& bx = (*mfs[var_idx])[mfi].box();
@@ -507,6 +510,12 @@ ABLMost::compute_most_bcs (const int& lev,
                                              t23_arr, t32_arr);
                     } else {
                         if ((k == klo-1) && vbxx.contains(i,j,k) && exp_most) {
+                            int ic, jc;
+                            ic = i  < lbound(cons_arr).x+1 ? lbound(cons_arr).x+1 : i;
+                            jc = j  < lbound(cons_arr).y   ? lbound(cons_arr).y   : j;
+                            ic = ic > ubound(cons_arr).x   ? ubound(cons_arr).x   : ic;
+                            jc = jc > ubound(cons_arr).y   ? ubound(cons_arr).y   : jc;
+                            stressx = lsm_flbu_arr(ic, jc, -1);
                             t13_arr(i,j,klo) = stressx;
                             if (t31_arr) t31_arr(i,j,klo) = stressx;
                         }
@@ -530,6 +539,12 @@ ABLMost::compute_most_bcs (const int& lev,
                     // NOTE: One stress rotation for ALL the stress components
                     if (!rot_most) {
                         if ((k == klo-1) && vbxy.contains(i,j,k) && exp_most) {
+                            int ic, jc;
+                            ic = i  < lbound(cons_arr).x   ? lbound(cons_arr).x   : i;
+                            jc = j  < lbound(cons_arr).y+1 ? lbound(cons_arr).y+1 : j;
+                            ic = ic > ubound(cons_arr).x   ? ubound(cons_arr).x   : ic;
+                            jc = jc > ubound(cons_arr).y   ? ubound(cons_arr).y   : jc;
+                            stressy = lsm_flbv_arr(ic, jc, -1);
                             t23_arr(i,j,klo) = stressy;
                             if (t32_arr) t32_arr(i,j,klo) = stressy;
                         }

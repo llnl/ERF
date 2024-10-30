@@ -2740,16 +2740,20 @@ void SLM::Copy_State_to_Lsm(const MultiFab& cons_in, const MultiFab& u_in, const
                                                   qv);
 
             qref_array(i,j,k) = qv;
-            slm_u(i,j,k) = u_array(i,j,k);
-            slm_v(i,j,k) = v_array(i,j,k);
+
+            amrex::Real u_cc = 0.5 * (u_array(i, j, k) + u_array(i + 1, j, k));
+            amrex::Real v_cc = 0.5 * (v_array(i, j, k) + v_array(i, j + 1, k));
+            slm_u(i, j, k) = u_cc;
+            slm_v(i, j, k) = v_cc;
+
             // TODO: this is for plotting purposes.. state arrays are at k=0 which is ghost cell for SLM values
             //  SLM AMREX plotfile does not write ghost cells, but NetCDF does - fix?
             rho_array(i, j, khi) = rho_array(i, j, 0);
             pres_array(i, j, khi) = pres_array(i, j, 0);
             tref_array(i, j, khi) = tref_array(i, j, 0);
             qref_array(i, j, khi) = qref_array(i, j, 0);
-            slm_u(i, j, khi) = u_array(i, j, 0);
-            slm_v(i, j, khi) = v_array(i, j, 0);
+            slm_u(i, j, khi) = slm_u(i, j, 0);
+            slm_v(i, j, khi) = slm_v(i, j, 0);
         });
     }
 
