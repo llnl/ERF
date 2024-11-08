@@ -3029,7 +3029,7 @@ std::vector<std::vector<amrex::Real>> SLM::read_cols(const std::string &fname, c
     return datasets;
 }
 
-void SLM::writeSLM_Data(const std::string plotfile_type, const amrex::Real time, const std::string plot_prefix, const int level_step)
+void SLM::writeSLM_Data(const PlotFileType plotfile_type, const amrex::Real time, const std::string plot_prefix, const int level_step)
 {
     std::string plotfilename = amrex::Concatenate(plot_prefix + "2D_", level_step, 5);
 
@@ -3128,18 +3128,17 @@ void SLM::writeSLM_Data(const std::string plotfile_type, const amrex::Real time,
 
     AMREX_ALWAYS_ASSERT(varnames.size() == output_size);
 
-    if (plotfile_type == "amrex") {
+    if (plotfile_type == PlotFileType::Amrex) {
         amrex::WriteSingleLevelPlotfile(plotfilename, fab, varnames, lsm_2d_geom, time, level_step);
 #ifdef ERF_USE_NETCDF
         // Temporarily write NetCDF always
         writeSLM_NetCDF(fab, varnames, time, plot_prefix, level_step);
 #endif
 #ifdef ERF_USE_NETCDF
-    } else if (plotfile_type == "netcdf" || plotfile_type == "NetCDF") {
+    } else if (plotfile_type == PlotFileType::Netcdf) {
         writeSLM_NetCDF(fab, varnames, time, plot_prefix, level_step);
 #endif
     } else {
-        Print() << "User specified plot_filetype = " << plotfile_type << std::endl;
         Abort("Dont know this plot_filetype");
     }
 }

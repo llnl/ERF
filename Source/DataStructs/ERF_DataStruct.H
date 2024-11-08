@@ -65,6 +65,14 @@ AMREX_ENUM(PerturbationType,
     Source, Direct, None
 );
 
+/**
+ * Enum of possible plotfile types
+*/
+AMREX_ENUM(PlotFileType,
+    None, Amrex, Netcdf
+);
+
+
 enum struct Coord {
     x, y, z
 };

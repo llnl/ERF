@@ -267,7 +267,7 @@ public:
         return LSM_Type::SLM;
     }
 
-    void writeSLM_Data(const std::string plotfile_type, const amrex::Real time, const std::string plot_prefix, const int level_step);
+    void writeSLM_Data(const PlotFileType plotfile_type, const amrex::Real time, const std::string plot_prefix, const int level_step);
 
     void init_from_file();
 

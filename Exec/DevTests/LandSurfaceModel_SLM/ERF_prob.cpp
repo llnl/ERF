@@ -87,7 +87,6 @@ Problem::init_custom_pert(
         state_pert(i, j, k, RhoScalar_comp) = 0.0;
 
         state_pert(i, j, k, RhoKE_comp) = 0.0;
-        state_pert(i, j, k, RhoQKE_comp) = 0.0;
 
         if (use_moisture) {
             state_pert(i, j, k, RhoQ1_comp) = 0.0;

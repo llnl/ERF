@@ -83,14 +83,6 @@ AMREX_ENUM(StateInterpType,
     FullState, Perturbational
 );
 
-/**
- * Enum of possible plotfile types
-*/
-AMREX_ENUM(PlotFileType,
-    None, Amrex, Netcdf
-);
-
-
 #if 0
 /**
  * Enum of possible coarse/fine interpolation options

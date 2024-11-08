@@ -85,7 +85,7 @@ public:
     Get_VarName (const int& varIdx) { return m_lsm_model[0]->Lsm_VarName(varIdx); }
 
     void
-    Plot_Lsm_Data (const std::string plotfile_type, amrex::Real time,
+    Plot_Lsm_Data (const PlotFileType plotfile_type, amrex::Real time,
                    const amrex::Vector<int> &level_steps,
                    const amrex::Vector<amrex::IntVect> &ref_ratio)
     {
@@ -113,17 +113,16 @@ public:
                     if (lev==0) varnames[n] = this->Get_VarName(n);
                 }
             }
-            if (plotfile_type == "amrex") {
+            if (plotfile_type == PlotFileType::Amrex) {
                 WriteMultiLevelPlotfile (plotfilename, nlev, GetVecOfConstPtrs(m_lsm_data_lev),
                                          varnames, m_lsm_geom_lev, time, level_steps, ref_ratio);
 #ifdef ERF_USE_NETCDF
-            } else if (plotfile_type == "netcdf" || plotfile_type == "NetCDF") {
+            } else if (plotfile_type == PlotFileType::Netcdf) {
                 int lev   = 0;
                 int l_which = 0;
                 //writeNCPlotFile(lev, l_which, plotfilename, GetVecOfConstPtrs(m_lsm_data_lev), varnames, level_steps, time);
 #endif
             } else {
-                amrex::Print() << "User specified plot_filetype = " << plotfile_type << std::endl;
                 amrex::Abort("Dont know this plot_filetype");
             }
 
