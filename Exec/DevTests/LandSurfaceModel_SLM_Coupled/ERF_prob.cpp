@@ -99,7 +99,7 @@ Problem::init_custom_pert (
     // interpolate the LSF data now using the geometry
     // z_cc is on device!
     amrex::Vector<amrex::Real> zlevels_stag;
-    if (sc.use_terrain) {
+    if (SolverChoice::terrain_type != TerrainType::None) {
         int khi = geomdata.Domain().bigEnd()[2] + 2;
         amrex::Gpu::DeviceVector<Real> d_zlevels_stag_vec(khi);
         amrex::Real *d_zlevels_stag = d_zlevels_stag_vec.data();
