@@ -1,7 +1,7 @@
 #include <ERF_SLM.H>
 #include "ERF_EOS.H"
 #include "ERF_TileNoZ.H"
-#include "ERF_Microphysics_Utils.H"
+#include "ERF_MicrophysicsUtils.H"
 
 #include <AMReX_PlotFileUtil.H>
 
@@ -62,7 +62,7 @@ SLM::Init (const MultiFab& cons_in,
     //       direct copying between lsm data/flux vars cannot be done in a parfor.
 
     // Set box array for lsm data
-    IntVect ng(0,0,1);
+    IntVect ng(1,1,1);
     BoxArray ba = cons_in.boxArray();
     DistributionMapping dm = cons_in.DistributionMap();
     BoxList bl_lsm = ba.boxList();
@@ -1460,6 +1460,13 @@ SLM::AdvanceSLM ()
             }
         });
     }
+
+    lsm_fab_vars[LsmVar_SLM::tsurf]->FillBoundary(m_geom.periodicity());
+    lsm_fab_vars[LsmVar_SLM::ustar]->FillBoundary(m_geom.periodicity());
+    lsm_fab_vars[LsmVar_SLM::tstar]->FillBoundary(m_geom.periodicity());
+    lsm_fab_vars[LsmVar_SLM::qstar]->FillBoundary(m_geom.periodicity());
+    lsm_fab_vars[LsmVar_SLM::flbu]->FillBoundary(m_geom.periodicity());
+    lsm_fab_vars[LsmVar_SLM::flbv]->FillBoundary(m_geom.periodicity());
 }
 
 void SLM::radiative_fluxes(const amrex::MFIter &mfi)
