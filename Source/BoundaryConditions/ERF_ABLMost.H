@@ -15,6 +15,8 @@
 #include <ERF_TerrainMetrics.H>
 #include <ERF_PBLHeight.H>
 
+#include <ERF_SLM.H>
+
 /** Monin-Obukhov surface layer profile
  *
  * van der Laan, P., Kelly, M. C., & Sørensen, N. N. (2017). A new k-epsilon
@@ -271,12 +273,40 @@ public:
             m_lsm_flux_lev[lev][n] = lsm_flux[n];
         }
 
-        if (lsm_data.size() > 1 && lsm_data[1])
+        pp.query("most.use_sfc_fluxes", use_sfc_fluxes);
+
+        if (lsm_data.size() > 1 && lsm_data[1] && !use_sfc_fluxes)
         {
             // If the LSM has more than theta defined, use ustar and tstar from LSM
             use_lsm_most = true; // enable SLM -> MOST coupling
             //use_lsm_most = false; // disable SLM -> MOST coupling
             amrex::Print() << "  MOST: Using ustar and tstar from LSM" << std::endl;
+        }
+
+        if (use_sfc_fluxes)
+        {
+            // load sensible and latent heat fluxes from sfc to prescribe
+            std::string sfc_file = "";
+            pp.query("most.sfc_file", sfc_file);
+
+            sfc = SLM::read_cols(sfc_file, 1);
+
+            // sfc contains: time(day) sst(K) H(W/m2) LE(W/m2) TAU(m2/s2)
+            
+            // convert day to seconds, H to m2/s2, LE to kg/kg m/s
+            // fluxes are divided by rho in MOST routine
+            amrex::Real start_day = sfc[0][0];
+            for(int i = 0; i < sfc[0].size(); i++)
+            {
+                // time
+                sfc[0][i] = 86400.0 * (sfc[0][i] - start_day);
+
+                // sensible heat flux
+                //sfc[2][i] = sfc[2][i] / Cp_d;
+
+                // latent heat flux
+                //sfc[3][i] = sfc[3][i] / L_v;
+            }
         }
 
         // Check if there is a user-specified roughness file to be read
@@ -557,6 +587,10 @@ private:
     amrex::Vector<amrex::FArrayBox> z_0;
     bool m_var_z0{false};
     bool use_lsm_most = false;
+    bool use_sfc_fluxes = false;
+    int sfc_time_ind = 0;
+    amrex::Real sfc_qflux;
+    amrex::Real sfc_tflux;
 
     bool use_moisture;
 
@@ -576,6 +610,9 @@ private:
     amrex::Vector<amrex::MultiFab*>  m_Hwave_lev;
     amrex::Vector<amrex::MultiFab*>  m_Lwave_lev;
     amrex::Vector<amrex::MultiFab*>  m_eddyDiffs_lev;
+
+    std::vector<std::vector<amrex::Real>> sfc;
+
 };
 
 #endif /* ABLMOST_H */

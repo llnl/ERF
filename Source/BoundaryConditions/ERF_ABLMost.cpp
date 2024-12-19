@@ -18,7 +18,7 @@ ABLMost::update_fluxes (const int& lev,
 
     // TODO: we want 0 index to always be theta?
     // Update land surface temp if we have a valid pointer
-    if (m_lsm_data_lev[lev][0]) get_lsm_tsurf(lev);
+    if (m_lsm_data_lev[lev][0] && time > 0.0) get_lsm_tsurf(lev);
 
     // Fill interior ghost cells
     t_surf[lev]->FillBoundary(m_geom[lev].periodicity());
@@ -181,6 +181,49 @@ ABLMost::update_fluxes (const int& lev,
         u_star[lev]->FillBoundary(m_geom[lev].periodicity());
         t_star[lev]->FillBoundary(m_geom[lev].periodicity());
         q_star[lev]->FillBoundary(m_geom[lev].periodicity());
+    
+        m_lsm_data_lev[lev][11]->FillBoundary(m_geom[lev].periodicity());
+        m_lsm_data_lev[lev][12]->FillBoundary(m_geom[lev].periodicity());
+    }
+
+    if (use_sfc_fluxes)
+    {
+        amrex::Real t0 = sfc[0][sfc_time_ind];
+        amrex::Real t1 = sfc[0][sfc_time_ind+1];
+        while (time >= t1)
+        {
+            int prev_index = sfc_time_ind;
+            // shift time index to next window
+            sfc_time_ind = std::min(sfc_time_ind + 1, int(sfc[0].size() - 2));
+            t0 = sfc[0][sfc_time_ind];
+            t1 = sfc[0][sfc_time_ind+1];
+            if (prev_index == sfc_time_ind) {
+                break;
+            }
+        }
+
+        auto linear_interp = [](const amrex::Real t0, const amrex::Real t1, const amrex::Real t,
+                                const amrex::Real x, const amrex::Real y) -> amrex::Real {
+            // returns a value that is linearly interpolated between x and y at time t. x
+            // is at t=t0, y is at t=t1.
+            if (t0 == t1 || t > t1) {
+                return y;
+            }
+            const amrex::Real dt = (t - t0) / (t1 - t0);
+            return x + (y - x) * dt;
+        };
+
+        sfc_qflux = linear_interp(t0, t1, time, sfc[3][sfc_time_ind], sfc[3][sfc_time_ind + 1]);
+        sfc_tflux = linear_interp(t0, t1, time, sfc[2][sfc_time_ind], sfc[2][sfc_time_ind + 1]);
+
+        amrex::Print() << " ABLMOST: Interpolating SHF and LHF at time " << time << ": SHF = " << sfc_tflux << " LHF = " << sfc_qflux << std::endl;
+    
+        // since no rho factors, these can be set here
+        //t_star[lev]->setVal(sfc_tflux / Cp_d);
+        //q_star[lev]->setVal(sfc_qflux / L_v);
+
+        t_star[lev]->setVal(sfc_tflux / 1004.0);
+        q_star[lev]->setVal(sfc_qflux / 2.5104e6);
     }
 }
 
@@ -429,8 +472,33 @@ ABLMost::compute_most_bcs (const int& lev,
         auto lsm_flux_arr = (m_lsm_flux_lev[lev][0]) ? m_lsm_flux_lev[lev][0]->array(mfi) :
                                                        Array4<Real> {};
 
-       auto lsm_flbu_arr = (m_lsm_data_lev[lev][11]) ? m_lsm_data_lev[lev][11]->array(mfi) :Array4<Real> {};
-       auto lsm_flbv_arr = (m_lsm_data_lev[lev][12]) ? m_lsm_data_lev[lev][12]->array(mfi) :Array4<Real> {};
+        const bool use_lsm = use_lsm_most;
+        auto lsm_flbu_arr = (use_lsm_most && m_lsm_data_lev[lev][11]) ? m_lsm_data_lev[lev][11]->array(mfi) : Array4<Real> {};
+        auto lsm_flbv_arr = (use_lsm_most && m_lsm_data_lev[lev][12]) ? m_lsm_data_lev[lev][12]->array(mfi) : Array4<Real> {};
+
+        if (use_sfc_fluxes) {
+            amrex::Real d_sfc_tflux = sfc_tflux;
+            amrex::Real d_sfc_qflux = sfc_qflux;
+
+            /*
+            ParallelFor(vbx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept
+            {
+                const amrex::Real rho = cons_arr(i, j, k, Rho_comp);
+
+                // NOTE: interpolated t and q need to be converted: SHF / Cp * rho, LHF / L_v * rho
+                // SLM branch removed rho factor in Custom MOST stress for tstar and qstar, so add rho factor back here
+                //  -> SHF = rho * (SHF / Cp * rho) -> SHF = SHF / Cp
+                //  -> LHF = rho * (LHF / L_v * rho) -> LHF = LHF / L_v
+                t_star_arr(i, j, 0) = d_sfc_tflux / Cp_d;
+                q_star_arr(i, j, 0) = d_sfc_qflux / L_v;
+            });
+            */
+
+            // Fill interior ghost cells
+            //u_star[lev]->FillBoundary(m_geom[lev].periodicity());
+            //t_star[lev]->FillBoundary(m_geom[lev].periodicity());
+            //q_star[lev]->FillBoundary(m_geom[lev].periodicity());
+        }
 
         for (int var_idx = 0; var_idx < Vars::NumTypes; ++var_idx)
         {
@@ -510,12 +578,16 @@ ABLMost::compute_most_bcs (const int& lev,
                                              t23_arr, t32_arr);
                     } else {
                         if ((k == klo-1) && vbxx.contains(i,j,k) && exp_most) {
-                            int ic, jc;
-                            ic = i  < lbound(cons_arr).x+1 ? lbound(cons_arr).x+1 : i;
-                            jc = j  < lbound(cons_arr).y   ? lbound(cons_arr).y   : j;
-                            ic = ic > ubound(cons_arr).x   ? ubound(cons_arr).x   : ic;
-                            jc = jc > ubound(cons_arr).y   ? ubound(cons_arr).y   : jc;
-                            stressx = lsm_flbu_arr(ic, jc, -1);
+                            if (use_lsm) {
+                                int ic, jc;
+                                ic = i  < lbound(cons_arr).x+1 ? lbound(cons_arr).x+1 : i;
+                                jc = j  < lbound(cons_arr).y   ? lbound(cons_arr).y   : j;
+                                ic = ic > ubound(cons_arr).x   ? ubound(cons_arr).x   : ic;
+                                jc = jc > ubound(cons_arr).y   ? ubound(cons_arr).y   : jc;
+                                //stressx = lsm_flbu_arr(ic, jc, -1);
+                                stressx = 0.5*(lsm_flbu_arr(ic-1, jc, -1) + lsm_flbu_arr(ic, jc, -1));
+                                //stressx = 0.5*(lsm_flbu_arr(i-1, j, -1) + lsm_flbu_arr(i, j, -1));
+                            }
                             t13_arr(i,j,klo) = stressx;
                             if (t31_arr) t31_arr(i,j,klo) = stressx;
                         }
@@ -539,12 +611,16 @@ ABLMost::compute_most_bcs (const int& lev,
                     // NOTE: One stress rotation for ALL the stress components
                     if (!rot_most) {
                         if ((k == klo-1) && vbxy.contains(i,j,k) && exp_most) {
-                            int ic, jc;
-                            ic = i  < lbound(cons_arr).x   ? lbound(cons_arr).x   : i;
-                            jc = j  < lbound(cons_arr).y+1 ? lbound(cons_arr).y+1 : j;
-                            ic = ic > ubound(cons_arr).x   ? ubound(cons_arr).x   : ic;
-                            jc = jc > ubound(cons_arr).y   ? ubound(cons_arr).y   : jc;
-                            stressy = lsm_flbv_arr(ic, jc, -1);
+                            if (use_lsm) {
+                                int ic, jc;
+                                ic = i  < lbound(cons_arr).x   ? lbound(cons_arr).x   : i;
+                                jc = j  < lbound(cons_arr).y+1 ? lbound(cons_arr).y+1 : j;
+                                ic = ic > ubound(cons_arr).x   ? ubound(cons_arr).x   : ic;
+                                jc = jc > ubound(cons_arr).y   ? ubound(cons_arr).y   : jc;
+                                //stressy = lsm_flbv_arr(ic, jc, -1);
+                                stressy = 0.5 * (lsm_flbv_arr(ic, jc-1, -1) + lsm_flbv_arr(ic, jc, -1));
+                                //stressy = 0.5 * (lsm_flbv_arr(i, j-1, -1) + lsm_flbv_arr(i, j, -1));
+                            }
                             t23_arr(i,j,klo) = stressy;
                             if (t32_arr) t32_arr(i,j,klo) = stressy;
                         }
