@@ -2,7 +2,6 @@
 #include "ERF_EOS.H"
 #include "ERF_TileNoZ.H"
 #include "ERF_MicrophysicsUtils.H"
-
 #include <AMReX_PlotFileUtil.H>
 
 using namespace amrex;
@@ -14,6 +13,7 @@ SLM::Init (const MultiFab& cons_in,
            const MultiFab& v_in,
            const Geometry& geom,
            const Real& dt)
+			
 {
     m_dt = dt;
     m_geom = geom;
@@ -211,6 +211,20 @@ SLM::Init (const MultiFab& cons_in,
     net_rad.setVal(0.0);
 
     slm_init();
+
+	//Following Noah-MP, zref if modified to become ztop (canopy topheight) + dz0(center height of the atmosphere's lowest grid)
+  	const Array4<const Real>& z_cc_arr = (solverChoice.terrain_type != TerrainType::None)? z_phys_cc->const_array(mfi) : Array4<Real>{}; 
+	amrex::Print() <<" z_cc_arr:"<<z_cc_arr<<std:endl;
+	Real zlo      = m_geom.ProbLo(2);
+    Real dz       = m_geom.CellSize(2);
+    amrex::Print() <<"zlo:"<<zlo<<" dz:"<<dz<<std::endl;	
+	auto ztop_arr = ztop.array(mfi);
+	amrex::Print() <<" ztop_arr:"<<ztop_arr<<std::endl;
+    Real zcc = (z_cc_arr) ? z_cc_arr(:,:,0) : zlo + 0.5*dz;
+	amrex::Print() <<" zcc:"<<zcc<<std::endl;
+	zref = ztop_arr(:,:,0) + zcc
+	amrex::Print() <<"zref:"<<zref<<std::endl;
+
 }
 
 /**
@@ -1663,11 +1677,6 @@ void SLM::transfer_coeff(const amrex::MFIter &mfi,
     const int d_klo_lsm = klo_lsm;
     const Real dt = m_dt;
 
-  	const Array4<const Real>& z_cc_arr = (solverChoice.terrain_type != TerrainType::None)? z_phys_cc->const_array(mfi) : Array4<Real>{};  
-	Real zlo      = geom.ProbLo(2);
-    Real dz       = geom.CellSize(2);
-	auto ztop_arr = ztop.array(mfi);
-	
 	auto box = mfi.tilebox();
 
     auto landmask_arr = landmask.const_array(mfi);
@@ -1782,10 +1791,6 @@ void SLM::transfer_coeff(const amrex::MFIter &mfi,
 
             q_sfc = q_gr;
         }
-		// Following Noah-MP, This is to avoid the condition where zref < ztop (ztop=canopy top height)
-        Real zcc = (z_cc_arr) ? z_cc_arr(i,j,0) : zlo + 0.5*dz;
-		amrex::Real d_zref = ztop_arr(i,j,0) + zcc
-
         // Inputs:
         // ts = t_sfc
         // th = tref
@@ -1808,6 +1813,7 @@ void SLM::transfer_coeff(const amrex::MFIter &mfi,
         {
             vel = sqrt(std::pow(ur_arr(i, j, 0), 2) + std::pow(vr_arr(i, j, 0), 2) + 1.0);
         }
+		const Real d_zref = zref(i,j)
 
         amrex::Real r = 9.81 / tsp * (thp * (1.0 + epsv * qr_arr(i, j, 0)) - tsp * (1.0 + epsv * q_sfc)) * (d_zref - disp_hgt_arr(i, j, 0)) / (vel*vel);
         r = std::max(-10.0, std::min(r, 0.19));
