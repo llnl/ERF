@@ -285,7 +285,8 @@ public:
 
     void radiative_fluxes(const amrex::MFIter &mfi);
 
-    void transfer_coeff(const amrex::MFIter &mfi);
+    void transfer_coeff(const amrex::MFIter &mfi,std::unique_ptr<MultiFab>& z_phys_cc,
+						const Geometry geom, const SolverChoice& solverChoice);
 
     void resistances(const amrex::MFIter &mfi);
 

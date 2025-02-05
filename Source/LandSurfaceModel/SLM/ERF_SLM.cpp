@@ -1654,14 +1654,21 @@ void SLM::radiative_fluxes(const amrex::MFIter &mfi)
     });
 }
 
-void SLM::transfer_coeff(const amrex::MFIter &mfi)
+void SLM::transfer_coeff(const amrex::MFIter &mfi,
+						std::unique_ptr<MultiFab>& z_phys_cc,
+                   		const Geometry geom,
+                   		const SolverChoice& solverChoice)
 {
     const int d_khi_lsm = khi_lsm;
     const int d_klo_lsm = klo_lsm;
-    const Real d_zref = zref;
     const Real dt = m_dt;
 
-    auto box = mfi.tilebox();
+  	const Array4<const Real>& z_cc_arr = (solverChoice.terrain_type != TerrainType::None)? z_phys_cc->const_array(mfi) : Array4<Real>{};  
+	Real zlo      = geom.ProbLo(2);
+    Real dz       = geom.CellSize(2);
+	auto ztop_arr = ztop.array(mfi);
+	
+	auto box = mfi.tilebox();
 
     auto landmask_arr = landmask.const_array(mfi);
 
@@ -1775,6 +1782,9 @@ void SLM::transfer_coeff(const amrex::MFIter &mfi)
 
             q_sfc = q_gr;
         }
+		// Following Noah-MP, This is to avoid the condition where zref < ztop (ztop=canopy top height)
+        Real zcc = (z_cc_arr) ? z_cc_arr(i,j,0) : zlo + 0.5*dz;
+		amrex::Real d_zref = ztop_arr(i,j,0) + zcc
 
         // Inputs:
         // ts = t_sfc
@@ -1801,7 +1811,6 @@ void SLM::transfer_coeff(const amrex::MFIter &mfi)
 
         amrex::Real r = 9.81 / tsp * (thp * (1.0 + epsv * qr_arr(i, j, 0)) - tsp * (1.0 + epsv * q_sfc)) * (d_zref - disp_hgt_arr(i, j, 0)) / (vel*vel);
         r = std::max(-10.0, std::min(r, 0.19));
-
         // initial guess
         amrex::Real xsi, fm, fh, xsi1;
         amrex::Real xsim0, xsih0;
