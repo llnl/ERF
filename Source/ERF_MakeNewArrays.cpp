@@ -262,6 +262,16 @@ ERF::init_stuff (int lev, const BoxArray& ba, const DistributionMapping& dm,
         precip[lev]->setVal(0.0);
     }
 
+    if (solverChoice.nudging_from_input_sounding) {
+        nudge_data[lev] = std::make_unique<MultiFab>(ba, dm, 4, ngrow_state);
+        nudge_data[lev]->setVal(0.0);
+    }
+
+    if (solverChoice.large_scale_forcing) {
+        lsf_data[lev] = std::make_unique<MultiFab>(ba, dm, 7, ngrow_state);
+        lsf_data[lev]->setVal(0.0);
+    }
+
 #if defined(ERF_USE_WINDFARM)
     //*********************************************************
     // Variables for Fitch model for windfarm parametrization

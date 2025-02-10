@@ -49,6 +49,7 @@ void make_sources (int level,
                    const Real* dptr_wbar_sub,
                    const Vector<Real*> d_rayleigh_ptrs_at_lev,
                    InputSoundingData& input_sounding_data,
+                   LargeScaleForcingData &lsf_data,
                    TurbulentPerturbation& turbPert)
 {
     BL_PROFILE_REGION("erf_make_sources()");
@@ -376,6 +377,7 @@ void make_sources (int level,
         // *************************************************************************************
         // 9. Add nudging towards value specified in input sounding
         // *************************************************************************************
+        /*
         if (solverChoice.nudging_from_input_sounding)
         {
             int itime_n    = 0;
@@ -419,6 +421,8 @@ void make_sources (int level,
                 Real z = (z_cc_arr) ? z_cc_arr(i,j,k) : zlo + (k+0.5)*dz;
                 if (z >= t_z1 && z <= t_z2) {
                     Real nudge = (coeff_n*theta_inp_sound_n[k] + coeff_np1*theta_inp_sound_np1[k]) - (dptr_t_plane(k)/dptr_r_plane(k));
+                    //Real nudge = (dptr_t_plane(k)/dptr_r_plane(k)) - (coeff_n*theta_inp_sound_n[k] + coeff_np1*theta_inp_sound_np1[k]);
+
                     //if (i == 0 && j == 0)
                     //    amrex::Print() << "   nudge i = " << i << " j = " << j << " k = " << k << ": theta_n = " << theta_inp_sound_n[k] << " theta_np1 = " << theta_inp_sound_np1[k] << " t / r plane(k) = " << dptr_t_plane(k) / dptr_r_plane(k) << ": nudge = " << nudge << " nudge*tau = " << nudge*tau_inv << " gamaz = " << gamaz << std::endl;
                     nudge *= tau_inv;
@@ -452,6 +456,7 @@ void make_sources (int level,
                 }
             });
         }
+        */
 
         // *************************************************************************************
         // 10. Add Immersed source terms

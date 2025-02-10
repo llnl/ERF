@@ -40,6 +40,7 @@
 #include <ERF_DataStruct.H>
 #include <ERF_TurbPertStruct.H>
 #include <ERF_InputSoundingData.H>
+#include <ERF_LargeScaleForcingData.H>
 #include <ERF_InputSpongeData.H>
 #include <ERF_ABLMost.H>
 #include <ERF_Derive.H>
@@ -266,6 +267,13 @@ public:
                                       amrex::Gpu::HostVector<amrex::Real>& h_avg_tau23, amrex::Gpu::HostVector<amrex::Real>& h_avg_tau33,
                                       amrex::Gpu::HostVector<amrex::Real>& h_avg_hfx3,  amrex::Gpu::HostVector<amrex::Real>& h_avg_q1fx3,
                                       amrex::Gpu::HostVector<amrex::Real>& h_avg_q2fx3, amrex::Gpu::HostVector<amrex::Real>& h_avg_diss);
+
+    void derive_forcing_profiles_stag(amrex::Gpu::HostVector<amrex::Real>& h_avg_ttend, amrex::Gpu::HostVector<amrex::Real>& h_avg_qtend,
+                                      amrex::Gpu::HostVector<amrex::Real>& h_avg_wsub, 
+                                      amrex::Gpu::HostVector<amrex::Real>& h_avg_thtend, amrex::Gpu::HostVector<amrex::Real>& h_avg_qhtend, amrex::Gpu::HostVector<amrex::Real>& h_avg_tvtend, amrex::Gpu::HostVector<amrex::Real>& h_avg_qvtend,
+                                      amrex::Gpu::HostVector<amrex::Real>& h_avg_tnudge,
+                                      amrex::Gpu::HostVector<amrex::Real>& h_avg_qnudge, amrex::Gpu::HostVector<amrex::Real>& h_avg_unudge,
+                                      amrex::Gpu::HostVector<amrex::Real>& h_avg_vnudge);
 
     // Perform the volume-weighted sum
     amrex::Real
@@ -779,6 +787,10 @@ private:
 
     // Containers for additional SLM inputs
     amrex::Vector<std::unique_ptr<amrex::MultiFab>> precip; // Rate of precipitation fall to surface
+
+    LargeScaleForcingData lsf;
+    amrex::Vector<std::unique_ptr<amrex::MultiFab>> nudge_data; // holds nudging inputs: tnudge, qnudge, unudge, vnudge
+    amrex::Vector<std::unique_ptr<amrex::MultiFab>> lsf_data; //  holds large scale forcing tendencies: ttend, qtend, wsub
 
 #if defined(ERF_USE_RRTMGP)
     amrex::Vector<std::unique_ptr<Radiation>> rad;

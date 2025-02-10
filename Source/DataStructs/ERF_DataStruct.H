@@ -393,6 +393,8 @@ struct SolverChoice {
         pp.query("nudging_t_z1", nudging_t_z1);
         pp.query("nudging_t_z2", nudging_t_z2);
 
+        pp.query("large_scale_forcing", large_scale_forcing);
+
         pp.query("do_radiation", do_radiation);
         pp.query("radiation_qsrc_file", qrad_file);
 
@@ -751,6 +753,10 @@ struct SolverChoice {
     amrex::Real nudging_q_z2 = 10000.0; // TODO: reasonable defaults here?
     amrex::Real nudging_t_z1 = 0.0;
     amrex::Real nudging_t_z2 = 10000.0;
+
+    bool large_scale_forcing = false;
+    std::string lsf_file = "";
+    amrex::Real lsf_timescale = 0.0;
 
     // User specified MOST BC type
     bool use_explicit_most = false;
