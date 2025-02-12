@@ -218,7 +218,7 @@ SLM::Init (const MultiFab& cons_in,
 	// if false, SLM is coupled to ERF atmosphere, therefore, zref is computed  
 	pp.query("SLM_use_inputs",set_from_file);
 
-	if (!set_from_file) {
+    if (!set_from_file) {
         ParmParse pp_erf("erf");
         pp_erf.query("use_terrain", use_terrain);
         amrex::Print()<<" SLM Init(): use_terrain:"<<use_terrain<<std::endl;
@@ -226,7 +226,7 @@ SLM::Init (const MultiFab& cons_in,
         Real zlo      = m_geom.ProbLo(2);
         Real dz       = m_geom.CellSize(2);
         amrex::Print() <<"zlo:"<<zlo<<" dz:"<<dz<<std::endl;	
-    
+        zrefxy.define(ba_lsm_2d, dm, 1, ng_2d); 
         for ( MFIter mfi(cons_in,TileNoZ()); mfi.isValid(); ++mfi) {
             const Box& xybx      = mfi.growntilebox(0);
             const Array4<const Real>& z_cc_arr = (use_terrain) ? z_phys_cc->const_array(mfi) : Array4<Real>{};
@@ -244,7 +244,7 @@ SLM::Init (const MultiFab& cons_in,
 	    }		
     } else {
 	zrefxy.setVal(zref);  // set zrefxy with the value read from inputs file
-	}
+    }
 }
 /**
  * Initialize SLM from input data - used for testing only
