@@ -2,7 +2,7 @@
 #stop_time = 3600    #  1 hour
 #stop_time = 4800    #  1.5 hours
 #stop_time = 7200    #  2 hours
-stop_time = 43200   #  12 hours
+stop_time = 1 #43200   #  12 hours
 #max_step = 3600
 
 amrex.fpe_trap_invalid = 1
@@ -155,16 +155,16 @@ slm.z0_soil = 0.0387  # baresoil roughness length
 slm.mws_mx0 = 50.0    # maximum puddle water storage (mm)
 slm.Rc_max  = 5000.0  # maximum stomatal resistance
 slm.T_opt   = 298.0   # optimum temperature for transpiration
-slm.zref    = 25.0    # height of reference level (m)
+#slm.zref    = 25.0    # height of reference level (m)
 
 slm.SLM_use_inputs = false
 
-#slm.rad_input_file = "CASS_512x512x156_50m_50m_1s_rad_coszrs_combined.nc"
-#slm.rad_input_file = "CASS_256x256x156_50m_50m_1s_rad_coszrs_combined.nc"
-slm.rad_input_file = "CASS_128x128x156_50m_50m_1s_rad_coszrs_combined.nc"
-#slm.rad_input_file = "CASS_32x32x156_50m_50m_1s_rad_coszrs_combined.nc"
-erf.do_radiation = true
-erf.radiation_qsrc_file = "CASS_128x128x156_50m_50m_1s_QRAD.nc"
+##slm.rad_input_file = "CASS_512x512x156_50m_50m_1s_rad_coszrs_combined.nc"
+##slm.rad_input_file = "CASS_256x256x156_50m_50m_1s_rad_coszrs_combined.nc"
+#slm.rad_input_file = "CASS_128x128x156_50m_50m_1s_rad_coszrs_combined.nc"
+##slm.rad_input_file = "CASS_32x32x156_50m_50m_1s_rad_coszrs_combined.nc"
+#erf.do_radiation = true
+#erf.radiation_qsrc_file = "CASS_128x128x156_50m_50m_1s_QRAD.nc"
 
 # Higher values of perturbations lead to instability
 # Instability seems to be coming from BC

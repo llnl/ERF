@@ -12,7 +12,8 @@ SLM::Init (const MultiFab& cons_in,
            const MultiFab& u_in,
            const MultiFab& v_in,
            const Geometry& geom,
-           const Real& dt)
+           const Real& dt,
+           std::unique_ptr<amrex::MultiFab>& z_phys_cc)
 			
 {
     m_dt = dt;
@@ -212,19 +213,30 @@ SLM::Init (const MultiFab& cons_in,
 
     slm_init();
 
-	//Following Noah-MP, zref if modified to become ztop (canopy topheight) + dz0(center height of the atmosphere's lowest grid)
-  	const Array4<const Real>& z_cc_arr = (solverChoice.terrain_type != TerrainType::None)? z_phys_cc->const_array(mfi) : Array4<Real>{}; 
-	amrex::Print() <<" z_cc_arr:"<<z_cc_arr<<std:endl;
+	//Following Noah-MP, zref is modified to become ztop (canopy topheight) + dz0(center height of the atmosphere's lowest grid)
+    ParmParse pp_erf("erf");
+    pp_erf.query("use_terrain", use_terrain);
+	amrex::Print()<<" SLM Init(): use_terrain:"<<use_terrain<<std::endl;
+
 	Real zlo      = m_geom.ProbLo(2);
     Real dz       = m_geom.CellSize(2);
     amrex::Print() <<"zlo:"<<zlo<<" dz:"<<dz<<std::endl;	
-	auto ztop_arr = ztop.array(mfi);
-	amrex::Print() <<" ztop_arr:"<<ztop_arr<<std::endl;
-    Real zcc = (z_cc_arr) ? z_cc_arr(:,:,0) : zlo + 0.5*dz;
-	amrex::Print() <<" zcc:"<<zcc<<std::endl;
-	zref = ztop_arr(:,:,0) + zcc
-	amrex::Print() <<"zref:"<<zref<<std::endl;
+    
+	for ( MFIter mfi(cons_in,TileNoZ()); mfi.isValid(); ++mfi) {
+        const Box& bx      = mfi.tilebox();
+        const Array4<const Real>& z_cc_arr = (use_terrain) ? z_phys_cc->const_array(mfi) : Array4<Real>{};
+		amrex::Print() <<" z_cc_arr:"<<z_cc_arr<<std::endl;
+		auto ztop_arr = ztop.array(mfi);
+		amrex::Print() <<" ztop_arr:"<<ztop_arr<<std::endl;
 
+        ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int) noexcept {
+			amrex::Print()<<"i,j:"<<i<<","<<j<<std::endl;
+    		Real zcc = (z_cc_arr) ? z_cc_arr(i,j,0) : zlo + 0.5*dz;
+			amrex::Print() <<"i,j:"<<i<<j<<" zcc:"<<zcc<<std::endl;
+	//		zref = ztop_arr(:,:,0) + zcc
+	//		amrex::Print() <<"zref:"<<zref<<std::endl;
+		});	
+	}		
 }
 
 /**
@@ -1668,10 +1680,7 @@ void SLM::radiative_fluxes(const amrex::MFIter &mfi)
     });
 }
 
-void SLM::transfer_coeff(const amrex::MFIter &mfi,
-						std::unique_ptr<MultiFab>& z_phys_cc,
-                   		const Geometry geom,
-                   		const SolverChoice& solverChoice)
+void SLM::transfer_coeff(const amrex::MFIter &mfi)
 {
     const int d_khi_lsm = khi_lsm;
     const int d_klo_lsm = klo_lsm;
@@ -1813,7 +1822,7 @@ void SLM::transfer_coeff(const amrex::MFIter &mfi,
         {
             vel = sqrt(std::pow(ur_arr(i, j, 0), 2) + std::pow(vr_arr(i, j, 0), 2) + 1.0);
         }
-		const Real d_zref = zref(i,j)
+		const Real d_zref = zref;
 
         amrex::Real r = 9.81 / tsp * (thp * (1.0 + epsv * qr_arr(i, j, 0)) - tsp * (1.0 + epsv * q_sfc)) * (d_zref - disp_hgt_arr(i, j, 0)) / (vel*vel);
         r = std::max(-10.0, std::min(r, 0.19));

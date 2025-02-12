@@ -24,7 +24,8 @@ class NullSurf {
                const amrex::MultiFab& /*u_in*/,
                const amrex::MultiFab& /*v_in*/,
                const amrex::Geometry& /*geom*/,
-               const amrex::Real& /*dt_advance*/) { }
+               const amrex::Real& /*dt_advance*/, 
+          	   std::unique_ptr<amrex::MultiFab>& /*z_phys_cc*/) { } 
 
     virtual
     void

@@ -165,7 +165,8 @@ public:
           const amrex::MultiFab& u_in,
           const amrex::MultiFab& v_in,
           const amrex::Geometry& geom,
-          const amrex::Real& dt) override;
+          const amrex::Real& dt,
+          std::unique_ptr<amrex::MultiFab>& z_phys_cc) override;
 
     // Wrapper to do all the updating
     void
@@ -393,6 +394,8 @@ private:
 
     amrex::Real tabs_s = 0.0; // surface temperature (K)
     amrex::Real t00 = 300.0; // constant offset for sstxy
+    
+	bool use_terrain = false;
 
     //   TODO: implement reading these input files
     bool readlandtype = false; // read landtype map from file
