@@ -74,8 +74,54 @@ void ERF::MakeNewLevelFromScratch (int lev, Real time, const BoxArray& ba_in,
     // *******************************************************************************************
     init_stuff(lev, ba, dm, lev_new, lev_old, base_state[lev], z_phys_nd[lev]);
 
-    //********************************************************************************************
-    // Land Surface Model
+    // ********************************************************************************************
+    // Build the data structures for calculating diffusive/turbulent terms
+    // ********************************************************************************************
+    update_diffusive_arrays(lev, ba, dm);
+
+    // ********************************************************************************************
+    // Build the data structures for holding sea surface temps
+    // ********************************************************************************************
+    sst_lev[lev].resize(1);     sst_lev[lev][0] = nullptr;
+
+    // ********************************************************************************************
+    // Thin immersed body
+    // *******************************************************************************************
+    init_thin_body(lev, ba, dm);
+
+    // ********************************************************************************************
+    // Initialize the integrator class
+    // ********************************************************************************************
+    initialize_integrator(lev, lev_new[Vars::cons],lev_new[Vars::xvel]);
+
+    // ********************************************************************************************
+    // Initialize the data itself
+    // If (init_type == InitType::WRFInput) then we are initializing terrain and the initial data in
+    //                                      the same call so we must call init_only before update_terrain_arrays
+    // If (init_type != InitType::WRFInput) then we want to initialize the terrain before the initial data
+    //                                      since we may need to use the grid information before constructing
+    //                                      initial idealized data
+    // ********************************************************************************************
+    if (restart_chkfile.empty()) {
+        if ( (solverChoice.init_type == InitType::WRFInput) || (solverChoice.init_type == InitType::Metgrid) )
+        {
+            AMREX_ALWAYS_ASSERT(solverChoice.terrain_type == TerrainType::StaticFittedMesh);
+            init_only(lev, start_time);
+            init_zphys(lev, time);
+            update_terrain_arrays(lev);
+            make_physbcs(lev);
+        } else {
+            init_zphys(lev, time);
+            update_terrain_arrays(lev);
+            // Note that for init_type != InitType::WRFInput and != InitType::Metgrid,
+            // make_physbcs is called inside init_only
+            init_only(lev, start_time);
+        }
+    }
+    
+	//********************************************************************************************
+    // Land Surface Model: This block must be executed after update_terrain_arrays(lev) function.
+	// Because z_phys_cc is used inside SLM to define the reference height
     // *******************************************************************************************
     int lsm_size  = lsm.Get_Data_Size();
     lsm_data[lev].resize(lsm_size);
@@ -163,51 +209,6 @@ void ERF::MakeNewLevelFromScratch (int lev, Real time, const BoxArray& ba_in,
         rad_forcing_ncf.close();
     }
 #endif
-
-    // ********************************************************************************************
-    // Build the data structures for calculating diffusive/turbulent terms
-    // ********************************************************************************************
-    update_diffusive_arrays(lev, ba, dm);
-
-    // ********************************************************************************************
-    // Build the data structures for holding sea surface temps
-    // ********************************************************************************************
-    sst_lev[lev].resize(1);     sst_lev[lev][0] = nullptr;
-
-    // ********************************************************************************************
-    // Thin immersed body
-    // *******************************************************************************************
-    init_thin_body(lev, ba, dm);
-
-    // ********************************************************************************************
-    // Initialize the integrator class
-    // ********************************************************************************************
-    initialize_integrator(lev, lev_new[Vars::cons],lev_new[Vars::xvel]);
-
-    // ********************************************************************************************
-    // Initialize the data itself
-    // If (init_type == InitType::WRFInput) then we are initializing terrain and the initial data in
-    //                                      the same call so we must call init_only before update_terrain_arrays
-    // If (init_type != InitType::WRFInput) then we want to initialize the terrain before the initial data
-    //                                      since we may need to use the grid information before constructing
-    //                                      initial idealized data
-    // ********************************************************************************************
-    if (restart_chkfile.empty()) {
-        if ( (solverChoice.init_type == InitType::WRFInput) || (solverChoice.init_type == InitType::Metgrid) )
-        {
-            AMREX_ALWAYS_ASSERT(solverChoice.terrain_type == TerrainType::StaticFittedMesh);
-            init_only(lev, start_time);
-            init_zphys(lev, time);
-            update_terrain_arrays(lev);
-            make_physbcs(lev);
-        } else {
-            init_zphys(lev, time);
-            update_terrain_arrays(lev);
-            // Note that for init_type != InitType::WRFInput and != InitType::Metgrid,
-            // make_physbcs is called inside init_only
-            init_only(lev, start_time);
-        }
-    }
 
      // Read in tables needed for windfarm simulations
     // fill in Nturb multifab - number of turbines in each mesh cell

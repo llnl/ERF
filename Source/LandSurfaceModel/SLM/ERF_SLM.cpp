@@ -214,31 +214,37 @@ SLM::Init (const MultiFab& cons_in,
     slm_init();
 
 	//Following Noah-MP, zref is modified to become ztop (canopy topheight) + dz0(center height of the atmosphere's lowest grid)
-    ParmParse pp_erf("erf");
-    pp_erf.query("use_terrain", use_terrain);
-	amrex::Print()<<" SLM Init(): use_terrain:"<<use_terrain<<std::endl;
+    //First, read in SLM_use_inputs, if true, zref is set from the inputs parameter slm.zref
+	// if false, SLM is coupled to ERF atmosphere, therefore, zref is computed  
+	pp.query("SLM_use_inputs",set_from_file);
 
-	Real zlo      = m_geom.ProbLo(2);
-    Real dz       = m_geom.CellSize(2);
-    amrex::Print() <<"zlo:"<<zlo<<" dz:"<<dz<<std::endl;	
+	if (!set_from_file) {
+        ParmParse pp_erf("erf");
+        pp_erf.query("use_terrain", use_terrain);
+        amrex::Print()<<" SLM Init(): use_terrain:"<<use_terrain<<std::endl;
+
+        Real zlo      = m_geom.ProbLo(2);
+        Real dz       = m_geom.CellSize(2);
+        amrex::Print() <<"zlo:"<<zlo<<" dz:"<<dz<<std::endl;	
     
-	for ( MFIter mfi(cons_in,TileNoZ()); mfi.isValid(); ++mfi) {
-        const Box& bx      = mfi.tilebox();
-        const Array4<const Real>& z_cc_arr = (use_terrain) ? z_phys_cc->const_array(mfi) : Array4<Real>{};
-		amrex::Print() <<" z_cc_arr:"<<z_cc_arr<<std::endl;
-		auto ztop_arr = ztop.array(mfi);
-		amrex::Print() <<" ztop_arr:"<<ztop_arr<<std::endl;
+        for ( MFIter mfi(cons_in,TileNoZ()); mfi.isValid(); ++mfi) {
+            const Box& xybx      = mfi.growntilebox(0);
+            const Array4<const Real>& z_cc_arr = (use_terrain) ? z_phys_cc->const_array(mfi) : Array4<Real>{};
+            amrex::Print() <<" z_cc_arr:"<<z_cc_arr<<std::endl;
+            auto ztop_arr = ztop.array(mfi);
+            amrex::Print() <<" ztop_arr:"<<ztop_arr<<std::endl;
 
-        ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int) noexcept {
-			amrex::Print()<<"i,j:"<<i<<","<<j<<std::endl;
-    		Real zcc = (z_cc_arr) ? z_cc_arr(i,j,0) : zlo + 0.5*dz;
-			amrex::Print() <<"i,j:"<<i<<j<<" zcc:"<<zcc<<std::endl;
-	//		zref = ztop_arr(:,:,0) + zcc
-	//		amrex::Print() <<"zref:"<<zref<<std::endl;
-		});	
-	}		
+            ParallelFor(xybx, [=] AMREX_GPU_DEVICE(int i, int j, int) noexcept {
+                amrex::Print()<<"i,j:"<<i<<","<<j<<std::endl;
+                amrex::Print()<<"z_cc_arr:"<<z_cc_arr(i,j,0)<<std::endl;
+                Real zcc = (z_cc_arr) ? z_cc_arr(i,j,0) : zlo + 0.5*dz;
+                amrex::Print() <<"i,j:"<<i<<j<<" zcc:"<<zcc<<std::endl;
+	//		    zref = ztop_arr(i,j,0) + zcc
+	//		    amrex::Print() <<"zref:"<<zref<<std::endl;
+		    });	
+	    }		
+    }
 }
-
 /**
  * Initialize SLM from input data - used for testing only
  */
