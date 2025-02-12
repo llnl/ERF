@@ -131,7 +131,7 @@ void ERF::advance_dycore(int level,
 
         r_ave.line_average(Rho_comp, r_plane_h);
 
-        Gpu::copyAsync(Gpu::hostToDevice, r_plane_h.begin(), r_plane_h.end(), r_plane_d.begin());
+        Gpu::copy(Gpu::hostToDevice, r_plane_h.begin(), r_plane_h.end(), r_plane_d.begin());
 
         Real* dptr_r = r_plane_d.data();
 
@@ -155,7 +155,7 @@ void ERF::advance_dycore(int level,
 
         t_ave.line_average(RhoTheta_comp, t_plane_h);
 
-        Gpu::copyAsync(Gpu::hostToDevice, t_plane_h.begin(), t_plane_h.end(), t_plane_d.begin());
+        Gpu::copy(Gpu::hostToDevice, t_plane_h.begin(), t_plane_h.end(), t_plane_d.begin());
 
         Real* dptr_t = t_plane_d.data();
 
@@ -176,7 +176,7 @@ void ERF::advance_dycore(int level,
             PlaneAverage qv_ave(&(state_old[IntVars::cons]), fine_geom, solverChoice.ave_plane, true);
             qv_ave.compute_averages(ZDir(), qv_ave.field());
             qv_ave.line_average(RhoQ1_comp, qv_plane_h);
-            Gpu::copyAsync(Gpu::hostToDevice, qv_plane_h.begin(), qv_plane_h.end(), qv_plane_d.begin());
+            Gpu::copy(Gpu::hostToDevice, qv_plane_h.begin(), qv_plane_h.end(), qv_plane_d.begin());
 
             Real* dptr_qv = qv_plane_d.data();
             qv_plane_tab.resize({tdomain.smallEnd(2)}, {tdomain.bigEnd(2)});
@@ -202,8 +202,8 @@ void ERF::advance_dycore(int level,
         u_ave.line_average(0, u_plane_h);
         v_ave.line_average(0, v_plane_h);
 
-        Gpu::copyAsync(Gpu::hostToDevice, u_plane_h.begin(), u_plane_h.end(), u_plane_d.begin());
-        Gpu::copyAsync(Gpu::hostToDevice, v_plane_h.begin(), v_plane_h.end(), v_plane_d.begin());
+        Gpu::copy(Gpu::hostToDevice, u_plane_h.begin(), u_plane_h.end(), u_plane_d.begin());
+        Gpu::copy(Gpu::hostToDevice, v_plane_h.begin(), v_plane_h.end(), v_plane_d.begin());
 
         Real* dptr_u = u_plane_d.data();
         Real* dptr_v = v_plane_d.data();

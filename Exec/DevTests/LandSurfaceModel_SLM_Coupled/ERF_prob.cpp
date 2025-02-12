@@ -56,6 +56,7 @@ Problem::Problem (const Real* problo, const Real* probhi)
 
 
     // Forcing files for SLM test
+    /*
     pp.query("large_scale_forcing_file", parms.lsf_file);
     pp.query("sounding_file", parms.snd_file);
     pp.query("forcing_timescale", parms.lsf_scale);
@@ -65,7 +66,7 @@ Problem::Problem (const Real* problo, const Real* probhi)
         // read the lsf file
         read_forcing_file(parms.lsf_file, nt_lsf, nz_lsf, times_lsf, z_lsf, p_lsf, t_lsf, q_lsf, u_lsf, v_lsf, w_lsf);
     }
-
+    */
     //===========================================================================
 
     init_base_parms(parms.rho_0, parms.T_0);
@@ -93,13 +94,15 @@ Problem::init_custom_pert (
     const SolverChoice& sc)
 {
     const bool use_moisture = (sc.moisture_type != MoistureType::None);
+    const bool use_terrain = (sc.terrain_type != TerrainType::None);
 
     const Real rdOcp   = sc.rdOcp;
 
     // interpolate the LSF data now using the geometry
     // z_cc is on device!
     amrex::Vector<amrex::Real> zlevels_stag;
-    if (SolverChoice::terrain_type != TerrainType::None) {
+    /*
+    if (use_terrain) {
         int khi = geomdata.Domain().bigEnd()[2] + 2;
         amrex::Gpu::DeviceVector<Real> d_zlevels_stag_vec(khi);
         amrex::Real *d_zlevels_stag = d_zlevels_stag_vec.data();
@@ -112,7 +115,8 @@ Problem::init_custom_pert (
         amrex::Gpu::copy(amrex::Gpu::deviceToHost, d_zlevels_stag_vec.begin(), d_zlevels_stag_vec.end(), zlevels_stag.begin());
     }
     interp_forcing(geomdata, zlevels_stag, times_lsf, z_lsf, t_lsf, q_lsf, u_lsf, v_lsf, w_lsf);
-
+    */
+   
     ParallelForRNG(bx, [=, parms_d=parms] AMREX_GPU_DEVICE(int i, int j, int k, const RandomEngine& engine) noexcept
     {
         // Geometry
@@ -121,7 +125,7 @@ Problem::init_custom_pert (
         const Real* dx = geomdata.CellSize();
         const Real x = prob_lo[0] + (i + 0.5) * dx[0];
         const Real y = prob_lo[1] + (j + 0.5) * dx[1];
-        const Real z = prob_lo[2] + (k + 0.5) * dx[2];
+        const Real z = (use_terrain) ? z_cc(i, j, k) : prob_lo[2] + (k + 0.5) * dx[2];
 
         // Define a point (xc,yc,zc) at the center of the domain
         const Real xc = 0.5 * (prob_lo[0] + prob_hi[0]);
@@ -148,10 +152,12 @@ Problem::init_custom_pert (
 
             Real theta_new = getThgivenPandT(Tnew,P,rdOcp);
             Real rhonew    = getRhogivenThetaPress(theta_new,P,rdOcp,qv);
-            state_pert(i, j, k, Rho_comp) = rhonew - rho;
+            //state_pert(i, j, k, Rho_comp) = rhonew - rho;
+            state_pert(i, j, k, Rho_comp) = 0.0;
 
             // Note we do not perturb this
-            state_pert(i, j, k, RhoTheta_comp) = 0.0;
+            //state_pert(i, j, k, RhoTheta_comp) = 0.0;
+            state_pert(i, j, k, RhoTheta_comp) = rhotheta - (theta_new * rhonew);
 
             //  Instead of perturbing (rho theta) we perturb T and hold (rho theta) fixed,
             //  which ends up being stored as a perturbation in rho
@@ -171,6 +177,7 @@ Problem::init_custom_pert (
         if (use_moisture) {
             state_pert(i, j, k, RhoQ1_comp) = 0.0;
             state_pert(i, j, k, RhoQ2_comp) = 0.0;
+            /*
             if ((z <= parms_d.pert_ref_height) && (parms_d.qv_0_Pert_Mag != 0.0))
             {
                 Real rhoold = state(i,j,k,Rho_comp);
@@ -183,6 +190,7 @@ Problem::init_custom_pert (
 
                 state_pert(i, j, k, RhoQ1_comp) = rhonew * qvnew - rhoold * qvold;
             }
+            */
         }
     });
 
@@ -295,17 +303,20 @@ Problem::update_rhotheta_sources (const Real& time,
 
     // Only apply temperature source below nominal inversion height
     for (int k = 0; k <= khi; k++) {
+        /*
         const Real z_cc = (z_phys_cc) ? zlevels[k] : prob_lo[2] + (k+0.5)* dx[2];
 
         if (lsf_forcing)
         {
             // apply tls forcing
             src[k] = t_int_lsf[itime_curr][k] * coeff_curr + t_int_lsf[itime_next][k] * coeff_next;
-            //amrex::Print() << " rhotheta forcing: k = " << k << ": tls_curr = " << t_int_lsf[itime_curr][k] << " tls_next = " << t_int_lsf[itime_next][k] << " src = " << src[k] << " src_scaled = " << src[k] * inv_scale << std::endl;
+            amrex::Print() << " rhotheta forcing: k = " << k << ": tls_curr = " << t_int_lsf[itime_curr][k] << " tls_next = " << t_int_lsf[itime_next][k] << " src = " << src[k] << " src_scaled = " << src[k] * inv_scale << std::endl;
             src[k] *= inv_scale;
         } else {
             src[k] = 0.0;
         }
+        */
+        src[k] = 0.0;
     }
 
     // Copy from host version to device version
@@ -351,6 +362,7 @@ Problem::update_rhoqt_sources (const Real& time,
 
     // Only apply temperature source below nominal inversion height
     for (int k = 0; k <= khi; k++) {
+        /*
         const Real z_cc = (z_phys_cc) ? zlevels[k] : prob_lo[2] + (k+0.5)* dx[2];
 
         if (lsf_forcing)
@@ -362,7 +374,8 @@ Problem::update_rhoqt_sources (const Real& time,
         } else {
             qsrc[k] = 0.0;
         }
-
+        */
+        qsrc[k] = 0.0;
     }
 
     // Copy from host version to device version
@@ -417,6 +430,7 @@ Problem::update_w_subsidence (const Real& time,
     for (int k = 0; k <= khi; k++) {
         const Real z_cc = (z_phys_cc) ? zlevels[k] : prob_lo[2] + k*dx[2];
 
+        /*
         if (lsf_forcing)
         {
             // apply wls forcing
@@ -426,6 +440,8 @@ Problem::update_w_subsidence (const Real& time,
         } else {
             wbar[k] = 0.0;
         }
+        */
+        wbar[k] = 0.0;
     }
 
     // Copy from host version to device version
@@ -480,6 +496,7 @@ Problem::update_geostrophic_profile (const Real& time,
         //u_geos[k] =  u_geo_wind; // 0; // -coriolis_factor * v_geo_wind
         //v_geos[k] =  0 ; // coriolis *  u_geo_wind;
 
+        /*
         if (lsf_forcing)
         {
             // apply uls and vls forcing
@@ -494,7 +511,9 @@ Problem::update_geostrophic_profile (const Real& time,
             u_geos[k] = 0.0;
             v_geos[k] = 0.0;
         }
-
+        */
+       u_geos[k] = 0.0;
+       v_geos[k] = 0.0;
     }
 
     // Copy from host version to device version
