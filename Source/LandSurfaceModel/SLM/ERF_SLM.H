@@ -425,6 +425,7 @@ private:
     amrex::Real T_opt = 298.0; // optimum temperature for transpiration
 
     amrex::Real zref = 0.5; // height of reference level (m), used in transer coef
+	amrex::MultiFab zrefxy;
 
     // Model variables
     //   NOTE: these MultiFabs are defined over the grid only in X and Y (no Z component)

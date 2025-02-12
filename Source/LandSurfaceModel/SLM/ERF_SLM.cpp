@@ -233,17 +233,18 @@ SLM::Init (const MultiFab& cons_in,
             amrex::Print() <<" z_cc_arr:"<<z_cc_arr<<std::endl;
             auto ztop_arr = ztop.array(mfi);
             amrex::Print() <<" ztop_arr:"<<ztop_arr<<std::endl;
+			auto zrefxy_arr = zrefxy.array(mfi);
 
             ParallelFor(xybx, [=] AMREX_GPU_DEVICE(int i, int j, int) noexcept {
-                amrex::Print()<<"i,j:"<<i<<","<<j<<std::endl;
-                amrex::Print()<<"z_cc_arr:"<<z_cc_arr(i,j,0)<<std::endl;
                 Real zcc = (z_cc_arr) ? z_cc_arr(i,j,0) : zlo + 0.5*dz;
-                amrex::Print() <<"i,j:"<<i<<j<<" zcc:"<<zcc<<std::endl;
-	//		    zref = ztop_arr(i,j,0) + zcc
-	//		    amrex::Print() <<"zref:"<<zref<<std::endl;
+                amrex::Print() <<"i,j:"<<i<<", "<<j<<" zcc:"<<zcc<<" ztop:"<<ztop_arr(i,j,0)<<std::endl;
+			    zrefxy_arr(i,j,0) = ztop_arr(i,j,0) + zcc;
+                amrex::Print() <<"i,j:"<<i<<", "<<j<<" zcc:"<<zcc<<" ztop:"<<ztop_arr(i,j,0)<<" zref:"<<zrefxy_arr(i,j,0)<<std::endl;
 		    });	
 	    }		
-    }
+    } else {
+	zrefxy.setVal(zref);  // set zrefxy with the value read from inputs file
+	}
 }
 /**
  * Initialize SLM from input data - used for testing only
@@ -1724,6 +1725,8 @@ void SLM::transfer_coeff(const amrex::MFIter &mfi)
     auto precip_array  = lsm_fab_vars[LsmVar_SLM::precipref]->const_array(mfi);
 
     auto r_a_arr = r_a.array(mfi);
+	
+	auto zref_arr = zrefxy.array(mfi);
 
     auto flbu_arr  = lsm_fab_vars[LsmVar_SLM::flbu]->array(mfi);
     auto flbv_arr  = lsm_fab_vars[LsmVar_SLM::flbv]->array(mfi);
@@ -1828,9 +1831,10 @@ void SLM::transfer_coeff(const amrex::MFIter &mfi)
         {
             vel = sqrt(std::pow(ur_arr(i, j, 0), 2) + std::pow(vr_arr(i, j, 0), 2) + 1.0);
         }
-		const Real d_zref = zref;
+		const Real d_zref = zref_arr(i,j,0);
+		amrex::Print() <<"i, j:"<<i<<", "<<j<<" d_zref:"<<d_zref<<std::endl;
 
-        amrex::Real r = 9.81 / tsp * (thp * (1.0 + epsv * qr_arr(i, j, 0)) - tsp * (1.0 + epsv * q_sfc)) * (d_zref - disp_hgt_arr(i, j, 0)) / (vel*vel);
+		amrex::Real r = 9.81 / tsp * (thp * (1.0 + epsv * qr_arr(i, j, 0)) - tsp * (1.0 + epsv * q_sfc)) * (d_zref - disp_hgt_arr(i, j, 0)) / (vel*vel);
         r = std::max(-10.0, std::min(r, 0.19));
         // initial guess
         amrex::Real xsi, fm, fh, xsi1;
