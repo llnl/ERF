@@ -4,7 +4,7 @@
 #stop_time = 7200    #  2 hours
 stop_time = 43200   #  12 hours
 
-max_step = 300
+max_step = 2 #300
 
 amrex.fpe_trap_invalid = 0
 
@@ -51,7 +51,7 @@ erf.most.zref   = 25.0
 erf.use_explicit_most   = 1
 
 #  -- Surface forcing for MOST
-erf.most.use_sfc_fluxes = 1
+erf.most.use_sfc_fluxes = 0 #1
 erf.most.sfc_file = "sfc_cass"
 
 # NOTE: This should have a qv grad too (use hoextrapcc?!)
@@ -143,7 +143,7 @@ erf.large_scale_forcing = true
 erf.forcing_timescale = 3600.0 #tauls
 erf.large_scale_forcing_file = "lsf_cass"
 
-#erf.land_surface_model = "SLM"
+erf.land_surface_model = "SLM"
 
 # ------------------------
 # SLM configuration
@@ -173,11 +173,11 @@ slm.SLM_use_inputs = false
 
 #slm.rad_input_file = "CASS_512x512x156_50m_50m_1s_rad_coszrs_combined.nc"
 #slm.rad_input_file = "CASS_256x256x156_50m_50m_1s_rad_coszrs_combined.nc"
-slm.rad_input_file = "CASS_128x128x156_50m_50m_1s_rad_coszrs_combined.nc"
+#slm.rad_input_file = "CASS_128x128x156_50m_50m_1s_rad_coszrs_combined.nc"
 #slm.rad_input_file = "CASS_32x32x156_50m_50m_1s_rad_coszrs_combined.nc"
 #erf.do_radiation = true
-erf.do_radiation = false
-erf.radiation_qsrc_file = "CASS_128x128x156_50m_50m_1s_QRAD.nc"
+#erf.do_radiation = false
+#erf.radiation_qsrc_file = "CASS_128x128x156_50m_50m_1s_QRAD.nc"
 
 # Higher values of perturbations lead to instability
 # Instability seems to be coming from BC
