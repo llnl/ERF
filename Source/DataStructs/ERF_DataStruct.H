@@ -397,6 +397,9 @@ struct SolverChoice {
 
         pp.query("do_radiation", do_radiation);
         pp.query("radiation_qsrc_file", qrad_file);
+#ifdef ERF_USE_RRTMGP
+        AMREX_ALWAYS_ASSERT_WITH_MESSAGE(do_radiation == false, "do_radiation forcing option incompatible with RRTMG!");
+#endif
 
         have_geo_wind_profile = (!abl_geo_wind_table.empty() || custom_geostrophic_profile);
         AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!(!abl_geo_wind_table.empty() && custom_geostrophic_profile),

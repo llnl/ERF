@@ -11,7 +11,7 @@ void ERF::advance_lsm (int lev,
     if (solverChoice.lsm_type != LandSurfaceType::None) {
         lsm.Update_Lsm_Vars_Lev(lev, cons, u_in, v_in);
 #ifdef ERF_USE_RRTMGP
-        //lsm.set_LSM_flux_inputs(lev, sw_lw_fluxes[lev].get(), solar_zenith[lev].get());
+        lsm.set_LSM_flux_inputs(lev, sw_lw_fluxes[lev].get(), solar_zenith[lev].get());
 #endif
         const bool use_moist = solverChoice.moisture_type != MoistureType::None && solverChoice.moisture_type != MoistureType::Kessler_NoRain;
         int rain_comp = 8;
