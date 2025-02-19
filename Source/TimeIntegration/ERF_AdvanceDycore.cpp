@@ -260,10 +260,11 @@ void ERF::advance_dycore(int level,
         {
         for ( MFIter mfi(state_old[IntVars::cons],TileNoZ()); mfi.isValid(); ++mfi)
         {
-            Box bx  = mfi.growntilebox();
+            Box bx  = mfi.growntilebox(IntVect(1, 1, 0));
             const Array4<Real>& cell_data = state_old[IntVars::cons].array(mfi);
             const Array4<Real>& lsf_arr = lsf_data[0]->array(mfi);
             Real zlo = fine_geom.ProbLo(2);
+            const int kmin = bx.smallEnd(2); // minimum k for vertical subsidence
             Real dzInv = fine_geom.InvCellSize(2);
             const Array4<const Real>& z_cc_arr = (l_use_terrain_fitted_coords) ? z_phys_cc[0]->const_array(mfi) : Array4<Real>{};
 
@@ -299,7 +300,7 @@ void ERF::advance_dycore(int level,
                 amrex::Real qvtend = -rdz * ( (cell_data(i, j, k1, RhoQ1_comp) / cell_data(i, j, k1, Rho_comp)) - (cell_data(i, j, k2, RhoQ1_comp) / cell_data(i, j, k2, Rho_comp)));
                 amrex::Real qctend = -rdz * ( (cell_data(i, j, k1, RhoQ2_comp) / cell_data(i, j, k1, Rho_comp)) - (cell_data(i, j, k2, RhoQ2_comp) / cell_data(i, j, k2, Rho_comp)));
 
-                if (k < 2 || k > 319) {
+                if (k < kmin) {
                     tvtend = 0.0;
                     qvtend = 0.0;
                 }
@@ -377,7 +378,7 @@ void ERF::advance_dycore(int level,
         {
         for ( MFIter mfi(state_old[IntVars::cons],TileNoZ()); mfi.isValid(); ++mfi)
         {
-            Box bx  = mfi.growntilebox();
+            Box bx = mfi.growntilebox(IntVect(1, 1, 0));
             const Array4<Real>& cell_data  = state_old[IntVars::cons].array(mfi);
             const Array4<const Real>& z_cc_arr = (l_use_terrain_fitted_coords) ? z_phys_cc[0]->const_array(mfi) : Array4<Real>{};
             const Array4<Real>& nudge_arr = nudge_data[0]->array(mfi);
