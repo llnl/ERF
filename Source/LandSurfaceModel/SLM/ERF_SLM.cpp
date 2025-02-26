@@ -1694,7 +1694,7 @@ void SLM::transfer_coeff(const amrex::MFIter &mfi)
     const int d_klo_lsm = klo_lsm;
     const Real dt = m_dt;
 
-	auto box = mfi.tilebox();
+    auto box = mfi.tilebox();
 
     auto landmask_arr = landmask.const_array(mfi);
 
