@@ -3,6 +3,7 @@
 #include "ERF_TileNoZ.H"
 #include "ERF_MicrophysicsUtils.H"
 #include <AMReX_PlotFileUtil.H>
+#include "ERF.H"
 
 using namespace amrex;
 
@@ -1832,7 +1833,6 @@ void SLM::transfer_coeff(const amrex::MFIter &mfi)
             vel = sqrt(std::pow(ur_arr(i, j, 0), 2) + std::pow(vr_arr(i, j, 0), 2) + 1.0);
         }
 		const Real d_zref = zref_arr(i,j,0);
-		amrex::Print() <<"i, j:"<<i<<", "<<j<<" d_zref:"<<d_zref<<std::endl;
 
 		amrex::Real r = 9.81 / tsp * (thp * (1.0 + epsv * qr_arr(i, j, 0)) - tsp * (1.0 + epsv * q_sfc)) * (d_zref - disp_hgt_arr(i, j, 0)) / (vel*vel);
         r = std::max(-10.0, std::min(r, 0.19));
