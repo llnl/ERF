@@ -17,7 +17,9 @@ set(TEST_FILES "${CMAKE_CURRENT_SOURCE_DIR}/inputs"
                "${CMAKE_CURRENT_SOURCE_DIR}/sfc_cass"
                "${CMAKE_CURRENT_SOURCE_DIR}/sounding_cass"
                "${CMAKE_CURRENT_SOURCE_DIR}/sounding_cass_2"
-               "${CMAKE_CURRENT_SOURCE_DIR}/sounding_cass_interpolated")
+               "${CMAKE_CURRENT_SOURCE_DIR}/sounding_cass_interpolated"
+			   "${CMAKE_CURRENT_SOURCE_DIR}/inputs_lba_slm_rrtmg_anelastic"
+			   "${CMAKE_CURRENT_SOURCE_DIR}/snd_lba")
 file(COPY ${TEST_FILES} DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/")
 
 include(${CMAKE_SOURCE_DIR}/CMake/BuildERFExe.cmake)
