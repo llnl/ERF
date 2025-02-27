@@ -268,7 +268,7 @@ ERF::init_stuff (int lev, const BoxArray& ba, const DistributionMapping& dm,
     }
 
     if (solverChoice.large_scale_forcing) {
-        lsf_data[lev] = std::make_unique<MultiFab>(ba, dm, 7, ngrow_state);
+        lsf_data[lev] = std::make_unique<MultiFab>(ba, dm, 8, ngrow_state);
         lsf_data[lev]->setVal(0.0);
     }
 

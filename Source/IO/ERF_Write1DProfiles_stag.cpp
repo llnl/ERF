@@ -46,7 +46,7 @@ ERF::write_1D_profiles_stag (Real time)
 
 
         Gpu::HostVector<Real> h_avg_ttend, h_avg_qtend, h_avg_wsub, h_avg_tnudge, h_avg_qnudge, h_avg_unudge, h_avg_vnudge;   
-        Gpu::HostVector<Real> h_avg_thtend, h_avg_qhtend, h_avg_tvtend, h_avg_qvtend;
+        Gpu::HostVector<Real> h_avg_thtend, h_avg_qhtend, h_avg_tvtend, h_avg_qvtend, h_avg_qcvtend;
         if (NumDataLogs() > 1) {
             derive_diag_profiles_stag(time,
                                       h_avg_u, h_avg_v, h_avg_w,
@@ -71,7 +71,7 @@ ERF::write_1D_profiles_stag (Real time)
 
         if (NumDataLogs() > 4 && time > 0.) {
             derive_forcing_profiles_stag(h_avg_ttend, h_avg_qtend, h_avg_wsub,
-                                         h_avg_thtend, h_avg_qhtend, h_avg_tvtend, h_avg_qvtend,
+                                         h_avg_thtend, h_avg_qhtend, h_avg_tvtend, h_avg_qvtend, h_avg_qcvtend,
                                          h_avg_tnudge, h_avg_qnudge, h_avg_unudge,
                                          h_avg_vnudge);
         }
@@ -287,7 +287,7 @@ ERF::write_1D_profiles_stag (Real time)
                         data_log4 << std::setw(datwidth) << std::setprecision(timeprecision) << time << " "
                                   << std::setw(datwidth) << std::setprecision(datprecision) << z << " "
                                   << h_avg_ttend[k]  << " " << h_avg_qtend[k]  << " " << h_avg_wsub[k]   << " "
-                                  << h_avg_thtend[k]  << " " << h_avg_qhtend[k]  << " " << h_avg_tvtend[k]  << " " << h_avg_qvtend[k]  << " " 
+                                  << h_avg_thtend[k]  << " " << h_avg_qhtend[k]  << " " << h_avg_tvtend[k]  << " " << h_avg_qvtend[k]  << " " << h_avg_qcvtend[k] << " "
                                   << h_avg_tnudge[k] << " " << h_avg_qnudge[k] << " " << h_avg_unudge[k] << " "
                                   << h_avg_vnudge[k]
                                   << std::endl;
@@ -298,7 +298,7 @@ ERF::write_1D_profiles_stag (Real time)
                   data_log4 << std::setw(datwidth) << std::setprecision(timeprecision) << time << " "
                             << std::setw(datwidth) << std::setprecision(datprecision) << z << " "
                             << NANval << " " << NANval << " " << NANval << " "
-                            << NANval << " " << NANval << " " << NANval << " " << NANval << " "
+                            << NANval << " " << NANval << " " << NANval << " " << NANval << " " << NANval << " "
                             << NANval << " " << NANval << " " << NANval << " "
                             << NANval
                             << std::endl;
@@ -764,6 +764,7 @@ ERF::derive_forcing_profiles_stag(Gpu::HostVector<Real>& h_avg_ttend, Gpu::HostV
                                   Gpu::HostVector<Real>& h_avg_wsub, 
                                   Gpu::HostVector<Real>& h_avg_thtend, Gpu::HostVector<Real>& h_avg_qhtend,
                                   Gpu::HostVector<Real>& h_avg_tvtend, Gpu::HostVector<Real>& h_avg_qvtend,
+                                  Gpu::HostVector<Real>& h_avg_qcvtend,
                                   Gpu::HostVector<Real>& h_avg_tnudge,
                                   Gpu::HostVector<Real>& h_avg_qnudge, Gpu::HostVector<Real>& h_avg_unudge,
                                   Gpu::HostVector<Real>& h_avg_vnudge)
@@ -785,6 +786,7 @@ ERF::derive_forcing_profiles_stag(Gpu::HostVector<Real>& h_avg_ttend, Gpu::HostV
         h_avg_qhtend   = sumToLine(*lsf_data[lev], 4,1,domain,zdir);
         h_avg_tvtend   = sumToLine(*lsf_data[lev], 5,1,domain,zdir);
         h_avg_qvtend   = sumToLine(*lsf_data[lev], 6,1,domain,zdir);
+        h_avg_qcvtend  = sumToLine(*lsf_data[lev], 7,1,domain,zdir);
     } else {
         h_avg_ttend = Gpu::HostVector<Real>(nz, 0.0);
         h_avg_qtend = Gpu::HostVector<Real>(nz, 0.0);
@@ -793,6 +795,7 @@ ERF::derive_forcing_profiles_stag(Gpu::HostVector<Real>& h_avg_ttend, Gpu::HostV
         h_avg_qhtend = Gpu::HostVector<Real>(nz, 0.0);
         h_avg_tvtend = Gpu::HostVector<Real>(nz, 0.0);
         h_avg_qvtend = Gpu::HostVector<Real>(nz, 0.0);
+        h_avg_qcvtend = Gpu::HostVector<Real>(nz, 0.0);
     }
 
     if (solverChoice.nudging_from_input_sounding) {
@@ -819,6 +822,7 @@ ERF::derive_forcing_profiles_stag(Gpu::HostVector<Real>& h_avg_ttend, Gpu::HostV
             h_avg_qhtend[k]     /= area_z;
             h_avg_tvtend[k]     /= area_z;
             h_avg_qvtend[k]     /= area_z;
+            h_avg_qcvtend[k]    /= area_z;
         }
 
         if (solverChoice.nudging_from_input_sounding) {

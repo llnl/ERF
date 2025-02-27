@@ -310,6 +310,8 @@ void ERF::advance_dycore(int level,
 
                 lsf_arr(i, j, k, 5) = tvtend;
                 lsf_arr(i, j, k, 6) = qvtend;
+
+                lsf_arr(i, j, k, 7) = qctend;
             });
 
             amrex::Gpu::streamSynchronize();
@@ -320,6 +322,7 @@ void ERF::advance_dycore(int level,
                 // directly apply tendencies for theta and qv
                 cell_data(i, j, k, RhoTheta_comp) += cell_data(i, j, k, Rho_comp) * lsf_arr(i, j, k, 0) * dt_advance;
                 cell_data(i, j, k, RhoQ1_comp) = max(0.0, cell_data(i, j, k, RhoQ1_comp) + cell_data(i, j, k, Rho_comp) * lsf_arr(i, j, k, 1) * dt_advance);
+                cell_data(i, j, k, RhoQ2_comp) += cell_data(i, j, k, Rho_comp) * lsf_arr(i, j, k, 7) * dt_advance;
 
                 // directly apply tendencies for theta and qv
                 //cell_data(i, j, k, RhoTheta_comp) += cell_data(i, j, k, Rho_comp) * tvtend * dt_advance;
