@@ -50,7 +50,7 @@ Radiation::Radiation (const int& lev,
     m_fixed_orbital_year = pp.query("rad_orbital_year", m_orbital_year);
     
 	// Determin start time 
-	pp.query("rad_day0",rad_day0);
+    pp.query("rad_day0",rad_day0);
 
     // Get orbital parameters from inputs file
     pp.query("rad_orbital_eccentricity", m_orbital_eccen);
@@ -146,13 +146,11 @@ Radiation::set_grids (int& level,
 
     // Update the day and month
     time_t timestamp = time_t(int(time+rad_day0));
-    amrex::Print()<<"radiation: time:"<<time<<" timestamp:"<<timestamp<<std::endl;
-	struct tm *timeinfo = gmtime(&timestamp);
+    struct tm *timeinfo = gmtime(&timestamp);
     if (m_fixed_orbital_year) {
         m_orbital_mon  = timeinfo->tm_mon + 1;
         m_orbital_day  = timeinfo->tm_mday;
         m_orbital_sec  = timeinfo->tm_hour*3600 + timeinfo->tm_min*60 + timeinfo->tm_sec;
-		amrex::Print()<<"fixed year: mon:"<<m_orbital_mon<<" day:"<<m_orbital_day<<" sec:"<<m_orbital_sec<<std::endl;
     } else {
         m_orbital_year = timeinfo->tm_year + 1900;
         m_orbital_mon  = timeinfo->tm_mon  + 1;
