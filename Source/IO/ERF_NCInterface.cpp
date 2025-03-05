@@ -437,6 +437,7 @@ void NCVar::get_attr (const std::string& name, std::vector<int>& values) const
 //Uncomment for parallel NetCDF
 void NCVar::par_access (const int cmode) const
 {
+    if (amrex::ParallelContext::NProcsAll() == 1) return;
     check_nc_error(nc_var_par_access(ncid, varid, cmode));
 }
 
@@ -695,7 +696,12 @@ NCFile NCFile::open (const std::string& name, const int cmode)
 NCFile NCFile::create_par (const std::string& name, const int cmode, MPI_Comm comm, MPI_Info info)
 {
     int ncid;
-    check_nc_error(nc_create_par(name.data(), cmode, comm, info, &ncid));
+    if (amrex::ParallelContext::NProcsAll() > 1) {
+        check_nc_error(nc_create_par(name.data(), cmode, comm, info, &ncid));
+    } else {
+        // revert to serial file with 1 rank
+        check_nc_error(nc_create(name.data(), cmode, &ncid));
+    }
     return NCFile(ncid);
 }
 
@@ -703,7 +709,12 @@ NCFile NCFile::create_par (const std::string& name, const int cmode, MPI_Comm co
 NCFile NCFile::open_par (const std::string& name, const int cmode, MPI_Comm comm, MPI_Info info)
 {
     int ncid;
-    check_nc_error(nc_open_par(name.data(), cmode, comm, info, &ncid));
+    if (amrex::ParallelContext::NProcsAll() > 1) {
+        check_nc_error(nc_open_par(name.data(), cmode, comm, info, &ncid));
+    } else {
+        // revert to serial with 1 rank
+        check_nc_error(nc_open(name.data(), cmode, &ncid));
+    }
     return NCFile(ncid);
 }
 
