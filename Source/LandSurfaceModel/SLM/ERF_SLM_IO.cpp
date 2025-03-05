@@ -38,7 +38,8 @@ SLM::writeSLM_NetCDF(const MultiFab& mf, const Vector<std::string>& varnames, co
         // Write out SLM 3D fields
         for (int var = 0; var < LsmVar_SLM::NumVars; ++var) {
             if (const_vars.find(var) != const_vars.end()) continue;
-            writeMFtoNC(ncf, lsm_fab_vars[var].get(), LsmVarName_Full[var], time, true); // write ghost cells
+            //writeMFtoNC(ncf, lsm_fab_vars[var].get(), LsmVarName_Full[var], time, true); // write ghost cells
+            writeMFtoNC(ncf, lsm_fab_vars[var].get(), LsmVarName_Full[var], time, false); // write ghost cells
         }
 
         // Write out SLM 2D fields
@@ -88,9 +89,6 @@ void SLM::writeMFtoNC(ncutils::NCFile &nc_file, const MultiFab* mf,
     {
         nc_file.enter_def_mode();
 
-        std::string mf_dim_name = name + "_dim";
-        nc_file.def_dim(mf_dim_name, AMREX_SPACEDIM);
-
         // create time dimension in file
         // TODO: fix this - move time dim to NCInterface
         if (time > -1.0 && !nc_file.has_dim("time"))
@@ -104,11 +102,39 @@ void SLM::writeMFtoNC(ncutils::NCFile &nc_file, const MultiFab* mf,
         {
             box_size += 2 * ngrow;
         }
-        nc_file.def_dim(name + "_x", box_size[0]);
-        nc_file.def_dim(name + "_y", box_size[1]);
-        nc_file.def_dim(name + "_z", box_size[2]);
 
-        std::vector<std::string> dim_names = {name + "_z", name + "_y", name + "_x"}; // col major
+        bool add_dims = true;
+        // Check if file has x and y dimensions
+        if (nc_file.has_dim("x") && nc_file.has_dim("y"))
+        {
+            // Check that the dimension bounds match
+            size_t x_size = nc_file.dim("x").len();
+            size_t y_size = nc_file.dim("y").len();
+
+            if (x_size == box_size[0] && y_size == box_size[1])
+            {
+                // reuse these dimensions for this dataset
+                add_dims = false;
+            }
+        } else {
+            // if the x and y dimensions don't exist, create them
+            nc_file.def_dim("x", box_size[0]);
+            nc_file.def_dim("y", box_size[1]);
+            nc_file.def_dim("z", box_size[2]);
+            add_dims = false;
+        }
+
+        std::vector<std::string> dim_names;
+        if (add_dims) {
+            dim_names = {name + "_z", name + "_y", name + "_x"}; // col major
+            nc_file.def_dim(name + "_x", box_size[0]);
+            nc_file.def_dim(name + "_y", box_size[1]);
+            nc_file.def_dim(name + "_z", box_size[2]);
+        } else {
+            dim_names = {"z", "y", "x"}; // col major
+        }
+
+        // add a dimension for MF components
         if (mf->nComp() > 1)
         {
             nc_file.def_dim(name + "_nComp", mf->nComp());
