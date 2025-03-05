@@ -11,66 +11,63 @@ SLM::writeSLM_NetCDF(const MultiFab& mf, const Vector<std::string>& varnames, co
 {
     std::string plotfilename = plot_prefix + ".nc";
 
-    if (amrex::ParallelDescriptor::IOProcessor())
+    ncutils::NCFile ncf =
+        (first_step)
+        ? ncutils::NCFile::create_par(plotfilename, NC_CLOBBER | NC_NETCDF4)
+        : ncutils::NCFile::open_par(plotfilename, NC_WRITE);
+
+    if (first_step)
     {
-        ncutils::NCFile ncf =
-          (first_step)
-            ? ncutils::NCFile::create(plotfilename, NC_CLOBBER | NC_NETCDF4)
-            : ncutils::NCFile::open(plotfilename, NC_WRITE);
+        writeNCHeader(ncf);
 
-        if (first_step)
+        // Write out 3D variables that are constant in time
+        for (const int var : const_vars)
         {
-            writeNCHeader(ncf);
-
-            // Write out 3D variables that are constant in time
-            for (const int var : const_vars)
-            {
-                amrex::Print() << " Writing CONSTANT 3D SLM MF '" << LsmVarName_Full[var] << "'" << std::endl;
-                writeMFtoNC(ncf, lsm_fab_vars[var].get(), LsmVarName_Full[var], -1.0);
-            }
-
-            // Write out 2D variables that are constant in time
-            writeMFtoNC(ncf, &LAI, "LAI", -1.0);
-            writeMFtoNC(ncf, &BAI, "BAI", -1.0);
-            writeMFtoNC(ncf, &ztop, "ztop", -1.0);
+            amrex::Print() << " Writing CONSTANT 3D SLM MF '" << LsmVarName_Full[var] << "'" << std::endl;
+            writeMFtoNC(ncf, lsm_fab_vars[var].get(), LsmVarName_Full[var], -1.0);
         }
 
-        // Write out SLM 3D fields
-        for (int var = 0; var < LsmVar_SLM::NumVars; ++var) {
-            if (const_vars.find(var) != const_vars.end()) continue;
-            //writeMFtoNC(ncf, lsm_fab_vars[var].get(), LsmVarName_Full[var], time, true); // write ghost cells
-            writeMFtoNC(ncf, lsm_fab_vars[var].get(), LsmVarName_Full[var], time, false); // write ghost cells
-        }
-
-        // Write out SLM 2D fields
-        // TODO: fix this
-        //  2D fields are combined into the single mf with varnames components
-        AMREX_ALWAYS_ASSERT(mf.nComp() == varnames.size());
-        IntVect ng(0, 0, 0);
-        for (int var = 0; var < mf.nComp(); ++var)
-        {
-            MultiFab fab(mf.boxArray(), mf.DistributionMap(), 1, ng);
-            MultiFab::Copy(fab, mf, var, 0, 1, 0);
-            writeMFtoNC(ncf, &fab, varnames[var], time);
-        }
-
-        writeMFtoNC(ncf, &cp_vege, "cp_vege", time);
-        writeMFtoNC(ncf, &z0_sfc, "z0_sfc", time);
-
-        //writeMFtoNC(ncf, &Khai_L, "Khai_L", -1.0);
-
-        //writeMFtoNC(ncf, &ustar, "ustar", time); // ustar and tstar already saved in 2D fab array above
-
-        // additional slm outputs
-        for (int var = 0; var < slm_diag.nComp(); ++var)
-        {
-            MultiFab fab(slm_diag.boxArray(), slm_diag.DistributionMap(), 1, ng);
-            MultiFab::Copy(fab, slm_diag, var, 0, 1, 0);
-            writeMFtoNC(ncf, &fab, diag_names[var], time);
-        }
-
-        ncf.close();
+        // Write out 2D variables that are constant in time
+        writeMFtoNC(ncf, &LAI, "LAI", -1.0);
+        writeMFtoNC(ncf, &BAI, "BAI", -1.0);
+        writeMFtoNC(ncf, &ztop, "ztop", -1.0);
     }
+
+    // Write out SLM 3D fields
+    for (int var = 0; var < LsmVar_SLM::NumVars; ++var) {
+        if (const_vars.find(var) != const_vars.end()) continue;
+        //writeMFtoNC(ncf, lsm_fab_vars[var].get(), LsmVarName_Full[var], time, true); // write ghost cells
+        writeMFtoNC(ncf, lsm_fab_vars[var].get(), LsmVarName_Full[var], time, false); // write ghost cells
+    }
+
+    // Write out SLM 2D fields
+    // TODO: fix this
+    //  2D fields are combined into the single mf with varnames components
+    AMREX_ALWAYS_ASSERT(mf.nComp() == varnames.size());
+    IntVect ng(0, 0, 0);
+    for (int var = 0; var < mf.nComp(); ++var)
+    {
+        MultiFab fab(mf.boxArray(), mf.DistributionMap(), 1, ng);
+        MultiFab::Copy(fab, mf, var, 0, 1, 0);
+        writeMFtoNC(ncf, &fab, varnames[var], time);
+    }
+
+    writeMFtoNC(ncf, &cp_vege, "cp_vege", time);
+    writeMFtoNC(ncf, &z0_sfc, "z0_sfc", time);
+
+    //writeMFtoNC(ncf, &Khai_L, "Khai_L", -1.0);
+
+    //writeMFtoNC(ncf, &ustar, "ustar", time); // ustar and tstar already saved in 2D fab array above
+
+    // additional slm outputs
+    for (int var = 0; var < slm_diag.nComp(); ++var)
+    {
+        MultiFab fab(slm_diag.boxArray(), slm_diag.DistributionMap(), 1, ng);
+        MultiFab::Copy(fab, slm_diag, var, 0, 1, 0);
+        writeMFtoNC(ncf, &fab, diag_names[var], time);
+    }
+
+    ncf.close();
 }
 
 void
@@ -176,6 +173,7 @@ void SLM::writeMFtoNC(ncutils::NCFile &nc_file, const MultiFab* mf,
 
         if (last_time != time)
         {
+            nc_file.var("time").par_access(NC_COLLECTIVE);
             nc_file.var("time").put(&time, {static_cast<size_t>(std::max(0, static_cast<int>(time_var_len)))}, {1});
 
             time_dim_len = nc_file.dim("time").len();
@@ -193,6 +191,9 @@ void SLM::writeMFtoNC(ncutils::NCFile &nc_file, const MultiFab* mf,
         data = mf_tmp.get();
     }
 
+    // TODO: fix - this is required since file opened each time step, so the variable access prop is reset
+    nc_file.var(name).par_access(NC_COLLECTIVE);
+
     amrex::Arena* Arena_Used = amrex::The_Arena();
 #ifdef AMREX_USE_GPU
     Arena_Used = amrex::The_Pinned_Arena();
@@ -208,8 +209,10 @@ void SLM::writeMFtoNC(ncutils::NCFile &nc_file, const MultiFab* mf,
             const auto *dataPtr = tmp.dataPtr(comp);
             AMREX_ALWAYS_ASSERT(dataPtr != nullptr);
 
-            // TODO: fix this for multiple levels, parallel, etc
-            std::vector<size_t> starts = {0, 0, 0};
+            // TODO: this assumes z always start at 0.. handle box.smallEnd()[2] better for 2D/3D MFs
+            std::vector<size_t> starts = {0,
+                                          static_cast<unsigned long>(box.smallEnd()[1]),
+                                          static_cast<unsigned long>(box.smallEnd()[0])};
             std::vector<size_t> counts = {static_cast<unsigned long>(box.length()[2]),
                                           static_cast<unsigned long>(box.length()[1]),
                                           static_cast<unsigned long>(box.length()[0])};
@@ -228,10 +231,10 @@ void SLM::writeMFtoNC(ncutils::NCFile &nc_file, const MultiFab* mf,
 
             auto mf_arr = data->array(mfi, comp);
             auto tmp_arr = tmp.array(comp);
-                ParallelFor(box, [=] AMREX_GPU_DEVICE (int i, int j, int k)
-                {
-                    tmp_arr(i, j, k) = mf_arr(i, j, k);
-                });
+            ParallelFor(box, [=] AMREX_GPU_DEVICE (int i, int j, int k)
+            {
+                tmp_arr(i, j, k) = mf_arr(i, j, k);
+            });
 
             nc_file.var(name).put(dataPtr, starts, counts);
         }
