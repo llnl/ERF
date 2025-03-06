@@ -18,7 +18,7 @@ SLM::writeSLM_NetCDF(const MultiFab& mf, const Vector<std::string>& varnames, co
 
     if (first_step)
     {
-        writeNCHeader(ncf);
+        writeNCHeader(ncf, m_geom);
 
         // Write out 3D variables that are constant in time
         for (const int var : const_vars)
@@ -71,9 +71,90 @@ SLM::writeSLM_NetCDF(const MultiFab& mf, const Vector<std::string>& varnames, co
 }
 
 void
-SLM::writeNCHeader(ncutils::NCFile &nc_file)
+SLM::writeNCHeader(ncutils::NCFile &nc_file, const amrex::Geometry &geom)
 {
-    // TODO
+    // define data dimensions: time, x, y, z
+    nc_file.enter_def_mode();
+
+    // create time as unlimited dimension
+    nc_file.def_dim("time", NC_UNLIMITED);
+    nc_file.def_var("time", ncutils::NCDType::Real, {"time"});
+
+    auto domain = geom.Domain();
+    const int nx = domain.length(0);
+    const int ny = domain.length(1);
+    const int nz = m_nz_lsm; // Z dim is defined using SLM geometry instead of ERF's
+
+    // define dimensions for data variables
+    nc_file.def_dim("x", nx);
+    nc_file.def_dim("y", ny);
+    nc_file.def_dim("z", nz);
+
+    // define coordinates for each dimension
+    nc_file.def_var("x", ncutils::NCDType::Real, {"x"});
+    nc_file.def_var("y", ncutils::NCDType::Real, {"y"});
+    nc_file.def_var("z", ncutils::NCDType::Real, {"z"});
+
+    // enable collective mode for parallel NetCDF
+    nc_file.var("time").par_access(NC_COLLECTIVE);
+    nc_file.var("x").par_access(NC_COLLECTIVE);
+    nc_file.var("y").par_access(NC_COLLECTIVE);
+    nc_file.var("z").par_access(NC_COLLECTIVE);
+
+    // write other metadata
+
+    nc_file.exit_def_mode();
+
+    // each rank writes its portion of x,y,z coordinates
+    // TODO: is there a better way to do this?
+    amrex::Arena* Arena_Used = amrex::The_Arena();
+#ifdef AMREX_USE_GPU
+    Arena_Used = amrex::The_Pinned_Arena();
+#endif
+
+    //   create table data in pinned space for device
+    amrex::TableData<Real, 1> x({0}, {nx}, Arena_Used);
+    amrex::TableData<Real, 1> y({0}, {ny}, Arena_Used);
+    amrex::TableData<Real, 1> z({0}, {nz}, Arena_Used);
+
+    auto x_arr = x.table();
+    auto y_arr = y.table();
+    auto z_arr = z.table();
+
+    const auto prob_lo = geom.ProbLoArray();
+    const auto prob_hi = geom.ProbHiArray();
+    const auto dx = geom.CellSizeArray();
+    const int d_khi_lsm = khi_lsm;
+    for(MFIter mfi(*lsm_fab_vars[0]); mfi.isValid(); ++mfi)
+    {
+        const auto &box = mfi.validbox();
+        const auto node_z_arr = lsm_fab_vars[LsmVar_SLM::node_z]->const_array(mfi);
+        const int bx_offset = box.smallEnd(0);
+        const int by_offset = box.smallEnd(1);
+        ParallelFor(box.length(0), [=] AMREX_GPU_DEVICE (int i)
+        {
+            x_arr(i) = prob_lo[0] + (bx_offset+i+0.5)*dx[0];
+        });
+
+        ParallelFor(box.length(1), [=] AMREX_GPU_DEVICE (int j)
+        {
+            y_arr(j) = prob_lo[1] + (by_offset+j+0.5)*dx[1];
+        });
+
+        ParallelFor(nz, [=] AMREX_GPU_DEVICE (int k)
+        {
+            // For SLM, z is node_z
+            z_arr(k) = node_z_arr(box.smallEnd(0), box.smallEnd(1), (k*-1)+d_khi_lsm);
+        });
+
+        amrex::Gpu::Device::synchronize();
+
+        nc_file.var("x").put(x_arr.p, {static_cast<unsigned long>(box.smallEnd()[0])}, {static_cast<unsigned long>(box.length()[0])});
+        nc_file.var("y").put(y_arr.p, {static_cast<unsigned long>(box.smallEnd()[1])}, {static_cast<unsigned long>(box.length()[1])});
+        nc_file.var("z").put(z_arr.p, {0}, {static_cast<unsigned long>(box.length()[2])});
+    }
+
+    amrex::ParallelDescriptor::Barrier();
 }
 
 void SLM::writeMFtoNC(ncutils::NCFile &nc_file, const MultiFab* mf,

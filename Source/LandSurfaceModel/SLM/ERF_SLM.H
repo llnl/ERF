@@ -309,7 +309,7 @@ public:
     void writeSLM_NetCDF(const amrex::MultiFab& mf, const amrex::Vector<std::string>& varnames,
                          const amrex::Real time, const std::string plot_prefix, const int level_step);
 
-    void writeNCHeader(ncutils::NCFile &nc_file);
+    void writeNCHeader(ncutils::NCFile &nc_file, const amrex::Geometry &geom);
 
     void writeMFtoNC(ncutils::NCFile &nc_file, const amrex::MultiFab* mf,
                      const std::string name, amrex::Real time, bool write_ghost = false);
