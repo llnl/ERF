@@ -42,7 +42,7 @@ SLM::Init (const MultiFab& cons_in,
       LsmVar_SLM::swdsvisxyref,  LsmVar_SLM::swdsnirxyref, LsmVar_SLM::swdsvisdxyref,
       LsmVar_SLM::swdsnirdxyref, LsmVar_SLM::lwref,        LsmVar_SLM::tref,
       LsmVar_SLM::uref,          LsmVar_SLM::vref,         LsmVar_SLM::dref,
-      LsmVar_SLM::qref,          LsmVar_SLM::pref,         LsmVar_SLM::node_z};
+      LsmVar_SLM::qref,          LsmVar_SLM::pref,         LsmVar_SLM::node_z, LsmVar_SLM::soilt_nudge, LsmVar_SLM::soilw_nudge};
 
     LsmVarName.resize(m_lsm_size);
     LsmVarName = {"tsurf",         "ustar",          "tstar",
@@ -54,7 +54,7 @@ SLM::Init (const MultiFab& cons_in,
                   "SW_dw_dir_nir", "SW_dw_dif_vis",  "SW_dw_dif_nir",
                   "LW_dw",         "ref_t",          "ref_u",
                   "ref_v",         "ref_d",          "ref_q",
-                  "ref_p",         "node_z"};
+                  "ref_p",         "node_z","soilt_nudge", "soilw_nudge"};
 
     AMREX_ALWAYS_ASSERT(LsmVarMap.size() == LsmVarName.size());
     AMREX_ALWAYS_ASSERT(LsmVarMap.size() == m_lsm_size);
@@ -150,7 +150,6 @@ SLM::Init (const MultiFab& cons_in,
     mws_mx.define(ba_lsm_2d, dm, 1, ng_2d);
     BAI.define(ba_lsm_2d, dm, 1, ng_2d);
 
-    tau_soil.define(ba_lsm_2d, dm, 1, ng_2d);
     mw_inc.define(ba_lsm_2d, dm, 1, ng_2d);
 
     evapo_dry.define(ba_lsm_2d, dm, 1, ng_2d);
@@ -273,10 +272,11 @@ void SLM::init_from_file()
     get_layer_prop("sand0", m_nz_lsm, sand0);
     get_layer_prop("sw0", m_nz_lsm, sw0);
     get_layer_prop("st0", m_nz_lsm, st0);
+    get_layer_prop("relax_hgt", m_nz_lsm, relax_hgt);
 
     for (int i = 0; i < m_nz_lsm; i++)
     {
-        amrex::Print() << " " << i << ": soilt = " << st0[i] << " soilw = " << sw0[i] << " clay = " << clay0[i] << " sand = " << sand0[i] << std::endl;
+        amrex::Print() << " " << i << ": soilt = " << st0[i] << " soilw = " << sw0[i] << " clay = " << clay0[i] << " sand = " << sand0[i] << " relax = " << relax_hgt[i] << std::endl;
     }
 
     pp.query("tabs_s", tabs_s);
@@ -287,6 +287,10 @@ void SLM::init_from_file()
     pp.query("Rc_max", Rc_max);
     pp.query("T_opt", T_opt);
     pp.query("zref", zref);
+
+    pp.query("soiltnudging", dosoiltnudging);
+    pp.query("soilwnudging", dosoilwnudging);
+    pp.query("tausoil", tausoil);
 
     pp.query("rad_input_file", rad_input_file);
     if (rad_input_file != "") {
@@ -1020,17 +1024,20 @@ void SLM::init_soil_tw()
     amrex::Gpu::DeviceVector<Real> d_sand_vec(m_dz_lsm.size());
     amrex::Gpu::DeviceVector<Real> d_st0_vec(m_dz_lsm.size());
     amrex::Gpu::DeviceVector<Real> d_sw0_vec(m_dz_lsm.size());
+    amrex::Gpu::DeviceVector<Real> d_relax_vec(m_dz_lsm.size());
 
     amrex::Gpu::copy(Gpu::hostToDevice, m_dz_lsm.begin(), m_dz_lsm.end(), d_dz_lsm_vec.begin());
     amrex::Gpu::copy(Gpu::hostToDevice, clay0.begin(), clay0.end(), d_clay_vec.begin());
     amrex::Gpu::copy(Gpu::hostToDevice, sand0.begin(), sand0.end(), d_sand_vec.begin());
     amrex::Gpu::copy(Gpu::hostToDevice, st0.begin(), st0.end(), d_st0_vec.begin());
     amrex::Gpu::copy(Gpu::hostToDevice, sw0.begin(), sw0.end(), d_sw0_vec.begin());
+    amrex::Gpu::copy(Gpu::hostToDevice, relax_hgt.begin(), relax_hgt.end(), d_relax_vec.begin());
     Real *d_dz_lsm = d_dz_lsm_vec.data();
     Real *d_clay0 = d_clay_vec.data();
     Real *d_sand0 = d_sand_vec.data();
     Real *d_st0 = d_st0_vec.data();
     Real *d_sw0 = d_sw0_vec.data();
+    Real *d_relax = d_relax_vec.data();
 
     auto tsurf = lsm_fab_vars[LsmVar_SLM::tsurf];
     for ( MFIter mfi(*tsurf, TileNoZ()); mfi.isValid(); ++mfi) {
@@ -1040,6 +1047,8 @@ void SLM::init_soil_tw()
 
         auto soilt_arr = lsm_fab_vars[LsmVar_SLM::soilt]->array(mfi);
         auto soilw_arr = lsm_fab_vars[LsmVar_SLM::soilw]->array(mfi);
+        auto soilt_obs_arr = lsm_fab_vars[LsmVar_SLM::soilt_obs]->array(mfi);
+        auto soilw_obs_arr = lsm_fab_vars[LsmVar_SLM::soilw_obs]->array(mfi);
 
         auto sand_arr = lsm_fab_vars[LsmVar_SLM::sand]->array(mfi);
         auto clay_arr = lsm_fab_vars[LsmVar_SLM::clay]->array(mfi);
@@ -1047,24 +1056,22 @@ void SLM::init_soil_tw()
         auto s_depth_arr = lsm_fab_vars[LsmVar_SLM::s_depth]->array(mfi);
         auto soil_relax_hgt_arr = lsm_fab_vars[LsmVar_SLM::soil_relax_hgt]->array(mfi);
 
-        auto tau_soil_arr = tau_soil.array(mfi);
-
         auto sstxy_arr = sstxy.array(mfi);
 
         ParallelFor(box3d, [=] AMREX_GPU_DEVICE (int i, int j, int k)
         {
             if (landmask_arr(i, j, 0) == 1)
             {
-                tau_soil_arr(i, j, 0) = tausoil;
-
-                // TODO: replace this with input from file
                 s_depth_arr(i, j, k) = d_dz_lsm[(k*-1)+d_khi_lsm];
                 clay_arr(i, j, k) = d_clay0[(k*-1)+d_khi_lsm];
                 sand_arr(i, j, k) = d_sand0[(k*-1)+d_khi_lsm];
                 soilt_arr(i, j, k) = d_st0[(k*-1)+d_khi_lsm];
                 soilw_arr(i, j, k) = d_sw0[(k*-1)+d_khi_lsm];
 
-                soil_relax_hgt_arr(i, j, k) = 0.0;
+                // initialize nudging profiles for soil based on the initial soilt and soilw
+                soilt_obs_arr(i, j, k) = soilt_arr(i, j, k);
+                soilw_obs_arr(i, j, k) = soilw_arr(i, j, k);
+                soil_relax_hgt_arr(i, j, k) = d_relax[(k*-1)+d_khi_lsm];
 
                 // TODO: nrestart conditional here
                 // TODO: sstxy - should be ERF surface temp array?
@@ -1250,6 +1257,11 @@ SLM::AdvanceSLM ()
     net_rad.setVal(0.0, SLM_NetRad::net_sw2, 1, 0);
     net_rad.setVal(0.0, SLM_NetRad::net_rad1, 1, 0);
     net_rad.setVal(0.0, SLM_NetRad::net_rad2, 1, 0);
+
+    // Soil temperature and moisture nudging
+    for ( MFIter mfi(*lsm_fab_vars[LsmVar_SLM::tsurf], TileNoZ()); mfi.isValid(); ++mfi) {
+        soil_nudging(mfi);
+    }
 
     for ( MFIter mfi(landtype, TileNoZ()); mfi.isValid(); ++mfi) {
         auto box = mfi.tilebox();
@@ -2702,7 +2714,7 @@ void SLM::soil_temperature(const amrex::MFIter &mfi)
         }
 
         // For bottom layer:
-        aa = -2.0 * dst_vars(i, j, d_klo_lsm + 1, SLM_DST::st_eff_cond) * dt / s_depth_arr(i, j, d_klo_lsm) / dst_vars(i, j, d_klo_lsm + 1, SLM_DST::st_capa) / (s_depth_arr(i, j, d_klo_lsm + 1) + s_depth_arr(i, j, d_klo_lsm));
+        aa = -2.0 * dst_vars(i, j, d_klo_lsm + 1, SLM_DST::st_eff_cond) * dt / s_depth_arr(i, j, d_klo_lsm) / dst_vars(i, j, d_klo_lsm, SLM_DST::st_capa) / (s_depth_arr(i, j, d_klo_lsm + 1) + s_depth_arr(i, j, d_klo_lsm));
         cc = 0.0;
         bb = 1.0 - aa;
         dd = soilt_arr(i, j, d_klo_lsm);
@@ -2717,6 +2729,56 @@ void SLM::soil_temperature(const amrex::MFIter &mfi)
             soilt_arr(i, j, lsm_k) = dst_vars(i, j, lsm_k, SLM_DST::beta) - dst_vars(i, j, lsm_k, SLM_DST::alpha) * soilt_arr(i, j, lsm_k - 1);
         }
     });
+}
+
+void SLM::soil_nudging(const amrex::MFIter &mfi3d)
+{
+    if (!dosoiltnudging && !dosoilwnudging) return;
+
+    const int d_khi_lsm = khi_lsm;
+    const int d_klo_lsm = klo_lsm;
+    const Real dt = m_dt;
+
+    auto box = mfi3d.tilebox();
+
+    auto landmask_arr = landmask.const_array(mfi3d);
+
+    auto soilt_arr = lsm_fab_vars[LsmVar_SLM::soilt]->array(mfi3d);
+    auto soilw_arr = lsm_fab_vars[LsmVar_SLM::soilw]->array(mfi3d);
+
+    auto soilt_nudge_arr = lsm_fab_vars[LsmVar_SLM::soilt_nudge]->array(mfi3d);
+    auto soilw_nudge_arr = lsm_fab_vars[LsmVar_SLM::soilw_nudge]->array(mfi3d);
+    auto soil_relax_hgt_arr = lsm_fab_vars[LsmVar_SLM::soil_relax_hgt]->const_array(mfi3d);
+
+    auto soilt_obs_arr = lsm_fab_vars[LsmVar_SLM::soilt_obs]->const_array(mfi3d);
+    auto soilw_obs_arr = lsm_fab_vars[LsmVar_SLM::soilw_obs]->const_array(mfi3d);
+
+    const Real d_tau = tausoil;
+    if (dosoiltnudging)
+    {
+        ParallelFor( box, [=] AMREX_GPU_DEVICE (int i, int j, int k)
+        {
+            if (landmask_arr(i, j, 0) != 1) {
+                return;
+            }
+
+            soilt_arr(i, j, k) -= (soilt_arr(i, j, k) - soilt_obs_arr(i, j, k))*dt/d_tau*soil_relax_hgt_arr(i, j, k);
+            soilt_nudge_arr(i, j, k) = (soilt_arr(i, j, k) - soilt_obs_arr(i, j, k))*soil_relax_hgt_arr(i, j, k) / d_tau;
+        });
+    }
+
+    if (dosoilwnudging)
+    {
+        ParallelFor( box, [=] AMREX_GPU_DEVICE (int i, int j, int k)
+        {
+            if (landmask_arr(i, j, 0) != 1) {
+                return;
+            }
+
+            soilw_arr(i, j, k) -= (soilw_arr(i, j, k) - soilw_obs_arr(i, j, k))*dt/d_tau*soil_relax_hgt_arr(i, j, k);
+            soilw_nudge_arr(i, j, k) = (soilw_arr(i, j, k) - soilw_obs_arr(i, j, k))*soil_relax_hgt_arr(i, j, k) / d_tau;
+        });
+    }
 }
 
 AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE

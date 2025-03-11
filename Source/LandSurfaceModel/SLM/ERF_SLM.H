@@ -56,6 +56,8 @@ namespace LsmVar_SLM {
       soilt_nudge,     // nudging of soilt
       sw_over_sat,     // soilw over saturation
       soil_relax_hgt,  // depth dependent soil relaxation function
+      soilt_obs,
+      soilw_obs,
       // vegetation
       rootF,           // fraction of total root length of a vegetation in each soil layer
       w_s_FC,          // wetness at field capacity
@@ -296,6 +298,8 @@ public:
 
     void soil_temperature(const amrex::MFIter &mfi);
 
+    void soil_nudging(const amrex::MFIter &mfi3d);
+
     AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
     static amrex::Real fh_calc(const amrex::Real &t, const amrex::Real &mps,
                         const amrex::Real &sw, const amrex::Real &B);
@@ -322,7 +326,7 @@ public:
 
 private:
     // number of lsm variables (theta)
-    int m_lsm_size = 29;
+    int m_lsm_size = 31;
 
     // LsmVar map (state indices -> LsmVar enum)
     amrex::Vector<int> LsmVarMap;
@@ -391,6 +395,7 @@ private:
     amrex::Vector<amrex::Real> sand0; // uniform sand content (%)
     amrex::Vector<amrex::Real> sw0; // uniform soil wetness (fraction)
     amrex::Vector<amrex::Real> st0; // uniform soil temperature (K)
+    amrex::Vector<amrex::Real> relax_hgt; // depth dependent soil relaxation function
 
     amrex::Real tabs_s = 0.0; // surface temperature (K)
     amrex::Real t00 = 300.0; // constant offset for sstxy
@@ -405,7 +410,7 @@ private:
 
     bool dosoilwnudging = false;
     bool dosoiltnudging = false;
-    static constexpr amrex::Real tausoil = 86400.0;
+    amrex::Real tausoil = 86400.0;
 
     amrex::Real z0_soil = 0.0387; // baresoil roughness length (m)
     static constexpr amrex::Real tfriz = 273.15;
@@ -478,8 +483,6 @@ private:
     amrex::MultiFab soilt_vars;
     amrex::MultiFab soilw_vars;
 
-    amrex::MultiFab tau_soil; // soil nudging time in seconds, when dosoiltnudging or dosoilwnudging=true
-
     amrex::MultiFab mw_inc;
 
     //amrex::MultiFab ustar, tstar;
@@ -547,7 +550,7 @@ private:
       "tsurf", "ustar", "tstar", "qstar", "ref_t", "ref_q", "ref_p", "ref_d", "ref_u", "ref_v", "ref_precip",
       "SW_dw_dir_vis", "SW_dw_dir_nir", "SW_dw_dif_vis", "SW_dw_dif_nir", "LW_dw", "zenith",
       "tveg", "mv", "tsoil", "wsoil", "sand", "clay", "soil_thickness", "node_z", "interface_z",
-      "soilw_nudge", "soilt_nudge", "sw_over_sat", "soil_relax_hgt", "rootF", "w_s_FC", "w_s_WP",
+      "soilw_nudge", "soilt_nudge", "sw_over_sat", "soil_relax_hgt", "soilt_obs", "soilw_obs", "rootF", "w_s_FC", "w_s_WP",
       "sst_capa", "sst_cond", "poro_soil", "theta_FC", "theta_WP", "m_pot_sat", "Bconst", "ks",
       "surface_u", "surface_v", "surface_vapor", "surface_heat", "precip_soil"
     };
@@ -561,10 +564,10 @@ private:
       LsmVar_SLM::s_depth,
       LsmVar_SLM::node_z,
       LsmVar_SLM::interface_z,
-      LsmVar_SLM::soilw_nudge,
-      LsmVar_SLM::soilt_nudge,
       LsmVar_SLM::sw_over_sat,
       LsmVar_SLM::soil_relax_hgt,
+      LsmVar_SLM::soilt_obs,
+      LsmVar_SLM::soilw_obs,
       LsmVar_SLM::rootF,
       LsmVar_SLM::w_s_FC,
       LsmVar_SLM::w_s_WP,
