@@ -542,9 +542,35 @@ private:
     // Extra MFs for output:
     amrex::MultiFab slm_diag;
 
-
-#ifdef ERF_USE_NETCDF
-    int ncfid = -1;
+    // List of 2D output variables that are declared as 3D
+    // These will only be saved at k = 0 (surface level) to save space
+    // TODO: these variables should be redefined to be 2D
+    inline static const std::unordered_set<int> surf_vars = {
+      LsmVar_SLM::tsurf,
+      LsmVar_SLM::ustar,
+      LsmVar_SLM::tstar,
+      LsmVar_SLM::qstar,
+      LsmVar_SLM::tref,
+      LsmVar_SLM::qref,
+      LsmVar_SLM::pref,
+      LsmVar_SLM::dref,
+      LsmVar_SLM::uref,
+      LsmVar_SLM::vref,
+      LsmVar_SLM::precipref,
+      LsmVar_SLM::swdsvisxyref,
+      LsmVar_SLM::swdsnirxyref,
+      LsmVar_SLM::swdsvisdxyref,
+      LsmVar_SLM::swdsnirdxyref,
+      LsmVar_SLM::lwref,
+      LsmVar_SLM::coszrsxy,
+      LsmVar_SLM::tv,
+      LsmVar_SLM::mv,
+      LsmVar_SLM::flbu,
+      LsmVar_SLM::flbv,
+      LsmVar_SLM::flbq,
+      LsmVar_SLM::flbt,
+      LsmVar_SLM::prsfc,
+    };
 
     static constexpr const char* LsmVarName_Full[] = {
       "tsurf", "ustar", "tstar", "qstar", "ref_t", "ref_q", "ref_p", "ref_d", "ref_u", "ref_v", "ref_precip",
@@ -556,6 +582,9 @@ private:
     };
 
     static_assert(sizeof(LsmVarName_Full)/sizeof(*LsmVarName_Full) == LsmVar_SLM::NumVars);
+
+#ifdef ERF_USE_NETCDF
+    int ncfid = -1;
 
     // List of output variables that are constant in time
     inline static const std::unordered_set<int> const_vars = {
@@ -590,6 +619,23 @@ private:
         "drain_flux",
         "evapo_wet",
         "grflux"
+    };
+
+    inline static const std::vector<std::string> soilt_var_names = {
+        "st_cond",
+        "st_capa",
+        "st_eff_cond",
+        "st_alpha",
+        "st_beta"
+    };
+
+    inline static const std::vector<std::string> soilw_var_names = {
+        "sw_wgt",
+        "sw_sh_eff_cond",
+        "sw_sh_eff_vel",
+        "sw_alpha",
+        "sw_beta",
+        "sw_sdepth_mm"
     };
 
     amrex::MultiFab rad_input_data;

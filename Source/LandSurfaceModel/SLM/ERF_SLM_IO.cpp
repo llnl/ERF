@@ -47,8 +47,7 @@ SLM::writeSLM_NetCDF(const MultiFab& mf, const Vector<std::string>& varnames, co
     IntVect ng(0, 0, 0);
     for (int var = 0; var < mf.nComp(); ++var)
     {
-        MultiFab fab(mf.boxArray(), mf.DistributionMap(), 1, ng);
-        MultiFab::Copy(fab, mf, var, 0, 1, 0);
+        MultiFab fab(mf, make_alias, var, 1);
         writeMFtoNC(ncf, &fab, varnames[var], time);
     }
 
@@ -62,9 +61,21 @@ SLM::writeSLM_NetCDF(const MultiFab& mf, const Vector<std::string>& varnames, co
     // additional slm outputs
     for (int var = 0; var < slm_diag.nComp(); ++var)
     {
-        MultiFab fab(slm_diag.boxArray(), slm_diag.DistributionMap(), 1, ng);
-        MultiFab::Copy(fab, slm_diag, var, 0, 1, 0);
+        MultiFab fab(slm_diag, make_alias, var, 1);
         writeMFtoNC(ncf, &fab, diag_names[var], time);
+    }
+
+    // Save soil temperature and moisture diagnostic variables
+    for (int var = 0; var < soilt_vars.nComp(); ++var)
+    {
+        MultiFab fab (soilt_vars, make_alias, var, 1);
+        writeMFtoNC(ncf, &fab, soilt_var_names[var], time);
+    }
+
+    for (int var = 0; var < soilw_vars.nComp() - 1; ++var)
+    {
+        MultiFab fab (soilw_vars, make_alias, var, 1);
+        writeMFtoNC(ncf, &fab, soilw_var_names[var], time);
     }
 
     ncf.close();
@@ -163,6 +174,14 @@ void SLM::writeMFtoNC(ncutils::NCFile &nc_file, const MultiFab* mf,
     IntVect ngrow = mf->nGrowVect();
     int num_times;
 
+    bool var_2d = false;
+    if (mf->boxArray().minimalBox().length(2) == 1) var_2d = true;
+
+    int khi = 0;
+    if (var_2d) {
+        khi = mf->boxArray().minimalBox().bigEnd(2) - ngrow[2];
+    }
+
     if (!nc_file.has_var(name))
     {
         nc_file.enter_def_mode();
@@ -198,7 +217,7 @@ void SLM::writeMFtoNC(ncutils::NCFile &nc_file, const MultiFab* mf,
             // if the x and y dimensions don't exist, create them
             nc_file.def_dim("x", box_size[0]);
             nc_file.def_dim("y", box_size[1]);
-            nc_file.def_dim("z", box_size[2]);
+            if (!var_2d) nc_file.def_dim("z", box_size[2]);
             add_dims = false;
         }
 
@@ -207,9 +226,13 @@ void SLM::writeMFtoNC(ncutils::NCFile &nc_file, const MultiFab* mf,
             dim_names = {name + "_z", name + "_y", name + "_x"}; // col major
             nc_file.def_dim(name + "_x", box_size[0]);
             nc_file.def_dim(name + "_y", box_size[1]);
-            nc_file.def_dim(name + "_z", box_size[2]);
+            if (!var_2d) nc_file.def_dim(name + "_z", box_size[2]);
         } else {
             dim_names = {"z", "y", "x"}; // col major
+        }
+
+        if (var_2d) {
+            dim_names.erase(dim_names.begin());
         }
 
         // add a dimension for MF components
@@ -298,6 +321,11 @@ void SLM::writeMFtoNC(ncutils::NCFile &nc_file, const MultiFab* mf,
                                           static_cast<unsigned long>(box.length()[1]),
                                           static_cast<unsigned long>(box.length()[0])};
 
+            if (var_2d) {
+                starts.erase(starts.begin());
+                counts.erase(counts.begin());
+            }
+
             if (data->nComp() > 1)
             {
                 starts.emplace(starts.begin(), comp);
@@ -312,10 +340,19 @@ void SLM::writeMFtoNC(ncutils::NCFile &nc_file, const MultiFab* mf,
 
             auto mf_arr = data->array(mfi, comp);
             auto tmp_arr = tmp.array(comp);
-            ParallelFor(box, [=] AMREX_GPU_DEVICE (int i, int j, int k)
+            if (var_2d)
             {
-                tmp_arr(i, j, k) = mf_arr(i, j, k);
-            });
+                const int d_khi_lsm = khi_lsm;
+                ParallelFor(box, [=] AMREX_GPU_DEVICE (int i, int j, int k)
+                {
+                    tmp_arr(i, j, k) = mf_arr(i, j, khi);
+                });
+            } else {
+                ParallelFor(box, [=] AMREX_GPU_DEVICE (int i, int j, int k)
+                {
+                    tmp_arr(i, j, k) = mf_arr(i, j, k);
+                });
+            }
 
             nc_file.var(name).put(dataPtr, starts, counts);
         }
