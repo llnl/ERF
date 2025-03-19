@@ -1104,6 +1104,18 @@ ERF::InitData_post ()
         for (int lev = 0; lev <= finest_level; ++lev) micro->Update_Micro_Vars_Lev(lev, vars_new[lev][Vars::cons]);
     }
 
+    // Update LSM with initial condition
+    if (solverChoice.lsm_type != LandSurfaceType::None) {
+        for (int lev = 0; lev <= finest_level; ++lev)
+        {
+            if (solverChoice.lsm_type == LandSurfaceType::SLM) {
+                lsm.get_model_lev<SLM>(lev)->set_dt(dt[lev]); // set SLM dt
+            }
+            lsm.set_LSM_terrain_inputs(lev, sst_lev, lmask_lev);
+            lsm.Update_Lsm_Vars_Lev(lev, vars_new[lev][Vars::cons], vars_new[lev][Vars::xvel], vars_new[lev][Vars::yvel]);
+        }
+    }
+
     // Fill time averaged velocities before first plot file
     if (solverChoice.time_avg_vel) {
         for (int lev = 0; lev <= finest_level; ++lev) {

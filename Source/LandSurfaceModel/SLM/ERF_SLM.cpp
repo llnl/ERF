@@ -2831,10 +2831,10 @@ void SLM::Copy_State_to_Lsm(const MultiFab& cons_in, const MultiFab& u_in, const
         {
             const Real qv = states_array(i,j,k,RhoQ1_comp)/states_array(i,j,k,Rho_comp);
             rho_array(i,j,k)   = states_array(i,j,k,Rho_comp);
-            pres_array(i,j,k)  = getPgivenRTh(states_array(i,j,k,RhoTheta_comp), qv)/100.;
+            pres_array(i,j,k)  = getPgivenRTh(states_array(i,j,k,RhoTheta_comp), 0.0)/100.;
             tref_array(i,j,k)  = getTgivenRandRTh(states_array(i,j,k,Rho_comp),
                                                   states_array(i,j,k,RhoTheta_comp),
-                                                  qv);
+                                                  0.0);
 
             qref_array(i,j,k) = qv;
 

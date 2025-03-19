@@ -175,6 +175,7 @@ public:
     Advance (const amrex::Real& dt) override
     {
         m_dt = dt;
+        time += m_dt;
 
         // override ERF inputs from reference data if testing flag is set
         this->time_interp_from_ref();
@@ -182,13 +183,12 @@ public:
         if (first_step)
         {
             // initialize values using first reference data
-            this->init_slm_vars();
+            //this->init_slm_vars();
             first_step = false;
         }
 
         this->AdvanceSLM();
 
-        time+=m_dt;
     }
 
     // Advance the lsm state vars
@@ -241,6 +241,10 @@ public:
     Update_Lsm_Vars (amrex::MultiFab& cons_in, amrex::MultiFab& u_in, amrex::MultiFab& v_in) override
     {
         this->Copy_State_to_Lsm(cons_in, u_in, v_in);
+        if (first_step && time == 0.0) {
+            this->init_slm_vars();
+            time += m_dt; // update time here so that first timestep time is correct
+        }
         //this->Diagnose();
         //this->Compute_Coefficients();
     }
@@ -323,6 +327,10 @@ public:
                         const amrex::Vector<std::string> &mf_names,
                         const amrex::Geometry& geom) const;
 #endif
+
+    void set_dt(const amrex::Real &dt) {
+        m_dt = dt;
+    }
 
 private:
     // number of lsm variables (theta)

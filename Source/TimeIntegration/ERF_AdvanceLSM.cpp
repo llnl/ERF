@@ -9,6 +9,10 @@ void ERF::advance_lsm (int lev,
                        const Real& dt_advance)
 {
     if (solverChoice.lsm_type != LandSurfaceType::None) {
+        // Fill boundaries before getting cell-centered velocities
+        u_in.FillBoundary(geom[lev].periodicity());
+        v_in.FillBoundary(geom[lev].periodicity());
+
         lsm.Update_Lsm_Vars_Lev(lev, cons, u_in, v_in);
 #ifdef ERF_USE_RRTMGP
         lsm.set_LSM_flux_inputs(lev, sw_lw_fluxes[lev].get(), solar_zenith[lev].get());

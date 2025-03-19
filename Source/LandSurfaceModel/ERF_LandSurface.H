@@ -159,6 +159,11 @@ public:
         m_lsm_model[lev]->set_terrain_inputs(sst_in[lev], lmask_in[lev]);
     }
 
+    template<class SurfModelType>
+    SurfModelType* get_model_lev(const int &lev) {
+        return static_cast<SurfModelType*>(m_lsm_model[lev].get());
+    }
+
 private:
     // lsm model at each level
     amrex::Vector<std::unique_ptr<NullSurf>> m_lsm_model;
