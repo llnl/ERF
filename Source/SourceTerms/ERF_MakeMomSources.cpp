@@ -494,56 +494,63 @@ void make_mom_sources (int level,
             // subsidence terms for U and V
             auto lsf_arr = lsf_tendencies->const_array(mfi);
 
+            const int kmin = domain.smallEnd(2) + 1; // minimum k for vertical subsidence
+            const int kmax = domain.bigEnd(2) - 1;   // maximum k for vertical subsidence
+
             ParallelFor(tbx, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
             {
-                int k1, k2;
-                amrex::Real inv_dz, rdz;
-                if (lsf_arr(i, j, k, 2) >= 0.0)
-                {
-                    k1 = k;
-                    k2 = k-1;
-                } else {
-                    k1 = k+1;
-                    k2 = k;
-                }
+                if (k > kmin && k < kmax) {
+                    int k1, k2;
+                    amrex::Real inv_dz, rdz;
+                    if (lsf_arr(i, j, k, 2) >= 0.0)
+                    {
+                        k1 = k;
+                        k2 = k-1;
+                    } else {
+                        k1 = k+1;
+                        k2 = k;
+                    }
 
-                Real dzInv = 0.5*dxInv[2];
-                if (z_nd_arr) {
-                    Real z_xf_lo = 0.25 * ( z_nd_arr(i,j,k  ) + z_nd_arr(i,j+1,k  )
-                                            + z_nd_arr(i,j,k-1) + z_nd_arr(i,j+1,k-1) );
-                    Real z_xf_hi = 0.25 * ( z_nd_arr(i,j,k+1) + z_nd_arr(i,j+1,k+1)
-                                            + z_nd_arr(i,j,k+2) + z_nd_arr(i,j+1,k+2) );
-                    dzInv = 1.0 / (z_xf_hi - z_xf_lo);
+                    Real dzInv = 0.5*dxInv[2];
+                    if (z_nd_arr) {
+                        Real z_xf_lo = 0.25 * ( z_nd_arr(i,j,k  ) + z_nd_arr(i,j+1,k  )
+                                                + z_nd_arr(i,j,k-1) + z_nd_arr(i,j+1,k-1) );
+                        Real z_xf_hi = 0.25 * ( z_nd_arr(i,j,k+1) + z_nd_arr(i,j+1,k+1)
+                                                + z_nd_arr(i,j,k+2) + z_nd_arr(i,j+1,k+2) );
+                        dzInv = 1.0 / (z_xf_hi - z_xf_lo);
+                    }
+                    Real rho_on_u_face = 0.5 * ( cell_data(i,j,k,Rho_comp) + cell_data(i-1,j,k,Rho_comp) );
+                    amrex::Real utend = -(dzInv * lsf_arr(i, j, k, 2)) * ( (rho_u(i, j, k1) / rho_on_u_face) - (rho_u(i, j, k2) / rho_on_u_face));
+                    xmom_src_arr(i, j, k) += utend;
                 }
-                Real rho_on_u_face = 0.5 * ( cell_data(i,j,k,Rho_comp) + cell_data(i-1,j,k,Rho_comp) );
-                amrex::Real utend = -(dzInv * lsf_arr(i, j, k, 2)) * ( (rho_u(i, j, k1) / rho_on_u_face) - (rho_u(i, j, k2) / rho_on_u_face));
-                xmom_src_arr(i, j, k) += utend;
             });
 
             ParallelFor(tby, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
             {
-                int k1, k2;
-                amrex::Real inv_dz, rdz;
-                if (lsf_arr(i, j, k, 2) >= 0.0)
-                {
-                    k1 = k;
-                    k2 = k-1;
-                } else {
-                    k1 = k+1;
-                    k2 = k;
-                }
+                if (k > kmin && k < kmax) {
+                    int k1, k2;
+                    amrex::Real inv_dz, rdz;
+                    if (lsf_arr(i, j, k, 2) >= 0.0)
+                    {
+                        k1 = k;
+                        k2 = k-1;
+                    } else {
+                        k1 = k+1;
+                        k2 = k;
+                    }
 
-                Real dzInv = 0.5*dxInv[2];
-                if (z_nd_arr) {
-                    Real z_yf_lo = 0.25 * ( z_nd_arr(i,j,k  ) + z_nd_arr(i+1,j,k  )
-                                            + z_nd_arr(i,j,k-1) + z_nd_arr(i+1,j,k-1) );
-                    Real z_yf_hi = 0.25 * ( z_nd_arr(i,j,k+1) + z_nd_arr(i+1,j,k+1)
-                                            + z_nd_arr(i,j,k+2) + z_nd_arr(i+1,j,k+2) );
-                    dzInv = 1.0 / (z_yf_hi - z_yf_lo);
+                    Real dzInv = 0.5*dxInv[2];
+                    if (z_nd_arr) {
+                        Real z_yf_lo = 0.25 * ( z_nd_arr(i,j,k  ) + z_nd_arr(i+1,j,k  )
+                                                + z_nd_arr(i,j,k-1) + z_nd_arr(i+1,j,k-1) );
+                        Real z_yf_hi = 0.25 * ( z_nd_arr(i,j,k+1) + z_nd_arr(i+1,j,k+1)
+                                                + z_nd_arr(i,j,k+2) + z_nd_arr(i+1,j,k+2) );
+                        dzInv = 1.0 / (z_yf_hi - z_yf_lo);
+                    }
+                    Real rho_on_v_face = 0.5 * ( cell_data(i,j,k,Rho_comp) + cell_data(i,j-1,k,Rho_comp) );
+                    amrex::Real vtend = -(dzInv * lsf_arr(i, j, k, 2)) * ( (rho_v(i, j, k1) / rho_on_v_face) - (rho_v(i, j, k2) / rho_on_v_face));
+                    ymom_src_arr(i, j, k) += vtend;
                 }
-                Real rho_on_v_face = 0.5 * ( cell_data(i,j,k,Rho_comp) + cell_data(i,j-1,k,Rho_comp) );
-                amrex::Real vtend = -(dzInv * lsf_arr(i, j, k, 2)) * ( (rho_v(i, j, k1) / rho_on_v_face) - (rho_v(i, j, k2) / rho_on_v_face));
-                ymom_src_arr(i, j, k) += vtend;
             });
         }
 

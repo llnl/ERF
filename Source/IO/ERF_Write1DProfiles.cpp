@@ -60,9 +60,9 @@ ERF::write_1D_profiles (Real time)
 
         if (NumDataLogs() > 4 && time > 0.) {
             derive_forcing_profiles_stag(h_avg_ttend, h_avg_qtend, h_avg_wsub,
-                                         h_avg_thtend, h_avg_qhtend, h_avg_tvtend, h_avg_qvtend, h_avg_qcvtend,
-                                         h_avg_tnudge, h_avg_qnudge, h_avg_unudge,
-                                         h_avg_vnudge);
+                                         h_avg_thtend, h_avg_qhtend, h_avg_tvtend,
+                                         h_avg_qvtend, h_avg_qcvtend, h_avg_tnudge,
+                                         h_avg_qnudge, h_avg_unudge, h_avg_vnudge);
         }
 
         int hu_size =  h_avg_u.size();
@@ -182,10 +182,10 @@ ERF::write_1D_profiles (Real time)
                         }
                         data_log4 << std::setw(datwidth) << std::setprecision(timeprecision) << time << " "
                                   << std::setw(datwidth) << std::setprecision(datprecision) << z << " "
-                                  << h_avg_ttend[k]  << " " << h_avg_qtend[k]  << " " << h_avg_wsub[k]   << " "
-                                  << h_avg_thtend[k]  << " " << h_avg_qhtend[k]  << " " << h_avg_tvtend[k]  << " " << h_avg_qvtend[k]  << " " << h_avg_qcvtend[k] << " "
-                                  << h_avg_tnudge[k] << " " << h_avg_qnudge[k] << " " << h_avg_unudge[k] << " "
-                                  << h_avg_vnudge[k]
+                                  << h_avg_ttend[k]  << " " << h_avg_qtend[k]   << " " << h_avg_wsub[k]   << " "
+                                  << h_avg_thtend[k] << " " << h_avg_qhtend[k]  << " " << h_avg_tvtend[k] << " "
+                                  << h_avg_qvtend[k] << " " << h_avg_qcvtend[k] << " " << h_avg_tnudge[k] << " "
+                                  << h_avg_qnudge[k] << " " << h_avg_unudge[k]  << " " << h_avg_vnudge[k]
                                   << std::endl;
                   } // loop over z
                 }

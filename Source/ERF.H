@@ -268,13 +268,12 @@ public:
                                       amrex::Gpu::HostVector<amrex::Real>& h_avg_hfx3,  amrex::Gpu::HostVector<amrex::Real>& h_avg_q1fx3,
                                       amrex::Gpu::HostVector<amrex::Real>& h_avg_q2fx3, amrex::Gpu::HostVector<amrex::Real>& h_avg_diss);
 
-    void derive_forcing_profiles_stag(amrex::Gpu::HostVector<amrex::Real>& h_avg_ttend, amrex::Gpu::HostVector<amrex::Real>& h_avg_qtend,
-                                      amrex::Gpu::HostVector<amrex::Real>& h_avg_wsub, 
-                                      amrex::Gpu::HostVector<amrex::Real>& h_avg_thtend, amrex::Gpu::HostVector<amrex::Real>& h_avg_qhtend, amrex::Gpu::HostVector<amrex::Real>& h_avg_tvtend, amrex::Gpu::HostVector<amrex::Real>& h_avg_qvtend,
-                                      amrex::Gpu::HostVector<amrex::Real>& h_avg_qcvtend,
-                                      amrex::Gpu::HostVector<amrex::Real>& h_avg_tnudge,
-                                      amrex::Gpu::HostVector<amrex::Real>& h_avg_qnudge, amrex::Gpu::HostVector<amrex::Real>& h_avg_unudge,
-                                      amrex::Gpu::HostVector<amrex::Real>& h_avg_vnudge);
+    void derive_forcing_profiles_stag(amrex::Gpu::HostVector<amrex::Real>& h_avg_ttend,  amrex::Gpu::HostVector<amrex::Real>& h_avg_qtend,
+                                      amrex::Gpu::HostVector<amrex::Real>& h_avg_wsub,   amrex::Gpu::HostVector<amrex::Real>& h_avg_thtend,
+                                      amrex::Gpu::HostVector<amrex::Real>& h_avg_qhtend, amrex::Gpu::HostVector<amrex::Real>& h_avg_tvtend,
+                                      amrex::Gpu::HostVector<amrex::Real>& h_avg_qvtend, amrex::Gpu::HostVector<amrex::Real>& h_avg_qcvtend,
+                                      amrex::Gpu::HostVector<amrex::Real>& h_avg_tnudge, amrex::Gpu::HostVector<amrex::Real>& h_avg_qnudge,
+                                      amrex::Gpu::HostVector<amrex::Real>& h_avg_unudge, amrex::Gpu::HostVector<amrex::Real>& h_avg_vnudge);
 
     // Perform the volume-weighted sum
     amrex::Real

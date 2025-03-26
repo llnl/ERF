@@ -260,14 +260,14 @@ void ERF::advance_dycore(int level,
         {
         for ( MFIter mfi(state_old[IntVars::cons],TileNoZ()); mfi.isValid(); ++mfi)
         {
-            Box bx  = mfi.growntilebox(IntVect(1, 1, 0));
+            Box bx  = mfi.tilebox();
             const Array4<Real>& cell_data = state_old[IntVars::cons].array(mfi);
             const Array4<Real>& lsf_arr = lsf_data[0]->array(mfi);
             Real zlo = fine_geom.ProbLo(2);
-            const int kmin = bx.smallEnd(2); // minimum k for vertical subsidence
             Real dzInv = fine_geom.InvCellSize(2);
+            const int kmin = domain.smallEnd(2) + 1; // minimum k for vertical subsidence
+            const int kmax = domain.bigEnd(2) - 1;   // maximum k for vertical subsidence
             const Array4<const Real>& z_cc_arr = (l_use_terrain_fitted_coords) ? z_phys_cc[0]->const_array(mfi) : Array4<Real>{};
-
 
             ParallelFor(bx, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
             {
@@ -283,35 +283,31 @@ void ERF::advance_dycore(int level,
                 lsf_arr(i, j, k, 3) = ttend;
                 lsf_arr(i, j, k, 4) = qtend;
 
-                int k1, k2;
-                amrex::Real inv_dz, rdz;
-                if (wsub >= 0.0)
-                {
-                    k1 = k;
-                    k2 = k-1;
-                } else {
-                    k1 = k+1;
-                    k2 = k;
+                if (k > kmin && k < kmax) {
+                    int k1, k2;
+                    amrex::Real inv_dz, rdz;
+                    if (wsub >= 0.0)
+                    {
+                        k1 = k;
+                        k2 = k-1;
+                    } else {
+                        k1 = k+1;
+                        k2 = k;
+                    }
+                    rdz = (z_cc_arr) ? 1.0 / (z_cc_arr(i,j,k1) - z_cc_arr(i,j,k2)) : dzInv;
+                    rdz *= wsub;
+
+                    amrex::Real tvtend = -rdz * ( (cell_data(i, j, k1, RhoTheta_comp) / cell_data(i, j, k1, Rho_comp)) - (cell_data(i, j, k2, RhoTheta_comp) / cell_data(i, j, k2, Rho_comp)));
+                    amrex::Real qvtend = -rdz * ( (cell_data(i, j, k1, RhoQ1_comp) / cell_data(i, j, k1, Rho_comp)) - (cell_data(i, j, k2, RhoQ1_comp) / cell_data(i, j, k2, Rho_comp)));
+                    amrex::Real qctend = -rdz * ( (cell_data(i, j, k1, RhoQ2_comp) / cell_data(i, j, k1, Rho_comp)) - (cell_data(i, j, k2, RhoQ2_comp) / cell_data(i, j, k2, Rho_comp)));
+
+                    lsf_arr(i, j, k, 0) += tvtend;
+                    lsf_arr(i, j, k, 1) += qvtend;
+
+                    lsf_arr(i, j, k, 5) = tvtend;
+                    lsf_arr(i, j, k, 6) = qvtend;
+                    lsf_arr(i, j, k, 7) = qctend;
                 }
-                rdz = (z_cc_arr) ? 1.0 / (z_cc_arr(i,j,k1) - z_cc_arr(i,j,k2)) : dzInv;
-                rdz *= wsub;
-
-                amrex::Real tvtend = -rdz * ( (cell_data(i, j, k1, RhoTheta_comp) / cell_data(i, j, k1, Rho_comp)) - (cell_data(i, j, k2, RhoTheta_comp) / cell_data(i, j, k2, Rho_comp)));
-                amrex::Real qvtend = -rdz * ( (cell_data(i, j, k1, RhoQ1_comp) / cell_data(i, j, k1, Rho_comp)) - (cell_data(i, j, k2, RhoQ1_comp) / cell_data(i, j, k2, Rho_comp)));
-                amrex::Real qctend = -rdz * ( (cell_data(i, j, k1, RhoQ2_comp) / cell_data(i, j, k1, Rho_comp)) - (cell_data(i, j, k2, RhoQ2_comp) / cell_data(i, j, k2, Rho_comp)));
-
-                if (k < kmin) {
-                    tvtend = 0.0;
-                    qvtend = 0.0;
-                }
-
-                lsf_arr(i, j, k, 0) += tvtend;
-                lsf_arr(i, j, k, 1) += qvtend;
-
-                lsf_arr(i, j, k, 5) = tvtend;
-                lsf_arr(i, j, k, 6) = qvtend;
-
-                lsf_arr(i, j, k, 7) = qctend;
             });
 
             amrex::Gpu::streamSynchronize();
@@ -323,11 +319,6 @@ void ERF::advance_dycore(int level,
                 cell_data(i, j, k, RhoTheta_comp) += cell_data(i, j, k, Rho_comp) * lsf_arr(i, j, k, 0) * dt_advance;
                 cell_data(i, j, k, RhoQ1_comp) = max(0.0, cell_data(i, j, k, RhoQ1_comp) + cell_data(i, j, k, Rho_comp) * lsf_arr(i, j, k, 1) * dt_advance);
                 cell_data(i, j, k, RhoQ2_comp) += cell_data(i, j, k, Rho_comp) * lsf_arr(i, j, k, 7) * dt_advance;
-
-                // directly apply tendencies for theta and qv
-                //cell_data(i, j, k, RhoTheta_comp) += cell_data(i, j, k, Rho_comp) * tvtend * dt_advance;
-                //cell_data(i, j, k, RhoQ1_comp) += cell_data(i, j, k, Rho_comp) * qvtend * dt_advance;
-                //cell_data(i, j, k, RhoQ2_comp) += cell_data(i, j, k, Rho_comp) * qctend * dt_advance;
             });
 
             amrex::Gpu::streamSynchronize();

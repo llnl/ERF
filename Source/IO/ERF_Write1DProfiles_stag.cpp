@@ -71,9 +71,9 @@ ERF::write_1D_profiles_stag (Real time)
 
         if (NumDataLogs() > 4 && time > 0.) {
             derive_forcing_profiles_stag(h_avg_ttend, h_avg_qtend, h_avg_wsub,
-                                         h_avg_thtend, h_avg_qhtend, h_avg_tvtend, h_avg_qvtend, h_avg_qcvtend,
-                                         h_avg_tnudge, h_avg_qnudge, h_avg_unudge,
-                                         h_avg_vnudge);
+                                         h_avg_thtend, h_avg_qhtend, h_avg_tvtend,
+                                         h_avg_qvtend, h_avg_qcvtend, h_avg_tnudge,
+                                         h_avg_qnudge, h_avg_unudge, h_avg_vnudge);
         }
 
         int unstag_size =  h_avg_w.size() - 1; // _un_staggered heights
@@ -286,10 +286,10 @@ ERF::write_1D_profiles_stag (Real time)
                         Real z = (zlevels_stag[0].size() > 1) ? zlevels_stag[0][k] : k * dx[2];
                         data_log4 << std::setw(datwidth) << std::setprecision(timeprecision) << time << " "
                                   << std::setw(datwidth) << std::setprecision(datprecision) << z << " "
-                                  << h_avg_ttend[k]  << " " << h_avg_qtend[k]  << " " << h_avg_wsub[k]   << " "
-                                  << h_avg_thtend[k]  << " " << h_avg_qhtend[k]  << " " << h_avg_tvtend[k]  << " " << h_avg_qvtend[k]  << " " << h_avg_qcvtend[k] << " "
-                                  << h_avg_tnudge[k] << " " << h_avg_qnudge[k] << " " << h_avg_unudge[k] << " "
-                                  << h_avg_vnudge[k]
+                                  << h_avg_ttend[k]  << " " << h_avg_qtend[k]   << " " << h_avg_wsub[k]   << " "
+                                  << h_avg_thtend[k] << " " << h_avg_qhtend[k]  << " " << h_avg_tvtend[k] << " "
+                                  << h_avg_qvtend[k] << " " << h_avg_qcvtend[k] << " " << h_avg_tnudge[k] << " "
+                                  << h_avg_qnudge[k] << " " << h_avg_unudge[k]  << " " << h_avg_vnudge[k]
                                   << std::endl;
                   } // loop over z
                   // Write top face values
@@ -298,9 +298,9 @@ ERF::write_1D_profiles_stag (Real time)
                   data_log4 << std::setw(datwidth) << std::setprecision(timeprecision) << time << " "
                             << std::setw(datwidth) << std::setprecision(datprecision) << z << " "
                             << NANval << " " << NANval << " " << NANval << " "
-                            << NANval << " " << NANval << " " << NANval << " " << NANval << " " << NANval << " "
                             << NANval << " " << NANval << " " << NANval << " "
-                            << NANval
+                            << NANval << " " << NANval << " " << NANval << " "
+                            << NANval << " " << NANval << " " << NANval
                             << std::endl;
                 }
             }
@@ -760,14 +760,12 @@ ERF::derive_stress_profiles_stag (Gpu::HostVector<Real>& h_avg_tau11, Gpu::HostV
 
 
 void
-ERF::derive_forcing_profiles_stag(Gpu::HostVector<Real>& h_avg_ttend, Gpu::HostVector<Real>& h_avg_qtend,
-                                  Gpu::HostVector<Real>& h_avg_wsub, 
-                                  Gpu::HostVector<Real>& h_avg_thtend, Gpu::HostVector<Real>& h_avg_qhtend,
-                                  Gpu::HostVector<Real>& h_avg_tvtend, Gpu::HostVector<Real>& h_avg_qvtend,
-                                  Gpu::HostVector<Real>& h_avg_qcvtend,
-                                  Gpu::HostVector<Real>& h_avg_tnudge,
-                                  Gpu::HostVector<Real>& h_avg_qnudge, Gpu::HostVector<Real>& h_avg_unudge,
-                                  Gpu::HostVector<Real>& h_avg_vnudge)
+ERF::derive_forcing_profiles_stag(Gpu::HostVector<Real>& h_avg_ttend,  Gpu::HostVector<Real>& h_avg_qtend,
+                                  Gpu::HostVector<Real>& h_avg_wsub,   Gpu::HostVector<Real>& h_avg_thtend,
+                                  Gpu::HostVector<Real>& h_avg_qhtend, Gpu::HostVector<Real>& h_avg_tvtend,
+                                  Gpu::HostVector<Real>& h_avg_qvtend, Gpu::HostVector<Real>& h_avg_qcvtend,
+                                  Gpu::HostVector<Real>& h_avg_tnudge, Gpu::HostVector<Real>& h_avg_qnudge,
+                                  Gpu::HostVector<Real>& h_avg_unudge, Gpu::HostVector<Real>& h_avg_vnudge)
 {
     // We assume that this is always called at level 0
     int lev = 0;
