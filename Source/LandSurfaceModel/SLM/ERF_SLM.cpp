@@ -3233,7 +3233,7 @@ void SLM::writeSLM_Data(const PlotFileType plotfile_type, const amrex::Real time
         amrex::WriteSingleLevelPlotfile(plotfilename, fab, varnames, lsm_2d_geom, time, level_step);
 #ifdef ERF_USE_NETCDF
         // Temporarily write NetCDF always
-        writeSLM_NetCDF(fab, varnames, time, plot_prefix, level_step);
+        //writeSLM_NetCDF(fab, varnames, time, plot_prefix, level_step);
 #endif
 #ifdef ERF_USE_NETCDF
     } else if (plotfile_type == PlotFileType::Netcdf) {
