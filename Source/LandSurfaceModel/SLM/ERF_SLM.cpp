@@ -268,11 +268,19 @@ void SLM::init_from_file()
         }
     };
 
+    pp.query("soiltnudging", dosoiltnudging);
+    pp.query("soilwnudging", dosoilwnudging);
+    pp.query("tausoil", tausoil);
+
     get_layer_prop("clay0", m_nz_lsm, clay0);
     get_layer_prop("sand0", m_nz_lsm, sand0);
     get_layer_prop("sw0", m_nz_lsm, sw0);
     get_layer_prop("st0", m_nz_lsm, st0);
-    get_layer_prop("relax_hgt", m_nz_lsm, relax_hgt);
+    if (dosoiltnudging || dosoilwnudging) {
+        get_layer_prop("relax_hgt", m_nz_lsm, relax_hgt);
+    } else {
+        std::fill(relax_hgt.begin(), relax_hgt.end(), 0.0);
+    }
 
     for (int i = 0; i < m_nz_lsm; i++)
     {
@@ -287,10 +295,6 @@ void SLM::init_from_file()
     pp.query("Rc_max", Rc_max);
     pp.query("T_opt", T_opt);
     pp.query("zref", zref);
-
-    pp.query("soiltnudging", dosoiltnudging);
-    pp.query("soilwnudging", dosoilwnudging);
-    pp.query("tausoil", tausoil);
 
     pp.query("rad_input_file", rad_input_file);
     if (rad_input_file != "") {
