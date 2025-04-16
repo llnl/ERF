@@ -292,7 +292,7 @@ public:
         // find the time index of forcing data to use
         for (int nt = 1; nt < num_times; nt++)
         {
-            if (time > times_lsf[nt])
+            if (time - start_time > times_lsf[nt])
             {
                 curr = nt;
             }
@@ -304,7 +304,7 @@ public:
             next = num_times;
         } else {
             next = curr + 1;
-            coeff_next = (time - times_lsf[curr]) / (times_lsf[next] - times_lsf[curr]);
+            coeff_next = ((time - start_time) - times_lsf[curr]) / (times_lsf[next] - times_lsf[curr]);
             coeff_curr = (1.0 - coeff_next);
         }
     }
@@ -339,6 +339,7 @@ public:
                          w_int_lsf_d[itime].begin());
     }
 
+    amrex::Real start_time = 0.0; // simulation start time
     amrex::Real tau_lsf = 0.0; // timescale to apply lsf
     std::string lsf_file = "";
 

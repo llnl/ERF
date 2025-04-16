@@ -48,7 +48,7 @@ Radiation::Radiation (const int& lev,
     // from timestamp for orbital year; if positive, use provided orbital year
     // for duration of simulation.
     m_fixed_orbital_year = pp.query("rad_orbital_year", m_orbital_year);
-    
+
 	// Determin start time 
     pp.query("rad_day0",rad_day0);
 
@@ -145,7 +145,7 @@ Radiation::set_grids (int& level,
     m_lon            = lon;
 
     // Update the day and month
-    time_t timestamp = time_t(int(time+rad_day0));
+    time_t timestamp = time_t(time+rad_day0);
     struct tm *timeinfo = gmtime(&timestamp);
     if (m_fixed_orbital_year) {
         m_orbital_mon  = timeinfo->tm_mon + 1;
@@ -157,6 +157,8 @@ Radiation::set_grids (int& level,
         m_orbital_day  = timeinfo->tm_mday;
         m_orbital_sec  = timeinfo->tm_hour*3600 + timeinfo->tm_min*60 + timeinfo->tm_sec;
     }
+
+    amrex::Print() << "  RADIATION timestamp = " << timestamp << " orbital year = " << m_orbital_year << " mon = " << m_orbital_mon << " day = " << m_orbital_day << " sec = " << m_orbital_sec << std::endl;
 
     // Only allocate and proceed if we are going to update radiation
     m_update_rad = false;
@@ -555,7 +557,7 @@ Radiation::yakl_buffers_to_mf ()
                 lsm_arr(i,j,k,1) = sfc_flux_dir_nir(icol);
                 lsm_arr(i,j,k,2) = sfc_flux_dif_vis(icol);
                 lsm_arr(i,j,k,3) = sfc_flux_dif_nir(icol);
-
+                //amrex::Print() << " i = " << i << " j = " << j << " k = " << k << " SW DIR VIS = " << lsm_arr(i, j, k, 0) << " SW DIR NIR = " << lsm_arr(i,j,k,1) << " SW DIF VIS = " << lsm_arr(i,j,k,2) << " SW DIF NIR = " << lsm_arr(i,j,k,3) << std::endl;
                 // Net SW flux for LSM
                 lsm_arr(i,j,k,4) = sfc_flux_dir_vis(icol) + sfc_flux_dir_nir(icol)
                                  + sfc_flux_dif_vis(icol) + sfc_flux_dif_nir(icol);
@@ -824,7 +826,8 @@ Radiation::run_impl ()
     rrtmgp::compute_heating_rate(lw_flux_up, lw_flux_dn, r_lay, z_del, lw_heating);
 
     // Compute surface fluxes
-    const int kbot = nlay + 1; // Should this be 1 for our layout?
+    //const int kbot = nlay + 1; // Should this be 1 for our layout?
+    const int kbot = 1; // Should this be 1 for our layout?
     parallel_for(SimpleBounds<3>(ncol, nlay+1, nswbands), YAKL_LAMBDA (int icol, int ilay, int ibnd)
     {
         sw_bnd_flux_dif(icol,ilay,ibnd) = sw_bnd_flux_dn(icol,ilay,ibnd) - sw_bnd_flux_dir(icol,ilay,ibnd);
