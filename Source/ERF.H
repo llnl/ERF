@@ -141,6 +141,13 @@ public:
     // Tag cells for refinement
     void ErrorEst (int lev, amrex::TagBoxArray& tags, amrex::Real time, int ngrow) override;
 
+    void HurricaneTracker (int lev,
+                          const amrex::MultiFab& U_new,
+                          const amrex::MultiFab& V_new,
+                          const amrex::MultiFab& W_new,
+                          const amrex::Real velmag_threshold,
+                          amrex::TagBoxArray& tags);
+
     // Initialize multilevel data
     void InitData ();
 
@@ -200,6 +207,7 @@ public:
     // Diagnostics
     void sum_integrated_quantities (amrex::Real time);
     void sum_derived_quantities (amrex::Real time);
+    void sum_energy_quantities (amrex::Real time);
 
     void write_1D_profiles (amrex::Real time);
     void write_1D_profiles_stag (amrex::Real time);
@@ -207,7 +215,7 @@ public:
     amrex::Real cloud_fraction (amrex::Real time);
 
     // Fill the physical boundary conditions for cell-centered velocity (diagnostic only)
-    void FillBdyCCVels (amrex::Vector<amrex::MultiFab>& mf_cc_vel);
+    void FillBdyCCVels (amrex::Vector<amrex::MultiFab>& mf_cc_vel, int levc=0);
 
     void sample_points (int lev, amrex::Real time, amrex::IntVect cell, amrex::MultiFab& mf);
     void sample_lines (int lev, amrex::Real time, amrex::IntVect cell, amrex::MultiFab& mf);
@@ -278,8 +286,7 @@ public:
     // Perform the volume-weighted sum
     amrex::Real
     volWgtSumMF (int lev, const amrex::MultiFab& mf, int comp,
-                 const amrex::MultiFab& mapfac,
-                 bool local, bool finemask);
+                 const amrex::MultiFab& mapfac, bool finemask);
 
     // Decide if it is time to take an action
     static bool is_it_time_for_action (int nstep, amrex::Real time, amrex::Real dt,
@@ -339,9 +346,9 @@ public:
                                const amrex::Real& time);
 
     void advance_lsm (int lev,
-                      amrex::MultiFab& /*cons_in*/,
-                      amrex::MultiFab& /*u_in*/,
-                      amrex::MultiFab& /*v_in*/,
+                      amrex::MultiFab& cons_in,
+                      amrex::MultiFab& xvel_in,
+                      amrex::MultiFab& yvel_in,
                       const amrex::Real& dt_advance);
 
 #if defined(ERF_USE_RRTMGP)
@@ -356,8 +363,11 @@ public:
     void MakeDiagnosticAverage (amrex::Vector<amrex::Real>& h_havg, amrex::MultiFab& S, int n);
     void derive_upwp (amrex::Vector<amrex::Real>& h_havg);
 
-    // write plotfile to disk
+    // Write plotfile to disk
     void WritePlotFile  (int which, PlotFileType plotfile_type, amrex::Vector<std::string> plot_var_names);
+
+    // Write subvolume of data into a different "plotfile"
+    void WriteSubvolume  ();
 
     void WriteMultiLevelPlotfileWithTerrain (const std::string &plotfilename,
                                              int nlevels,
@@ -474,18 +484,6 @@ public:
     void MakeEBGeometry ();
     void make_eb_box ();
     void make_eb_regular ();
-    void redistribute_term (int lev, int ncomp,
-                            amrex::MultiFab& result,
-                            amrex::MultiFab& result_tmp,
-                            amrex::MultiFab const& state,
-                            amrex::BCRec const* bc,
-                            amrex::Real const dt);
-    void redistribute_term (amrex::MFIter const& mfi, int lev, int ncomp,
-                            amrex::MultiFab& result,
-                            amrex::MultiFab& result_tmp,
-                            amrex::MultiFab const& state,
-                            amrex::BCRec const* bc,
-                            amrex::Real const dt);
 
     // more flexible version of AverageDown() that lets you average down across multiple levels
     void AverageDownTo (int crse_lev, int scomp, int ncomp); // NOLINT
@@ -677,8 +675,10 @@ private:
     amrex::Vector<amrex::Vector<amrex::FArrayBox>> bdy_data_yhi;
 
     amrex::Real bdy_time_interval;
-    amrex::Vector<std::unique_ptr<amrex::MultiFab>> lat_m, lon_m;
+    amrex::Vector<std::unique_ptr<amrex::MultiFab>> lat_m, lon_m;       // Latitude and Longitude on the grid
 #endif // ERF_USE_NETCDF
+
+    amrex::Vector<std::unique_ptr<amrex::MultiFab>> sinPhi_m, cosPhi_m; // Coriolis factors on the grid
 
     // Struct for working with the sounding data we take as an input
     InputSoundingData input_sounding_data;
@@ -690,6 +690,7 @@ private:
     amrex::Vector<amrex::Gpu::DeviceVector<amrex::Real>> xvel_bc_data;
     amrex::Vector<amrex::Gpu::DeviceVector<amrex::Real>> yvel_bc_data;
     amrex::Vector<amrex::Gpu::DeviceVector<amrex::Real>> zvel_bc_data;
+    amrex::Vector<amrex::Gpu::DeviceVector<amrex::Real>> th_bc_data;
 
     // Function to read and populate above vectors (if input file exists)
     void init_Dirichlet_bc_data (const std::string input_file);
@@ -766,7 +767,7 @@ private:
     amrex::Vector<amrex::MultiFab> zmom_crse_rhs;
 
     std::unique_ptr<Microphysics> micro;
-    amrex::Vector<amrex::Vector<amrex::MultiFab*>> qmoist; // (lev,ncomp) This has up to 8 components: qt, qv, qc, qi, qp, qr, qs, qg
+    amrex::Vector<amrex::Vector<amrex::MultiFab*>> qmoist; // (lev,ncomp) rain_accum, snow_accum, graup_accum
 
     // Variables for wind farm parametrization models
 
@@ -917,9 +918,16 @@ private:
 
     int last_plot_file_step_1;
     int last_plot_file_step_2;
+    int last_subvol;
 
     int last_check_file_step;
     int plot_file_on_restart = 1;
+
+    // Output control
+    const int datwidth = 14;
+    const int datprecision = 6;
+    const int timeprecision = 13; // e.g., 1-yr LES: 31,536,000 s with dt ~ 0.01 ==> min prec = 10
+                                  // epoch time for 2030-01-01 00:00:00 is 1,893,456,000 s with dt ~ 0.01 ==> min prec = 12
 
     ////////////////
     // runtime parameters
@@ -928,6 +936,9 @@ private:
     int max_step = std::numeric_limits<int>::max();
     amrex::Real start_time = 0.0;
     amrex::Real  stop_time = std::numeric_limits<amrex::Real>::max();
+
+    bool use_datetime = false;
+    const std::string datetime_format = "%Y-%m-%d %H:%M:%S";
 
     // if >= 0 we restart from a checkpoint
     std::string restart_chkfile = "";
@@ -956,11 +967,14 @@ private:
     // plotfile prefix and frequency
     std::string plot_file_1 {"plt_1_"};
     std::string plot_file_2 {"plt_2_"};
+    std::string subvol_file {"subvol"};
     bool m_expand_plotvars_to_unif_rr = false;
     int m_plot_int_1 = -1;
     int m_plot_int_2 = -1;
+    int m_subvol_int = -1;
     amrex::Real m_plot_per_1 = -1.0;
     amrex::Real m_plot_per_2 = -1.0;
+    amrex::Real m_subvol_per = -1.0;
     bool m_plot_face_vels = false;
 
     bool plot_lsm = false;
@@ -1193,51 +1207,61 @@ private:
 
     static AMREX_FORCE_INLINE
     int
-    ComputeGhostCells (const AdvChoice& advChoice, bool use_num_diff)
+    ComputeGhostCells (const SolverChoice& sc)
     {
-        if (use_num_diff)
+        int ngrow = 0;
+
+        if (sc.use_num_diff)
         {
-            return 3;
+            ngrow = 3;
         } else {
             if (
-                 (advChoice.dycore_horiz_adv_type    == AdvType::Centered_6th)
-              || (advChoice.dycore_vert_adv_type     == AdvType::Centered_6th)
-              || (advChoice.moistscal_horiz_adv_type == AdvType::Centered_6th)
-              || (advChoice.moistscal_horiz_adv_type == AdvType::Centered_6th)
-              || (advChoice.dryscal_horiz_adv_type   == AdvType::Centered_6th)
-              || (advChoice.dryscal_vert_adv_type    == AdvType::Centered_6th) )
-            { return 3; }
+                 (sc.advChoice.dycore_horiz_adv_type    == AdvType::Centered_6th)
+              || (sc.advChoice.dycore_vert_adv_type     == AdvType::Centered_6th)
+              || (sc.advChoice.moistscal_horiz_adv_type == AdvType::Centered_6th)
+              || (sc.advChoice.moistscal_horiz_adv_type == AdvType::Centered_6th)
+              || (sc.advChoice.dryscal_horiz_adv_type   == AdvType::Centered_6th)
+              || (sc.advChoice.dryscal_vert_adv_type    == AdvType::Centered_6th) )
+            { ngrow = 3; }
             else if (
-                 (advChoice.dycore_horiz_adv_type    == AdvType::Upwind_5th)
-              || (advChoice.dycore_vert_adv_type     == AdvType::Upwind_5th)
-              || (advChoice.moistscal_horiz_adv_type == AdvType::Upwind_5th)
-              || (advChoice.moistscal_horiz_adv_type == AdvType::Upwind_5th)
-              || (advChoice.dryscal_horiz_adv_type   == AdvType::Upwind_5th)
-              || (advChoice.dryscal_vert_adv_type    == AdvType::Upwind_5th) )
-            { return 3; }
+                 (sc.advChoice.dycore_horiz_adv_type    == AdvType::Upwind_5th)
+              || (sc.advChoice.dycore_vert_adv_type     == AdvType::Upwind_5th)
+              || (sc.advChoice.moistscal_horiz_adv_type == AdvType::Upwind_5th)
+              || (sc.advChoice.moistscal_horiz_adv_type == AdvType::Upwind_5th)
+              || (sc.advChoice.dryscal_horiz_adv_type   == AdvType::Upwind_5th)
+              || (sc.advChoice.dryscal_vert_adv_type    == AdvType::Upwind_5th) )
+            { ngrow = 3; }
             else if (
-                  (advChoice.dryscal_horiz_adv_type   == AdvType::Weno_5)
-               || (advChoice.dryscal_vert_adv_type    == AdvType::Weno_5)
-               || (advChoice.moistscal_horiz_adv_type == AdvType::Weno_5)
-               || (advChoice.moistscal_vert_adv_type  == AdvType::Weno_5)
-               || (advChoice.moistscal_horiz_adv_type == AdvType::Weno_5Z)
-               || (advChoice.moistscal_vert_adv_type  == AdvType::Weno_5Z)
-               || (advChoice.dryscal_horiz_adv_type   == AdvType::Weno_5Z)
-               || (advChoice.dryscal_vert_adv_type    == AdvType::Weno_5Z) )
-            { return 3; }
+                  (sc.advChoice.dryscal_horiz_adv_type   == AdvType::Weno_5)
+               || (sc.advChoice.dryscal_vert_adv_type    == AdvType::Weno_5)
+               || (sc.advChoice.moistscal_horiz_adv_type == AdvType::Weno_5)
+               || (sc.advChoice.moistscal_vert_adv_type  == AdvType::Weno_5)
+               || (sc.advChoice.moistscal_horiz_adv_type == AdvType::Weno_5Z)
+               || (sc.advChoice.moistscal_vert_adv_type  == AdvType::Weno_5Z)
+               || (sc.advChoice.dryscal_horiz_adv_type   == AdvType::Weno_5Z)
+               || (sc.advChoice.dryscal_vert_adv_type    == AdvType::Weno_5Z) )
+            { ngrow = 3; }
             else if (
-                  (advChoice.dryscal_horiz_adv_type   == AdvType::Weno_7)
-               || (advChoice.dryscal_vert_adv_type    == AdvType::Weno_7)
-               || (advChoice.moistscal_horiz_adv_type == AdvType::Weno_7)
-               || (advChoice.moistscal_vert_adv_type  == AdvType::Weno_7)
-               || (advChoice.moistscal_horiz_adv_type == AdvType::Weno_7Z)
-               || (advChoice.moistscal_vert_adv_type  == AdvType::Weno_7Z)
-               || (advChoice.dryscal_horiz_adv_type   == AdvType::Weno_7Z)
-               || (advChoice.dryscal_vert_adv_type    == AdvType::Weno_7Z) )
-            { return 4; }
+                  (sc.advChoice.dryscal_horiz_adv_type   == AdvType::Weno_7)
+               || (sc.advChoice.dryscal_vert_adv_type    == AdvType::Weno_7)
+               || (sc.advChoice.moistscal_horiz_adv_type == AdvType::Weno_7)
+               || (sc.advChoice.moistscal_vert_adv_type  == AdvType::Weno_7)
+               || (sc.advChoice.moistscal_horiz_adv_type == AdvType::Weno_7Z)
+               || (sc.advChoice.moistscal_vert_adv_type  == AdvType::Weno_7Z)
+               || (sc.advChoice.dryscal_horiz_adv_type   == AdvType::Weno_7Z)
+               || (sc.advChoice.dryscal_vert_adv_type    == AdvType::Weno_7Z) )
+            { ngrow = 4; }
             else
-            { return 2; }
+            {
+                if (sc.terrain_type == TerrainType::EB){
+                    ngrow = 3;
+                } else {
+                    ngrow = 2;
+                }
+            }
         }
+
+        return ngrow;
     }
 
     AMREX_FORCE_INLINE
@@ -1373,6 +1397,19 @@ private:
         amrex::ParallelDescriptor::Barrier("ERF::setRecordDerDataInfo");
     }
 
+    void setRecordEnergyDataInfo (int i, const std::string& filename) // NOLINT
+    {
+        if (amrex::ParallelDescriptor::IOProcessor())
+        {
+            tot_e_datalog[i] = std::make_unique<std::fstream>();
+            tot_e_datalog[i]->open(filename.c_str(),std::ios::out|std::ios::app);
+            if (!tot_e_datalog[i]->good()) {
+                amrex::FileOpenFailed(filename);
+            }
+        }
+        amrex::ParallelDescriptor::Barrier("ERF::setRecordEnergyDataInfo");
+    }
+
     void setRecordSamplePointInfo (int i, int lev, amrex::IntVect& cell, const std::string& filename) // NOLINT
     {
         amrex::MultiFab dummy(grids[lev],dmap[lev],1,0);
@@ -1412,10 +1449,12 @@ private:
     amrex::Real sampler_per = -1.0;
     std::unique_ptr<SampleData> data_sampler = nullptr;
 
-    amrex::Vector<std::unique_ptr<std::fstream> > datalog;
-    amrex::Vector<std::unique_ptr<std::fstream> > der_datalog;
-    amrex::Vector<std::string>     datalogname;
-    amrex::Vector<std::string> der_datalogname;
+    amrex::Vector<std::unique_ptr<std::fstream> >       datalog;
+    amrex::Vector<std::unique_ptr<std::fstream> >   der_datalog;
+    amrex::Vector<std::unique_ptr<std::fstream> > tot_e_datalog;
+    amrex::Vector<std::string>       datalogname;
+    amrex::Vector<std::string>   der_datalogname;
+    amrex::Vector<std::string> tot_e_datalogname;
 
     amrex::Vector<std::unique_ptr<std::fstream> > sampleptlog;
     amrex::Vector<std::string> sampleptlogname;
@@ -1435,14 +1474,17 @@ private:
     //! The filename of the ith samplelinelog file.
     [[nodiscard]] std::string SampleLineLogName (int i) const noexcept { return samplelinelogname[i]; }
 
-    // amrex::Vector<std::unique_ptr<amrex::EBFArrayBoxFactory> > m_factory;
-    amrex::Vector<std::unique_ptr<amrex::FabFactory<amrex::FArrayBox> > > m_factory;
+    // array of EB objects
+    amrex::Vector<std::unique_ptr<eb_>> eb;
 
-    [[nodiscard]] amrex::FabFactory<amrex::FArrayBox> const&
-    Factory (int lev) const noexcept { return *m_factory[lev]; }
+    [[nodiscard]] eb_ const& get_eb (int lev) const noexcept {
+        AMREX_ASSERT(lev >= 0 && lev < eb.size() && eb[lev] != nullptr);
+        return *eb[lev];
+    }
+
     [[nodiscard]] amrex::EBFArrayBoxFactory const&
     EBFactory (int lev) const noexcept {
-        return static_cast<amrex::EBFArrayBoxFactory const&>(*m_factory[lev]);
+        return *(eb[lev]->get_const_factory());
     }
 
     [[nodiscard]] static int nghost_eb_basic ()

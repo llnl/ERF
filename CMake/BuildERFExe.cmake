@@ -21,10 +21,6 @@ function(build_erf_lib erf_lib_name)
     target_compile_definitions(${erf_lib_name} PUBLIC ERF_USE_MULTIBLOCK)
   endif()
 
-  if(ERF_ENABLE_WARM_NO_PRECIP)
-    target_compile_definitions(${erf_lib_name} PUBLIC ERF_USE_WARM_NO_PRECIP)
-  endif()
-
   if(ERF_ENABLE_PARTICLES)
     target_sources(${erf_lib_name} PRIVATE
                    ${SRC_DIR}/Particles/ERFPCEvolve.cpp
@@ -57,7 +53,7 @@ function(build_erf_lib erf_lib_name)
   if(ERF_ENABLE_NOAH)
     target_include_directories(${erf_lib_name} PUBLIC
                                $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/Source/LandSurfaceModel/NOAH>
-                               $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/Submodules/NOAH-MP/drivers/hrldas>)
+                               $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/Submodules/NOAH-MP/drivers/erf>)
     target_sources(${erf_lib_name} PRIVATE
                    ${SRC_DIR}/LandSurfaceModel/NOAH/ERF_NOAH.cpp)
     target_compile_definitions(${erf_lib_name} PUBLIC ERF_USE_NOAH)
@@ -163,6 +159,7 @@ function(build_erf_lib erf_lib_name)
        ${SRC_DIR}/IO/ERF_Write1DProfiles_stag.cpp
        ${SRC_DIR}/IO/ERF_WriteScalarProfiles.cpp
        ${SRC_DIR}/IO/ERF_Plotfile.cpp
+       ${SRC_DIR}/IO/ERF_WriteSubvolume.cpp
        ${SRC_DIR}/IO/ERF_WriteJobInfo.cpp
        ${SRC_DIR}/IO/ERF_ConsoleIO.cpp
        ${SRC_DIR}/LinearSolvers/ERF_PoissonSolve.cpp

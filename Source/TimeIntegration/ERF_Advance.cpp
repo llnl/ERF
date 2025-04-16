@@ -64,26 +64,23 @@ ERF::Advance (int lev, Real time, Real dt_lev, int iteration, int /*ncycle*/)
                        Geom(lev).Domain(),
                        domain_bcs_type);
 
-    // TODO: Can test on multiple levels later
     // Update the inflow perturbation update time and amplitude
-    if (lev == 0) {
-        if (solverChoice.pert_type == PerturbationType::Source ||
-            solverChoice.pert_type == PerturbationType::Direct)
-        {
-            turbPert.calc_tpi_update(lev, dt_lev, U_old, V_old, S_old);
-        }
+    if (solverChoice.pert_type == PerturbationType::Source ||
+        solverChoice.pert_type == PerturbationType::Direct)
+    {
+        turbPert.calc_tpi_update(lev, dt_lev, U_old, V_old, S_old);
+    }
 
-        // If PerturbationType::Direct is selected, directly add the computed perturbation
-        // on the conserved field
-        if (solverChoice.pert_type == PerturbationType::Direct)
-        {
-            auto m_ixtype = S_old.boxArray().ixType(); // Conserved term
-            for (MFIter mfi(S_old,TileNoZ()); mfi.isValid(); ++mfi) {
-                Box bx  = mfi.tilebox();
-                const Array4<Real> &cell_data  = S_old.array(mfi);
-                const Array4<const Real> &pert_cell = turbPert.pb_cell.array(mfi);
-                turbPert.apply_tpi(lev, bx, RhoTheta_comp, m_ixtype, cell_data, pert_cell);
-            }
+    // If PerturbationType::Direct is selected, directly add the computed perturbation
+    // on the conserved field
+    if (solverChoice.pert_type == PerturbationType::Direct)
+    {
+        auto m_ixtype = S_old.boxArray().ixType(); // Conserved term
+        for (MFIter mfi(S_old,TileNoZ()); mfi.isValid(); ++mfi) {
+            Box bx  = mfi.tilebox();
+            const Array4<Real> &cell_data  = S_old.array(mfi);
+            const Array4<const Real> &pert_cell = turbPert.pb_cell[lev].array(mfi);
+            turbPert.apply_tpi(lev, bx, RhoTheta_comp, m_ixtype, cell_data, pert_cell);
         }
     }
 
@@ -208,10 +205,13 @@ ERF::Advance (int lev, Real time, Real dt_lev, int iteration, int /*ncycle*/)
     // ***********************************************************************************************
     if (lev < finest_level) {
          IntVect ngvect_vels = vars_new[lev][Vars::xvel].nGrowVect();
-         (*physbcs_cons[lev])(vars_new[lev][Vars::cons],0,vars_new[lev][Vars::cons].nComp(),
+         (*physbcs_cons[lev])(vars_new[lev][Vars::cons], vars_new[lev][Vars::xvel], vars_new[lev][Vars::yvel],
+                              0,vars_new[lev][Vars::cons].nComp(),
                               vars_new[lev][Vars::cons].nGrowVect(),time,BCVars::cons_bc,true);
-            (*physbcs_u[lev])(vars_new[lev][Vars::xvel],0,1,ngvect_vels,time,BCVars::xvel_bc,true);
-            (*physbcs_v[lev])(vars_new[lev][Vars::yvel],0,1,ngvect_vels,time,BCVars::yvel_bc,true);
+            (*physbcs_u[lev])(vars_new[lev][Vars::xvel], vars_new[lev][Vars::xvel], vars_new[lev][Vars::yvel],
+                              ngvect_vels,time,BCVars::xvel_bc,true);
+            (*physbcs_v[lev])(vars_new[lev][Vars::yvel], vars_new[lev][Vars::xvel], vars_new[lev][Vars::yvel],
+                              ngvect_vels,time,BCVars::yvel_bc,true);
             (*physbcs_w[lev])(vars_new[lev][Vars::zvel], vars_new[lev][Vars::xvel], vars_new[lev][Vars::yvel],
                               ngvect_vels,time,BCVars::zvel_bc,true);
     }

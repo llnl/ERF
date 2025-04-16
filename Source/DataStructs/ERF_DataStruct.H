@@ -18,7 +18,7 @@
 #include <ERF_TurbPertStruct.H>
 
 AMREX_ENUM(InitType,
-    None, Input_Sounding, WRFInput, Metgrid, Uniform
+    None, Input_Sounding, NCFile, WRFInput, Metgrid, Uniform
 );
 
 AMREX_ENUM(ABLDriverType,
@@ -46,7 +46,7 @@ AMREX_ENUM(MoistureModelType,
 );
 
 AMREX_ENUM(MoistureType,
-    SAM, SAM_NoIce, SAM_NoPrecip_NoIce, Kessler, Kessler_NoRain, SatAdj, Morrison, None
+    SAM, SAM_NoIce, SAM_NoPrecip_NoIce, Kessler, Kessler_NoRain, SatAdj, Morrison, Morrison_NoIce, None
 );
 
 AMREX_ENUM(WindFarmType,
@@ -132,31 +132,22 @@ struct SolverChoice {
             amrex::Abort("The input moisture_type is deprecated.  Set moisture_model instead.");
         }
         pp.query_enum_case_insensitive("moisture_model",moisture_type);
-        if (moisture_type == MoistureType::SAM) {
+        if ( (moisture_type == MoistureType::Morrison      ) ||
+             (moisture_type == MoistureType::SAM           ) ||
+             (moisture_type == MoistureType::Morrison_NoIce) ||
+             (moisture_type == MoistureType::SAM_NoIce     ) ) {
             RhoQv_comp = RhoQ1_comp;
             RhoQc_comp = RhoQ2_comp;
             RhoQr_comp = RhoQ4_comp;
-        } else if (moisture_type == MoistureType::SAM_NoIce) {
+        } else if ( (moisture_type == MoistureType::SAM_NoPrecip_NoIce) ||
+                    (moisture_type == MoistureType::Kessler_NoRain) ||
+                    (moisture_type == MoistureType::SatAdj) ) {
             RhoQv_comp = RhoQ1_comp;
             RhoQc_comp = RhoQ2_comp;
-            RhoQr_comp = RhoQ4_comp;
-        } else if (moisture_type == MoistureType::SAM_NoPrecip_NoIce) {
-            RhoQv_comp = RhoQ1_comp;
-            RhoQc_comp = RhoQ2_comp;
-        } else if (moisture_type == MoistureType::Morrison) {
-            RhoQv_comp = RhoQ1_comp;
-            RhoQc_comp = RhoQ2_comp;
-            RhoQr_comp = RhoQ4_comp;
         } else if (moisture_type == MoistureType::Kessler) {
             RhoQv_comp = RhoQ1_comp;
             RhoQc_comp = RhoQ2_comp;
             RhoQr_comp = RhoQ3_comp;
-        } else if (moisture_type == MoistureType::Kessler_NoRain) {
-            RhoQv_comp = RhoQ1_comp;
-            RhoQc_comp = RhoQ2_comp;
-        } else if (moisture_type == MoistureType::SatAdj) {
-            RhoQv_comp = RhoQ1_comp;
-            RhoQc_comp = RhoQ2_comp;
         }
 
         // TODO: should we set default for dry??
@@ -167,6 +158,7 @@ struct SolverChoice {
                 moisture_type == MoistureType::SAM_NoIce          ||
                 moisture_type == MoistureType::SAM_NoPrecip_NoIce ||
                 moisture_type == MoistureType::Morrison ||
+                moisture_type == MoistureType::Morrison_NoIce ||
                 moisture_type == MoistureType::SatAdj)
             {
                 buoyancy_type = 1; // uses Rhoprime
@@ -334,6 +326,8 @@ struct SolverChoice {
 
         // Include Coriolis forcing?
         pp.query("use_coriolis", use_coriolis);
+        pp.query("has_lat_lon", has_lat_lon);
+        if (has_lat_lon) { pp.query("variable_coriolis", variable_coriolis); }
 
         // Include Rayleigh damping (separate flags for each variable)
         pp.query("rayleigh_damp_U", rayleigh_damp_U);
@@ -377,7 +371,7 @@ struct SolverChoice {
 
         if (use_coriolis)
         {
-            build_coriolis_forcings(pp_prefix);
+            build_coriolis_forcings_const_lat(pp_prefix);
         }
 
         pp.query("add_custom_rhotheta_forcing", custom_rhotheta_forcing);
@@ -549,6 +543,8 @@ struct SolverChoice {
             amrex::Print() << "Moisture Model: SAM No Precip No Ice" << std::endl;
         } else if (moisture_type == MoistureType::Morrison) {
             amrex::Print() << "Moisture Model: Morrison" << std::endl;
+        } else if (moisture_type == MoistureType::Morrison_NoIce) {
+            amrex::Print() << "Moisture Model: Morrison_NoIce" << std::endl;
         } else if (moisture_type == MoistureType::Kessler) {
             amrex::Print() << "Moisture Model: Kessler" << std::endl;
         } else if (moisture_type == MoistureType::Kessler_NoRain) {
@@ -612,7 +608,7 @@ struct SolverChoice {
         }
     }
 
-    void build_coriolis_forcings(std::string pp_prefix)
+    void build_coriolis_forcings_const_lat (std::string pp_prefix)
     {
         amrex::ParmParse pp(pp_prefix);
 
@@ -794,6 +790,9 @@ struct SolverChoice {
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> abl_geo_forcing;
     std::string abl_geo_wind_table;
     bool have_geo_wind_profile {false};
+
+    bool has_lat_lon{false};
+    bool variable_coriolis{false};
 
     int ave_plane {2};
     // Microphysics params

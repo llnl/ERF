@@ -3,17 +3,17 @@
 using namespace amrex;
 
 void ERF::advance_lsm (int lev,
-                       MultiFab& cons,
-                       MultiFab& u_in,
-                       MultiFab& v_in,
+                       MultiFab& cons_in,
+                       MultiFab& xvel_in,
+                       MultiFab& yvel_in,
                        const Real& dt_advance)
 {
     if (solverChoice.lsm_type != LandSurfaceType::None) {
         // Fill boundaries before getting cell-centered velocities
-        u_in.FillBoundary(geom[lev].periodicity());
-        v_in.FillBoundary(geom[lev].periodicity());
+        xvel_in.FillBoundary(geom[lev].periodicity());
+        yvel_in.FillBoundary(geom[lev].periodicity());
 
-        lsm.Update_Lsm_Vars_Lev(lev, cons, u_in, v_in);
+        lsm.Update_Lsm_Vars_Lev(lev, cons_in, xvel_in, yvel_in);
 #ifdef ERF_USE_RRTMGP
         lsm.set_LSM_flux_inputs(lev, sw_lw_fluxes[lev].get(), solar_zenith[lev].get());
 #endif
@@ -42,8 +42,12 @@ void ERF::advance_lsm (int lev,
         }
 
         lsm.set_LSM_terrain_inputs(lev, sst_lev, lmask_lev);
-        lsm.Advance(lev, dt_advance);
-        lsm.Update_State_Vars_Lev(lev, cons);
+        if (solverChoice.lsm_type == LandSurfaceType::NOAH) {
+            lsm.Advance(lev, cons_in, xvel_in, yvel_in, SFS_hfx3_lev[lev].get(), SFS_q1fx3_lev[lev].get(), dt_advance, istep[lev]);
+        } else {
+            lsm.Advance(lev, dt_advance);
+        }
+        lsm.Update_State_Vars_Lev(lev, cons_in);
 
         if (use_moist) {
             // copy current rain_accum into precip used to compute the rate for the next timestep

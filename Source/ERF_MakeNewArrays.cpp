@@ -49,7 +49,7 @@ ERF::init_stuff (int lev, const BoxArray& ba, const DistributionMapping& dm,
     // NOTE: this is where we actually allocate z_phys_nd -- but here it's called "tmp_zphys_nd"
     // We need this to be one greater than the ghost cells to handle levels > 0
 
-    int ngrow = ComputeGhostCells(solverChoice.advChoice, solverChoice.use_num_diff) + 2;
+    int ngrow = ComputeGhostCells(solverChoice) + 2;
     tmp_zphys_nd = std::make_unique<MultiFab>(ba_nd,dm,1,IntVect(ngrow,ngrow,ngrow));
 
     z_phys_cc[lev] = std::make_unique<MultiFab>(ba,dm,1,1);
@@ -86,7 +86,7 @@ ERF::init_stuff (int lev, const BoxArray& ba, const DistributionMapping& dm,
 
     if (SolverChoice::terrain_type == TerrainType::ImmersedForcing)
     {
-        terrain_blanking[lev] = std::make_unique<MultiFab>(ba,dm,1,1);
+        terrain_blanking[lev] = std::make_unique<MultiFab>(ba,dm,1,ngrow);
         terrain_blanking[lev]->setVal(1.0);
     }
 
@@ -126,8 +126,8 @@ ERF::init_stuff (int lev, const BoxArray& ba, const DistributionMapping& dm,
     // The number of ghost cells for density must be 1 greater than that for velocity
     //     so that we can go back in forth between velocity and momentum on all faces
     // ********************************************************************************************
-    int ngrow_state = ComputeGhostCells(solverChoice.advChoice, solverChoice.use_num_diff) + 1;
-    int ngrow_vels  = ComputeGhostCells(solverChoice.advChoice, solverChoice.use_num_diff);
+    int ngrow_state = ComputeGhostCells(solverChoice) + 1;
+    int ngrow_vels  = ComputeGhostCells(solverChoice);
 
     // ********************************************************************************************
     // New solution data containers
@@ -361,13 +361,11 @@ ERF::init_stuff (int lev, const BoxArray& ba, const DistributionMapping& dm,
     //*********************************************************
     // Turbulent perturbation region initialization
     //*********************************************************
-    // TODO: Test perturbation on multiple levels
     if (solverChoice.pert_type == PerturbationType::Source ||
         solverChoice.pert_type == PerturbationType::Direct)
     {
-        if (lev == 0) {
-            turbPert.init_tpi(lev, geom[lev].Domain().bigEnd(), geom[lev].CellSizeArray(), ba, dm, ngrow_state, pp_prefix);
-        }
+        amrex::Box bnd_bx = ba.minimalBox();
+        turbPert.init_tpi(lev, bnd_bx.smallEnd(), bnd_bx.bigEnd(), geom[lev].CellSizeArray(), ba, dm, ngrow_state, pp_prefix, refRatio(), max_level);
     }
 
     //
@@ -507,7 +505,7 @@ ERF::init_zphys (int lev, Real time)
                                   domain_bcs_type, BCVars::cons_bc);
         }
 
-        int ngrow = ComputeGhostCells(solverChoice.advChoice, solverChoice.use_num_diff) + 2;
+        int ngrow = ComputeGhostCells(solverChoice) + 2;
         Box bx(surroundingNodes(Geom(lev).Domain())); bx.grow(ngrow);
         FArrayBox terrain_fab(makeSlab(bx,2,0),1);
 
@@ -541,7 +539,7 @@ ERF::init_zphys (int lev, Real time)
 
         if (solverChoice.terrain_type == TerrainType::ImmersedForcing) {
             terrain_blanking[lev]->setVal(1.0);
-            MultiFab::Subtract(*terrain_blanking[lev], EBFactory(lev).getVolFrac(), 0, 0, 1, 0);
+            MultiFab::Subtract(*terrain_blanking[lev], EBFactory(lev).getVolFrac(), 0, 0, 1, ngrow);
             terrain_blanking[lev]->FillBoundary(geom[lev].periodicity());
         }
 
@@ -589,7 +587,7 @@ ERF::remake_zphys (int lev, Real /*time*/, std::unique_ptr<MultiFab>& temp_zphys
         // This assumes we have already remade the EBGeometry
         //
         terrain_blanking[lev]->setVal(1.0);
-        MultiFab::Subtract(*terrain_blanking[lev], EBFactory(lev).getVolFrac(), 0, 0, 1, 0);
+        MultiFab::Subtract(*terrain_blanking[lev], EBFactory(lev).getVolFrac(), 0, 0, 1, z_phys_nd[lev]->nGrowVect());
     }
 }
 void
@@ -634,7 +632,7 @@ ERF::make_physbcs (int lev)
 
     physbcs_cons[lev] = std::make_unique<ERFPhysBCFunct_cons> (lev, geom[lev], domain_bcs_type, domain_bcs_type_d,
                                                                m_bc_extdir_vals, m_bc_neumann_vals,
-                                                               z_phys_nd[lev], solverChoice.use_real_bcs);
+                                                               z_phys_nd[lev], solverChoice.use_real_bcs, th_bc_data[lev].data());
     physbcs_u[lev]    = std::make_unique<ERFPhysBCFunct_u> (lev, geom[lev], domain_bcs_type, domain_bcs_type_d,
                                                             m_bc_extdir_vals, m_bc_neumann_vals,
                                                             z_phys_nd[lev], solverChoice.use_real_bcs, xvel_bc_data[lev].data());

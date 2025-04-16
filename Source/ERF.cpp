@@ -11,8 +11,10 @@
 #include <ERF.H>
 #include <AMReX_buildInfo.H>
 #include <AMReX_Random.H>
+#include <ERF_EpochTime.H>
 #include <ERF_Utils.H>
 #include <ERF_TerrainMetrics.H>
+#include <ERF_EBIFTerrain.H>
 #include <memory>
 
 using namespace amrex;
@@ -29,7 +31,7 @@ Real ERF::cfl           =  0.8;
 Real ERF::sub_cfl       =  1.0;
 Real ERF::init_shrink   =  1.0;
 Real ERF::change_max    =  1.1;
-Real ERF::dt_max_initial = 1.0;
+Real ERF::dt_max_initial = 2.0e100;
 Real ERF:: dt_max = 1e9;
 int  ERF::fixed_mri_dt_ratio = 0;
 
@@ -209,7 +211,7 @@ ERF::ERF_shared ()
 
     t_new.resize(nlevs_max, 0.0);
     t_old.resize(nlevs_max, -1.e100);
-    dt.resize(nlevs_max, 1.e100);
+    dt.resize(nlevs_max, std::min(1.e100,dt_max_initial));
     dt_mri_ratio.resize(nlevs_max, 1);
 
     vars_new.resize(nlevs_max);
@@ -249,6 +251,7 @@ ERF::ERF_shared ()
     xvel_bc_data.resize(nlevs_max);
     yvel_bc_data.resize(nlevs_max);
     zvel_bc_data.resize(nlevs_max);
+    th_bc_data.resize(nlevs_max);
 
     advflux_reg.resize(nlevs_max);
 
@@ -346,12 +349,19 @@ ERF::ERF_shared ()
     // Size lat long arrays if using netcdf
     lat_m.resize(nlevs_max);
     lon_m.resize(nlevs_max);
-    for (int lev = 0; lev < max_level; ++lev)
-    {
+    for (int lev = 0; lev < max_level; ++lev) {
         lat_m[lev] = nullptr;
         lon_m[lev] = nullptr;
     }
 #endif
+
+    // Variable coriolis
+    sinPhi_m.resize(nlevs_max);
+    cosPhi_m.resize(nlevs_max);
+    for (int lev = 0; lev < max_level; ++lev) {
+        sinPhi_m[lev] = nullptr;
+        cosPhi_m[lev] = nullptr;
+    }
 
     // Initialize tagging criteria for mesh refinement
     refinement_criteria_setup();
@@ -362,8 +372,11 @@ ERF::ERF_shared ()
           ref_ratio[lev][0]  << " " << ref_ratio[lev][1]  <<  " " << ref_ratio[lev][2] << std::endl;
     }
 
-    // We will create each of these in MakeNewLevel.../RemakeLevel
-    m_factory.resize(max_level+1);
+    // We will create each of these in MakeNewLevelFromScratch
+    eb.resize(max_level+1);
+    for (int lev = 0; lev < max_level + 1; lev++){
+        eb[lev] = std::make_unique<eb_>();
+    }
 
     //
     // Construct the EB data structures and store in a separate class
@@ -372,15 +385,14 @@ ERF::ERF_shared ()
     if ( solverChoice.terrain_type == TerrainType::EB ||
          solverChoice.terrain_type == TerrainType::ImmersedForcing)
     {
-        int lev = 0; Real dummy_time = 0.0;
-        Box terrain_bx(surroundingNodes(geom[lev].Domain())); terrain_bx.grow(3);
+        Box terrain_bx(surroundingNodes(geom[max_level].Domain())); terrain_bx.grow(3);
         FArrayBox terrain_fab(makeSlab(terrain_bx,2,0),1);
-        prob->init_terrain_surface(geom[lev], terrain_fab, dummy_time);
-
-        amrex::Print() << "MAKING EB GEOMETRY " << std::endl;
-        eb_ eb(geom[lev], terrain_fab, stretched_dz_d[lev], solverChoice.anelastic[lev]);
-        // MakeEBGeometry();
-
+        Real dummy_time = 0.0;
+        prob->init_terrain_surface(geom[max_level], terrain_fab, dummy_time);
+        TerrainIF ebterrain(terrain_fab, geom[max_level], stretched_dz_d[max_level]);
+        auto gshop = EB2::makeShop(ebterrain);
+        bool build_coarse_level_by_coarsening(false);
+        amrex::EB2::Build(gshop, geom[max_level], max_level, max_level, build_coarse_level_by_coarsening);
     }
 }
 
@@ -398,6 +410,11 @@ ERF::Evolve ()
     //      for finer levels (with or without subcycling)
     for (int step = istep[0]; step < max_step && cur_time < stop_time; ++step)
     {
+        if (use_datetime) {
+            Print() << "\n" << getTimestamp(cur_time, datetime_format)
+                    << " (" << cur_time-start_time << " s elapsed)"
+                    << std::endl;
+        }
         Print() << "\nCoarse STEP " << step+1 << " starts ..." << std::endl;
 
         ComputeDt(step);
@@ -426,6 +443,10 @@ ERF::Evolve ()
         if (writeNow(cur_time, dt[0], step+1, m_plot_int_2, m_plot_per_2)) {
             last_plot_file_step_2 = step+1;
             WritePlotFile(2,plotfile_type_2,plot_var_names_2);
+        }
+        if (writeNow(cur_time, dt[0], step+1, m_subvol_int, m_subvol_per)) {
+            last_subvol = step+1;
+            WriteSubvolume();
         }
 
         if (writeNow(cur_time, dt[0], step+1, m_check_int, m_check_per)) {
@@ -457,6 +478,9 @@ ERF::Evolve ()
     }
     if ( (m_plot_int_2 > 0 || m_plot_per_2 > 0.) && istep[0] > last_plot_file_step_2) {
         WritePlotFile(2,plotfile_type_1,plot_var_names_2);
+    }
+    if ( (m_subvol_int > 0 || m_subvol_per > 0.) && istep[0] > last_subvol) {
+        WriteSubvolume();
     }
 
     if ( (m_check_int > 0 || m_check_per > 0.) && istep[0] > last_check_file_step) {
@@ -549,6 +573,7 @@ ERF::post_timestep (int nstep, Real time, Real dt_lev0)
     if (is_it_time_for_action(nstep, time, dt_lev0, sum_interval, sum_per)) {
         sum_integrated_quantities(time);
         sum_derived_quantities(time);
+        sum_energy_quantities(time);
     }
 
     if (solverChoice.pert_type == PerturbationType::Source ||
@@ -720,6 +745,13 @@ ERF::InitData_post ()
         for (int lev(0); lev <= finest_level; ++lev) {
             make_physbcs(lev);
             (*physbcs_base[lev])(base_state[lev],0,base_state[lev].nComp(),base_state[lev].nGrowVect());
+        }
+
+        if (solverChoice.do_forest_drag) {
+            for (int lev(0); lev <= finest_level; ++lev) {
+                m_forest_drag[lev]->define_drag_field(grids[lev], dmap[lev], geom[lev],
+                                                      z_phys_cc[lev].get(), z_phys_nd[lev].get());
+            }
         }
     }
 
@@ -912,11 +944,11 @@ ERF::InitData_post ()
     }
 #endif
 
-        (*physbcs_cons[lev])(lev_new[Vars::cons],0,ncomp_cons,
+        (*physbcs_cons[lev])(lev_new[Vars::cons],lev_new[Vars::xvel],lev_new[Vars::yvel],0,ncomp_cons,
                              ngvect_cons,t_new[lev],BCVars::cons_bc,do_fb);
-        (   *physbcs_u[lev])(lev_new[Vars::xvel],0,1         ,
+        (   *physbcs_u[lev])(lev_new[Vars::xvel],lev_new[Vars::xvel],lev_new[Vars::yvel],
                              ngvect_vels,t_new[lev],BCVars::xvel_bc,do_fb);
-        (   *physbcs_v[lev])(lev_new[Vars::yvel],0,1         ,
+        (   *physbcs_v[lev])(lev_new[Vars::yvel],lev_new[Vars::xvel],lev_new[Vars::yvel],
                              ngvect_vels,t_new[lev],BCVars::yvel_bc,do_fb);
         (   *physbcs_w[lev])(lev_new[Vars::zvel],lev_new[Vars::xvel],lev_new[Vars::yvel],
                              ngvect_vels,t_new[lev],BCVars::zvel_bc,do_fb);
@@ -1007,12 +1039,12 @@ ERF::InitData_post ()
     }
 
 #ifdef ERF_USE_WW3_COUPLING
-    int lev = 0;
+    int my_lev = 0;
     amrex::Print() <<  " About to call send_to_ww3 from ERF.cpp" << std::endl;
-    send_to_ww3(lev);
+    send_to_ww3(my_lev);
     amrex::Print() <<  " About to call read_waves from ERF.cpp"  << std::endl;
-    read_waves(lev);
-   // send_to_ww3(lev);
+    read_waves(my_lev);
+   // send_to_ww3(my_lev);
 #endif
 
     // Configure ABLMost params if used MostWall boundary condition
@@ -1157,6 +1189,10 @@ ERF::InitData_post ()
             WritePlotFile(2,plotfile_type_2,plot_var_names_2);
             last_plot_file_step_2 = istep[0];
         }
+        if (m_subvol_int > 0 || m_subvol_per > 0.) {
+            WriteSubvolume();
+            last_subvol = istep[0];
+        }
     }
 
     // Set these up here because we need to know which MPI rank "cell" is on...
@@ -1166,8 +1202,9 @@ ERF::InitData_post ()
         datalog.resize(num_datalogs);
         datalogname.resize(num_datalogs);
         pp.queryarr("data_log",datalogname,0,num_datalogs);
-        for (int i = 0; i < num_datalogs; i++)
+        for (int i = 0; i < num_datalogs; i++) {
             setRecordDataInfo(i,datalogname[i]);
+        }
     }
 
     if (pp.contains("der_data_log"))
@@ -1176,8 +1213,20 @@ ERF::InitData_post ()
         der_datalog.resize(num_der_datalogs);
         der_datalogname.resize(num_der_datalogs);
         pp.queryarr("der_data_log",der_datalogname,0,num_der_datalogs);
-        for (int i = 0; i < num_der_datalogs; i++)
+        for (int i = 0; i < num_der_datalogs; i++) {
             setRecordDerDataInfo(i,der_datalogname[i]);
+        }
+    }
+
+    if (pp.contains("energy_data_log"))
+    {
+        int num_energy_datalogs = pp.countval("energy_data_log");
+        tot_e_datalog.resize(num_energy_datalogs);
+        tot_e_datalogname.resize(num_energy_datalogs);
+        pp.queryarr("energy_data_log",tot_e_datalogname,0,num_energy_datalogs);
+        for (int i = 0; i < num_energy_datalogs; i++) {
+            setRecordEnergyDataInfo(i,tot_e_datalogname[i]);
+        }
     }
 
 
@@ -1254,6 +1303,7 @@ ERF::InitData_post ()
     if (is_it_time_for_action(istep[0], t_new[0], dt[0], sum_interval, sum_per)) {
         sum_integrated_quantities(t_new[0]);
         sum_derived_quantities(t_new[0]);
+        sum_energy_quantities(t_new[0]);
     }
 
     // Create object to do line and plane sampling if needed
@@ -1362,8 +1412,10 @@ ERF::init_only (int lev, Real time)
     auto& lev_old = vars_old[lev];
 
 #ifndef ERF_USE_NETCDF
-    AMREX_ALWAYS_ASSERT_WITH_MESSAGE((solverChoice.init_type != InitType::WRFInput && solverChoice.init_type != InitType::Metgrid),
-                                     "init_type cannot be 'WRFInput' or 'MetGrid' if we don't build with netcdf!");
+    AMREX_ALWAYS_ASSERT_WITH_MESSAGE(( (solverChoice.init_type != InitType::WRFInput) &&
+                                       (solverChoice.init_type != InitType::Metgrid ) &&
+                                       (solverChoice.init_type != InitType::NCFile  )  ),
+                                     "init_type cannot be 'WRFInput', 'MetGrid' or 'NCFile' if we don't build with netcdf!");
 #endif
 
     // Loop over grids at this level to initialize our grid data
@@ -1400,6 +1452,34 @@ ERF::init_only (int lev, Real time)
         // The base state is initialized from WRF wrfinput data, output by
         // ideal.exe or real.exe
         init_from_wrfinput(lev);
+        if (lev==0) {
+            if ((start_time > 0) && (start_time != t_new[lev])) {
+                Print() << "Ignoring specified start_time="
+                        << std::setprecision(timeprecision) << start_time
+                        << std::endl;
+            }
+            start_time = t_new[lev];
+        }
+        use_datetime = true;
+
+        // The physbc's need the terrain but are needed for initHSE
+        if (!solverChoice.use_real_bcs) {
+            make_physbcs(lev);
+        }
+    }
+    else if (solverChoice.init_type == InitType::NCFile)
+    {
+        // The base state is initialized by reading from a Netcdf file
+        init_from_wrfinput(lev);
+        if (lev==0) {
+            if ((start_time > 0) && (start_time != t_new[lev])) {
+                Print() << "Ignoring specified start_time="
+                        << std::setprecision(timeprecision) << start_time
+                        << std::endl;
+            }
+            start_time = t_new[lev];
+        }
+        use_datetime = true;
 
         // The physbc's need the terrain but are needed for initHSE
         if (!solverChoice.use_real_bcs) {
@@ -1456,10 +1536,8 @@ ERF::init_only (int lev, Real time)
     // Initialize turbulent perturbation
     if (solverChoice.pert_type == PerturbationType::Source ||
         solverChoice.pert_type == PerturbationType::Direct) {
-        if (lev == 0) {
-            turbPert_update(lev, 0.);
-            turbPert_amplitude(lev);
-        }
+        turbPert_update(lev, 0.);
+        turbPert_amplitude(lev);
     }
 }
 
@@ -1470,9 +1548,18 @@ ERF::ReadParameters ()
     {
         ParmParse pp;  // Traditionally, max_step and stop_time do not have prefix.
         pp.query("max_step", max_step);
-        pp.query("stop_time", stop_time);
 
-        pp.query("start_time", start_time); // This is optional, it defaults to 0
+        std::string start_datetime, stop_datetime;
+        if (pp.query("start_datetime", start_datetime)) {
+            start_time = getEpochTime(start_datetime, datetime_format);
+            if (pp.query("stop_datetime", stop_datetime)) {
+                stop_time = getEpochTime(stop_datetime, datetime_format);
+            }
+            use_datetime = true;
+        } else {
+            pp.query("stop_time", stop_time);
+            pp.query("start_time", start_time); // This is optional, it defaults to 0
+        }
     }
 
     ParmParse pp(pp_prefix);
@@ -1552,19 +1639,18 @@ ERF::ReadParameters ()
 
         // NetCDF wrfinput initialization files -- possibly multiple files at each of multiple levels
         //        but we always have exactly one file at level 0
-        for (int lev = 0; lev <= max_level; lev++)
-        {
+        for (int lev = 0; lev <= max_level; lev++) {
             const std::string nc_file_names = Concatenate("nc_init_file_",lev,1);
-            if (pp.contains(nc_file_names.c_str()))
-            {
+            if (pp.contains(nc_file_names.c_str())) {
                 int num_files = pp.countval(nc_file_names.c_str());
                 num_files_at_level[lev] = num_files;
                 nc_init_file[lev].resize(num_files);
                 pp.queryarr(nc_file_names.c_str(), nc_init_file[lev],0,num_files);
-                for (int j = 0; j < num_files; j++)
+                for (int j = 0; j < num_files; j++) {
                     Print() << "Reading NC init file names at level " << lev << " and index " << j << " : " << nc_init_file[lev][j] << std::endl;
-            }
-        }
+                } // j
+            } // if pp.contains
+        } // lev
 
         // NetCDF wrfbdy lateral boundary file
         pp.query("nc_bdy_file", nc_bdy_file);
@@ -1636,6 +1722,10 @@ ERF::ReadParameters ()
         pp.query("plot_per_1",  m_plot_per_1);
         pp.query("plot_per_2",  m_plot_per_2);
 
+        pp.query("subvol_file",   subvol_file);
+        pp.query("subvol_int" , m_subvol_int);
+        pp.query("subvol_per" , m_subvol_per);
+
         pp.query("expand_plotvars_to_unif_rr",m_expand_plotvars_to_unif_rr);
 
         pp.query("plot_face_vels",m_plot_face_vels);
@@ -1702,9 +1792,18 @@ ERF::ReadParameters ()
         }
     }
 
-    if (solverChoice.init_type == InitType::WRFInput) {
-        AMREX_ALWAYS_ASSERT(solverChoice.terrain_type == TerrainType::StaticFittedMesh);
-    }
+    // If init from WRFInput or Metgrid make sure a valid file name is present
+    if ((solverChoice.init_type == InitType::WRFInput) ||
+        (solverChoice.init_type == InitType::Metgrid)  ||
+        (solverChoice.init_type == InitType::NCFile) ) {
+        for (int lev = 0; lev <= max_level; lev++) {
+            int num_files = nc_init_file[lev].size();
+            AMREX_ALWAYS_ASSERT_WITH_MESSAGE(num_files>0, "A file name must be present for init type WRFInput, Metgrid or NCFile.");
+            for (int j = 0; j < num_files; j++) {
+                AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!nc_init_file[lev][j].empty(), "Valid file name must be present for init type WRFInput, Metgrid or NCFile.");
+            } //j
+        } // lev
+    } // InitType
 
     // What type of land surface model to use
     // NOTE: Must be checked after init_params
@@ -1740,7 +1839,8 @@ ERF::ParameterSanityChecks ()
     AMREX_ALWAYS_ASSERT(cfl > 0. || fixed_dt[0] > 0.);
 
     // We don't allow use_real_bcs to be true if init_type is not either InitType::WRFInput or InitType::Metgrid
-    AMREX_ALWAYS_ASSERT(!solverChoice.use_real_bcs || ((solverChoice.init_type == InitType::WRFInput) || (solverChoice.init_type == InitType::Metgrid)) );
+    AMREX_ALWAYS_ASSERT( !solverChoice.use_real_bcs ||
+                        ((solverChoice.init_type == InitType::WRFInput) || (solverChoice.init_type == InitType::Metgrid)) );
 
     AMREX_ALWAYS_ASSERT(real_width >= 0);
     AMREX_ALWAYS_ASSERT(real_set_width >= 0);

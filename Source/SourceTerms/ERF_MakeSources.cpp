@@ -202,7 +202,7 @@ void make_sources (int level,
         ParallelFor(bx, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
         {
             // Short-wavelength and long-wavelength radiation source terms
-            cell_src(i,j,k,RhoTheta_comp) += qheating_arr(i,j,k,0) + qheating_arr(i,j,k,1);
+            cell_src(i,j,k,RhoTheta_comp) += cell_data(i,j,k,Rho_comp) * ( qheating_arr(i,j,k,0) + qheating_arr(i,j,k,1) );
         });
 #else
         if (solverChoice.do_radiation) {
@@ -377,7 +377,7 @@ void make_sources (int level,
         // *************************************************************************************
         if (solverChoice.pert_type == PerturbationType::Source) {
             auto m_ixtype = S_data[IntVars::cons].boxArray().ixType(); // Conserved term
-            const amrex::Array4<const amrex::Real>& pert_cell = turbPert.pb_cell.const_array(mfi);
+            const amrex::Array4<const amrex::Real>& pert_cell = turbPert.pb_cell[level].const_array(mfi);
             turbPert.apply_tpi(level, bx, RhoTheta_comp, m_ixtype, cell_src, pert_cell); // Applied as source term
         }
 

@@ -22,43 +22,95 @@ cloud water / ice mixing ratio.
 **Horizontal grid**: both ERF and WRF use Arakawa C-grid staggering.
 
 **Time Integration**: Time-split integration using 3rd-order Runge-Kutta scheme with smaller time step for
-acoustic and gravity wave modes.  Variable time step capability.
+acoustic and gravity wave modes.  Variable time step capability. Vertically implicit acoustic step off-centering.
 
 **Spatial Discretization**: 2nd- to 6th-order advection options in horizontal and vertical.  In addition, several
 different WENO schemes are available for scalar variables other than density and potential temperature.
 
-**Turbulent Mixing**: Sub-grid scale turbulence formulation.  Vertically implicit acoustic step off-centering.
+**Turbulent Mixing**: ERF and WRF have the same sub-grid scale turbulence closures with the Smagorinsky or
+1.5-order TKE (Deardorff) model, in isotropic or anisotropic forms, for large-eddy simulation (LES);
+planetary boundary layer (PBL) schemes (MYNN, YSU) are available. ERF also has support for RANS turbulence modeling.
 
-**Diffusion**: In WRF, the diffusion coefficients specified in the input file (:math:`K_h` and :math:`K_v` for
-horizontal and vertical diffusion) get divided by the Prandtl number for the potential temperature and the scalars.
-For the momentum, they are used as it is. In ERF, the coefficients specified in the inputs (:math:`\alpha_T` and :math:`\alpha_C`)
-are used as it is, and no division by Prandtl number is done.
+**Diffusion**: In WRF and ERF, constant diffusion coefficients may be specified (:math:`K_h` and :math:`K_v` for
+horizontal and vertical diffusion). Constant dynamic viscosity may also be specified in ERF.
+Variable diffusivity is provided in 3-D through LES modeling and in 1-D through PBL modeling. For mesoscale applications,
+3-D diffusion is provided by combining a PBL scheme with the Smagorinsky model.
+Prandtl and Schmidt numbers are used to derive diffusivities of heat or other scalars from the diffusivity of momentum.
 
 **Initial conditions**: both ERF and WRF have the ability to initialize problems from
-3D "real" data (output of real.exe), "ideal" data (output of ideal.exe) and from 1D input soundings.
+3-D "real" data (output of real.exe), "ideal" data (output of ideal.exe), and from 1-D input soundings.
 
 **Lateral boundary conditions**: Periodic, open, symmetric and specified (in wrfbdy* files).
 
-**Bottom boundary conditions**: Frictional or free-slip
+**Bottom boundary conditions**: Frictional (Monin-Obukhov Similarity Theory) or free-slip
 
-**Earth's Rotation**: Coriolis terms in ERF controlled by run-time input flag
+**Earth's Rotation**: Coriolis terms in ERF controlled by run-time input flag (2-D or 3-D, constant or spatially varying
+for real-data cases)
 
 **Mapping to Sphere**: ERF supports the use of map scale factors for isotropic projections (read in from
 wrfinput files).
 
 **Nesting**: One-way or two-way.  Multiple levels and integer ratios.
 
+**Wind Energy Modeling**: Wind farm parameterizations and a generalize actuator disk are available.
 
 
 Key Differences
 --------------------
+ERF provides **performance portability** on different computing architectures **including GPUs from all major vendors** (Nvidia, AMD, and Intel).
 
-**Vertical coordinates**: Unlike WRF, ERF uses a height-based vertical coordinate, with vertical grid stretching permitted.
+**Vertical Coordinates**: Unlike WRF, ERF uses a height-based vertical coordinate, with vertical grid stretching permitted.
 
-**Time Integration**: ERF supports using a 3rd-order Runge-Kutta scheme with no substepping as alternative to RK3 with acoustic substepping.
+**Governing Equations**: ERF supports both fully compressible and anelastic equation sets.
 
-**Initial conditions**: ERF has an additional mode of "custom" initialization in which
-the user writes the initialization routine.
+**Time Integration**: ERF supports using a 3rd-order Runge-Kutta scheme with explicit acoustic substepping or no substepping
+(in addition to the implicit acoustic substepping in WRF).
+
+**Representation of Surface Features**: Terrain and urban geometries may be simulated with immersed forcing or embedded (immersed) boundary techniques.
+
+**Interface with AMR-Wind**: ERF may be tightly coupled with AMR-Wind, an incompressible ABL solver with integrated turbine aeroservoelastic dynamics modeling and two-phase flow capabilities.
+
+**Particles**: ERF can be compiled with support for particles, for flow visualization or Lagrangian physics modeling.
+
+**User-Defined Functions**: ERF provides templates to customize initialization and/or impose spatiotemporally varying source terms.
 
 ERF does *not* have the capability for global simulation
+
+
+
+Workflows
+--------------------
+For real-data simulations, ERF supports a variety of workflows and can work with existing WRF Preprocessing System (WPS) or initial/boundary condition data.
+
+.. list-table:: Simulation Workflows
+   :header-rows: 1
+
+   * -
+     - Large-Scale Data (reanalysis, HRRR, ...)
+     - Intermediate Processing
+     - Weather Simulation
+   * - WRF
+     - Manual download
+     - WPS + ``real.exe``
+     - ``wrf.exe``
+   * - WRF --> ERF
+     - Manual download
+     - WPS + ``real.exe``
+     - ``erf_abl`` (init from wrfinput)
+   * -
+     - Manual download
+     - ``ndown.exe``
+     - ``erf_abl`` (init from wrfinput)
+   * - WPS --> ERF
+     - Manual download
+     - WPS
+     - ``erf_abl`` (init from metgrid)
+   * - E3SM --> ERF
+     - ``run_e3sm``
+     -  *Under development*
+     - ``erf_abl``
+   * - ERF standalone
+     - Python tools
+     - Python tools *(under development)*
+     - ``erf_abl``
 

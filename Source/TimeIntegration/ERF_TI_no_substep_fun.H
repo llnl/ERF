@@ -17,6 +17,7 @@
         const amrex::GpuArray<int, IntVars::NumTypes> ncomp_fast = {2,1,1,1};
 
         if (verbose) amrex::Print() << " No-substepping time integration at level " << level
+                                    << std::setprecision(timeprecision)
                                     << " to " << time_for_fp
                                     << " with dt = " << slow_dt << std::endl;
 
@@ -106,7 +107,7 @@
                     });
 
                 } else { // Fixed or no terrain
-                    const Array4<const Real>& dJ_old =     detJ_cc[level]->const_array(mfi);
+                    const Array4<const Real>& dJ_old = detJ_cc[level]->const_array(mfi);
                     ParallelFor(bx, ncomp_fast[IntVars::cons],
                     [=] AMREX_GPU_DEVICE (int i, int j, int k, int nn) {
                         const int n = scomp_fast[IntVars::cons] + nn;
@@ -119,15 +120,37 @@
                     // Commenting out the update is a HACK while developing the EB capability
                     if (solverChoice.terrain_type == TerrainType::EB)
                     {
+                        const Array4<const Real>& vfrac_u = (get_eb(level).get_u_const_factory())->getVolFrac().const_array(mfi);
+                        const Array4<const Real>& vfrac_v = (get_eb(level).get_v_const_factory())->getVolFrac().const_array(mfi);
+                        const Array4<const Real>& vfrac_w = (get_eb(level).get_w_const_factory())->getVolFrac().const_array(mfi);
+
                         ParallelFor(tbx, tby, tbz,
                         [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept {
-                            ssum[IntVars::xmom](i,j,k) = sold[IntVars::xmom](i,j,k);
+                            if (vfrac_u(i,j,k) > 0.0) {
+                                // ssum[IntVars::xmom](i,j,k) = sold[IntVars::xmom](i,j,k);
+                                ssum[IntVars::xmom](i,j,k) = sold[IntVars::xmom](i,j,k)
+                                                        + slow_dt * fslow[IntVars::xmom](i,j,k);
+                            } else {
+                                ssum[IntVars::xmom](i,j,k) = sold[IntVars::xmom](i,j,k);
+                            }
                         },
                         [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept {
-                            ssum[IntVars::ymom](i,j,k) = sold[IntVars::ymom](i,j,k);
+                            if (vfrac_v(i,j,k) > 0.0) {
+                                // ssum[IntVars::ymom](i,j,k) = sold[IntVars::ymom](i,j,k);
+                                ssum[IntVars::ymom](i,j,k) = sold[IntVars::ymom](i,j,k)
+                                                        + slow_dt * fslow[IntVars::ymom](i,j,k);
+                            } else {
+                                ssum[IntVars::ymom](i,j,k) = sold[IntVars::ymom](i,j,k);
+                            }
                         },
                         [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept {
-                            ssum[IntVars::zmom](i,j,k) = sold[IntVars::zmom](i,j,k);
+                            if (vfrac_w(i,j,k) > 0.0) {
+                                // ssum[IntVars::zmom](i,j,k) = sold[IntVars::zmom](i,j,k);
+                                ssum[IntVars::zmom](i,j,k) = sold[IntVars::zmom](i,j,k)
+                                                        + slow_dt * fslow[IntVars::zmom](i,j,k);
+                            } else {
+                                ssum[IntVars::zmom](i,j,k) = sold[IntVars::zmom](i,j,k);
+                            }
                         });
 
                     } else {
@@ -152,7 +175,7 @@
             {
                 // Redistribute cons states (cell-centered)
 
-                MultiFab dUdt_tmp(ba, dm, F_slow[IntVars::cons].nComp(), F_slow[IntVars::cons].nGrow(), MFInfo(), Factory(level));
+                MultiFab dUdt_tmp(ba, dm, F_slow[IntVars::cons].nComp(), F_slow[IntVars::cons].nGrow(), MFInfo(), EBFactory(level));
                 dUdt_tmp.setVal(0.);
                 MultiFab::Copy(dUdt_tmp, F_slow[IntVars::cons], 0, 0, F_slow[IntVars::cons].nComp(), F_slow[IntVars::cons].nGrow());
                 dUdt_tmp.FillBoundary(fine_geom.periodicity());
@@ -163,28 +186,55 @@
                 S_old[IntVars::cons].setDomainBndry(1.234e10, 0, ncomp_fast[IntVars::cons], fine_geom);
 
                 // Update F_slow by Redistribution.
-                redistribute_term ( level, ncomp_fast[IntVars::cons], F_slow[IntVars::cons], dUdt_tmp,
-                                    S_old[IntVars::cons], bc_ptr_d, slow_dt);
+                redistribute_term ( ncomp_fast[IntVars::cons], fine_geom, F_slow[IntVars::cons], dUdt_tmp,
+                                    S_old[IntVars::cons], EBFactory(level), bc_ptr_d, slow_dt);
+
+                // Redistribute momentum states (face-centered)
+
+                Vector<MultiFab> dUdt_mom(AMREX_SPACEDIM);
+                for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+                    dUdt_mom[i].define(F_slow[1+i].boxArray(), F_slow[1+i].DistributionMap(), F_slow[1+i].nComp(), F_slow[1+i].nGrow(), MFInfo());
+                    dUdt_mom[i].setVal(0.);
+                    MultiFab::Copy(dUdt_mom[i], F_slow[1+i], 0, 0, F_slow[1+i].nComp(), F_slow[1+i].nGrow());
+                    dUdt_mom[i].FillBoundary(fine_geom.periodicity());
+                    dUdt_mom[i].setDomainBndry(1.234e10, 0, ncomp_fast[1+i], fine_geom);
+                }
+
+                for (int i = 0; i < AMREX_SPACEDIM; ++i) {
+                    S_old[1+i].FillBoundary(fine_geom.periodicity());
+                    S_old[1+i].setDomainBndry(1.234e10, 0, ncomp_fast[1+i], fine_geom);
+                }
+
+                // Update F_slow by Redistribution.
+                redistribute_term ( ncomp_fast[IntVars::xmom], fine_geom, F_slow[IntVars::xmom], dUdt_mom[0],
+                                    S_old[IntVars::xmom], *(get_eb(level).get_u_const_factory()), bc_ptr_d, slow_dt);
+                redistribute_term ( ncomp_fast[IntVars::ymom], fine_geom, F_slow[IntVars::ymom], dUdt_mom[1],
+                                    S_old[IntVars::ymom], *(get_eb(level).get_v_const_factory()), bc_ptr_d, slow_dt);
+                redistribute_term ( ncomp_fast[IntVars::zmom], fine_geom, F_slow[IntVars::zmom], dUdt_mom[2],
+                                    S_old[IntVars::zmom], *(get_eb(level).get_w_const_factory()), bc_ptr_d, slow_dt);
 
                 // Update state using the updated F_slow. (NOTE: redistribute_term returns RHS not state variables.)
 
                 for ( MFIter mfi(S_sum[IntVars::cons],TilingIfNotGPU()); mfi.isValid(); ++mfi)
                 {
                     const Box bx = mfi.tilebox();
-                    Vector<Array4<Real> >  ssum_h(ncomp_fast[IntVars::cons]);
-                    Vector<Array4<Real> >  sold_h(ncomp_fast[IntVars::cons]);
-                    Vector<Array4<Real> > fslow_h(ncomp_fast[IntVars::cons]);
-                    const Array4<const Real>& dJ_old = detJ_cc[level]->const_array(mfi);
+                    Box tbx = mfi.nodaltilebox(0);
+                    Box tby = mfi.nodaltilebox(1);
+                    Box tbz = mfi.nodaltilebox(2);
 
-                    for (int i = 0; i < ncomp_fast[IntVars::cons]; ++i) {
-                        ssum_h[i]  = S_sum[i].array(mfi);
-                        sold_h[i]  = S_old[i].array(mfi);
+                    Vector<Array4<Real> >  ssum_h(n_data);
+                    Vector<Array4<Real> >  sold_h(n_data);
+                    Vector<Array4<Real> > fslow_h(n_data);
+
+                    for (int i = 0; i < n_data; ++i) {
+                         ssum_h[i] =  S_sum[i].array(mfi);
+                         sold_h[i] =  S_old[i].array(mfi);
                         fslow_h[i] = F_slow[i].array(mfi);
                     }
 
-                    Gpu::AsyncVector<Array4<Real> >  sold_d(ncomp_fast[IntVars::cons]);
-                    Gpu::AsyncVector<Array4<Real> >  ssum_d(ncomp_fast[IntVars::cons]);
-                    Gpu::AsyncVector<Array4<Real> > fslow_d(ncomp_fast[IntVars::cons]);
+                    Gpu::AsyncVector<Array4<Real> >  sold_d(n_data);
+                    Gpu::AsyncVector<Array4<Real> >  ssum_d(n_data);
+                    Gpu::AsyncVector<Array4<Real> > fslow_d(n_data);
 
                     Gpu::copy(Gpu::hostToDevice,  sold_h.begin(),  sold_h.end(),  sold_d.begin());
                     Gpu::copy(Gpu::hostToDevice,  ssum_h.begin(),  ssum_h.end(),  ssum_d.begin());
@@ -194,18 +244,45 @@
                     Array4<Real>*  ssum =  ssum_d.dataPtr();
                     Array4<Real>* fslow = fslow_d.dataPtr();
 
+                    // const Array4<const Real>& vfrac_c = detJ_cc[level]->const_array(mfi);
+                    const Array4<const Real>& vfrac_c = (get_eb(level).get_const_factory())->getVolFrac().const_array(mfi);
+
                     ParallelFor(bx, ncomp_fast[IntVars::cons], [=] AMREX_GPU_DEVICE (int i, int j, int k, int nn)
                     {
                         const int n = scomp_fast[IntVars::cons] + nn;
-                        if (dJ_old(i,j,k) > 0.0) {
+                        if (vfrac_c(i,j,k) > 0.0) {
                             ssum[IntVars::cons](i,j,k,n) = sold[IntVars::cons](i,j,k,n) + slow_dt *
                                 ( fslow[IntVars::cons](i,j,k,n) );
                         }
                     });
-                }
 
-                // Redistribute momentum states (face-centered) will be added here.
+                    const Array4<const Real>& vfrac_u = (get_eb(level).get_u_const_factory())->getVolFrac().const_array(mfi);
+                    const Array4<const Real>& vfrac_v = (get_eb(level).get_v_const_factory())->getVolFrac().const_array(mfi);
+                    const Array4<const Real>& vfrac_w = (get_eb(level).get_w_const_factory())->getVolFrac().const_array(mfi);
+
+                    ParallelFor(tbx, tby, tbz,
+                    [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept {
+                        if (vfrac_u(i,j,k) > 0.0) {
+                            ssum[IntVars::xmom](i,j,k) = sold[IntVars::xmom](i,j,k)
+                            + slow_dt * fslow[IntVars::xmom](i,j,k);
+                        }
+                    },
+                    [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept {
+                        if (vfrac_v(i,j,k) > 0.0) {
+                            ssum[IntVars::ymom](i,j,k) = sold[IntVars::ymom](i,j,k)
+                                                    + slow_dt * fslow[IntVars::ymom](i,j,k);
+                        }
+                    },
+                    [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept {
+                        if (vfrac_w(i,j,k) > 0.0) {
+                            ssum[IntVars::zmom](i,j,k) = sold[IntVars::zmom](i,j,k)
+                                                    + slow_dt * fslow[IntVars::zmom](i,j,k);
+                        }
+                    });
+                } // MFIter
+
             } // EB
+
         } // omp
 
         // Even if we update all the conserved variables we don't need

@@ -12,6 +12,7 @@ read_from_wrfinput (int lev,
                     FArrayBox& NC_fab,
                     const std::string& NC_name,
                     Geometry& geom,
+                    int& use_theta_m,
                     int& success)
 {
     if (ParallelDescriptor::IOProcessor()) {
@@ -24,6 +25,7 @@ read_from_wrfinput (int lev,
             std::vector<int> attr;
             ncf.get_attr("WEST-EAST_GRID_DIMENSION", attr);   NC_nx = attr[0];
             ncf.get_attr("SOUTH-NORTH_GRID_DIMENSION", attr); NC_ny = attr[0];
+            ncf.get_attr("USE_THETA_M", attr);                use_theta_m = attr[0];
         }
         { // Global Attributes (Real)
             std::vector<Real> attr;
@@ -40,16 +42,16 @@ read_from_wrfinput (int lev,
         amrex::ignore_unused(NC_dateTime); amrex::ignore_unused(NC_epochTime);
 
         // Verify the inputs geometry matches what the NETCDF file has
-        Real tol   = 1.0e-3;
+        Real rtol   = 1.0e-7;
         Real Len_x = NC_dx * Real(NC_nx-1);
         Real Len_y = NC_dy * Real(NC_ny-1);
-        if (std::fabs(Len_x - (geom.ProbHi(0) - geom.ProbLo(0))) > tol) {
+        if (std::fabs((Len_x - (geom.ProbHi(0) - geom.ProbLo(0))) / Len_x) > rtol) {
             Print() << "X problem extent " << (geom.ProbHi(0) - geom.ProbLo(0)) << " does not match NETCDF file "
                     << Len_x << "!\n";
             Print() << "dx: " << NC_dx << ' ' << "Nx: " << NC_nx-1 << "\n";
             Abort("Domain specification error");
         }
-        if (std::fabs(Len_y - (geom.ProbHi(1) - geom.ProbLo(1))) > tol) {
+        if (std::fabs((Len_y - (geom.ProbHi(1) - geom.ProbLo(1))) / Len_y) > rtol) {
             Print() << "Y problem extent " << (geom.ProbHi(1) - geom.ProbLo(1)) << " does not match NETCDF file "
                     << Len_y << "!\n";
             Print() << "dy: " << NC_dy << ' ' << "Ny: " << NC_ny-1 << "\n";
@@ -63,15 +65,17 @@ read_from_wrfinput (int lev,
     Vector<int> successes; successes.resize(NC_names.size());
 
     if (NC_name == "ALB" || NC_name == "AL" || NC_name == "U" ||  NC_name == "V" ||  NC_name == "W" ||
-        NC_name == "T"   || NC_name == "PH" || NC_name == "PHB" || NC_name == "PB" || NC_name == "P" ||
+        NC_name == "THM" || NC_name == "PH" || NC_name == "PHB" || NC_name == "PB" || NC_name == "P" ||
         NC_name == "QVAPOR"   || NC_name == "QCLOUD" || NC_name == "QRAIN")
     {
+        // Note: staggering is handled in `fill_fab_from_arrays`
         NC_dim_types.push_back(NC_Data_Dims_Type::Time_BT_SN_WE);
     }
-    else if (NC_name == "MAPFAC_UY" || NC_name == "MAPFAC_VY" || NC_name == "MAPFAC_MY" ||
-             NC_name == "MUB"       || NC_name == "SST"       || NC_name == "LANDMASK"  ||
-             NC_name == "XLAT_V" || NC_name == "XLONG_U")
+    else if (NC_name == "MAPFAC_U" || NC_name == "MAPFAC_V" || NC_name == "MAPFAC_M" ||
+             NC_name == "MUB"      || NC_name == "SST"      || NC_name == "LANDMASK"  ||
+             NC_name == "XLAT_V"   || NC_name == "XLONG_U")
     {
+        // Note: staggering is handled in `fill_fab_from_arrays`
         NC_dim_types.push_back(NC_Data_Dims_Type::Time_SN_WE);
     }
     else if (NC_name == "C1H" || NC_name == "C2H")
@@ -82,6 +86,10 @@ read_from_wrfinput (int lev,
     // Read the netcdf file and fill these FABs
     BuildFABsFromNetCDFFile<FArrayBox,Real>(domain, fname, NC_names, NC_dim_types, NC_fabs, successes);
 
+    // Success was already broadcast in ERF_NCWpsFile.H
     success = successes[0];
+
+    // Broadcast use_theta_m
+    ParallelDescriptor::Bcast(&use_theta_m, 1, ParallelDescriptor::IOProcessorNumber());
 }
 #endif // ERF_USE_NETCDF

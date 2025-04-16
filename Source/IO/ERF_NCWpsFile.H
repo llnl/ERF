@@ -3,11 +3,11 @@
 
 #include <sstream>
 #include <string>
-#include <ctime>
 #include <atomic>
 
 #include "AMReX_FArrayBox.H"
 #include "AMReX_IArrayBox.H"
+#include "ERF_EpochTime.H"
 #include "ERF_NCInterface.H"
 
 using PlaneVector = amrex::Vector<amrex::FArrayBox>;
@@ -128,29 +128,51 @@ int BuildFABsFromWRFBdyFile (const std::string &fname,
                              amrex::Vector<amrex::Vector<amrex::FArrayBox>>& bdy_data_ylo,
                              amrex::Vector<amrex::Vector<amrex::FArrayBox>>& bdy_data_yhi);
 
-AMREX_FORCE_INLINE
-std::time_t
-getEpochTime (const std::string& dateTime, const std::string& dateTimeFormat)
+template<typename DType>
+void ReadTimeSliceFromNetCDFFile(const std::string& fname,
+                                 const int tidx,
+                                 amrex::Vector<std::string> names,
+                                 amrex::Vector<NDArray<DType> >& arrays,
+                                 amrex::Vector<int>& success)
 {
-    // Create a stream which we will use to parse the string,
-    // which we provide to constructor of stream to fill the buffer.
-    std::istringstream ss{ dateTime };
+    amrex::Print() << "Reading time slice " << tidx << " from " << fname << std::endl;
+    AMREX_ASSERT(arrays.size() == names.size());
 
-    // Create a tm object to store the parsed date and time.
-    std::tm tmTime;
-    memset(&tmTime, 0, sizeof(tmTime));
+    if (amrex::ParallelDescriptor::IOProcessor())
+    {
+        auto ncf = ncutils::NCFile::open(fname, NC_CLOBBER | NC_NETCDF4);
 
-    // Now we read from buffer using get_time manipulator
-    // and formatting the input appropriately.
-    strptime(dateTime.c_str(), dateTimeFormat.c_str(), &tmTime);
+        int ntimes = ncf.dim("Time").len();
+        AMREX_ALWAYS_ASSERT((tidx >= 0) && (tidx < ntimes));
 
-    // Convert the tm structure to time_t value and return.
-    // Here we use timegm since the output should be relative to UTC.
-    auto epoch = timegm(&tmTime);
-    // Print() << "Time Stamp: "<< std::put_time(&tmTime, "%c")
-    //         << " , Epoch: " << epoch << std::endl;
+        for (auto n=0; n<arrays.size(); ++n)
+        {
+            std::string vname_to_write = names[n];
+            std::string vname_to_read  = names[n];
+            if (vname_to_read.substr(0,2) == "R_") {
+                vname_to_read  = names[n+4]; // This allows us to read "T" instead -- we will over-write this later
+            }
 
-    return epoch;
+            success[n] = ncf.has_var(vname_to_read);
+
+            if (success[n] == 1)
+            {
+                std::vector<std::string> dimnames = ncf.var(vname_to_read).dimnames();
+                AMREX_ALWAYS_ASSERT(dimnames[0] == "Time");
+
+                std::vector<size_t> count = ncf.var(vname_to_read).shape();
+                std::vector<size_t> start(count.size(), 0);
+                start[0] = tidx;
+                count[0] = 1;
+
+                arrays[n] = NDArray<DType>(vname_to_read, count);
+                DType* dataPtr = arrays[n].get_data();
+
+                ncf.var(vname_to_read).get(dataPtr, start, count);
+            } // has_var
+        }
+        ncf.close();
+    }
 }
 
 template<typename DType>
@@ -197,19 +219,29 @@ void ReadNetCDFFile (const std::string& fname, amrex::Vector<std::string> names,
 
             if (success[n] == 1) {
 
+                std::vector<std::string> dimnames = ncf.var(vname_to_read).dimnames();
+                AMREX_ALWAYS_ASSERT(dimnames[0] == "Time");
+
                 std::vector<size_t> shape = ncf.var(vname_to_read).shape();
                 arrays[n]                 = NDArray<DType>(vname_to_read,shape);
                 DType* dataPtr            = arrays[n].get_data();
 
                 std::vector<size_t> start(shape.size(), 0);
 
-                // auto numPts               = arrays[n].ndim();
-                // amrex::Print() << "NetCDF Variable name = " << vname_to_read << std::endl;
-                // amrex::Print() << "numPts read from NetCDF file/var = " << numPts << std::endl;
-                // amrex::Print()  << "Dims of the variable = (";
-                // for (auto &dim:shape)
-                //     amrex::Print() << dim << ", " ;
-                // amrex::Print()  << ")" << std::endl;
+#if 0
+                auto numPts               = arrays[n].ndim();
+                amrex::Print() << "NetCDF Variable name = " << vname_to_read << std::endl;
+                amrex::Print() << "numPts read from NetCDF file/var = " << numPts << std::endl;
+                amrex::Print() << "Dims in var = " << ncf.var(vname_to_read).ndim() << std::endl;
+                amrex::Print()  << "Dim names = (";
+                for (auto &dim:dimnames)
+                    amrex::Print() << dim << ", " ;
+                amrex::Print()  << ")" << std::endl;
+                amrex::Print()  << "Dims of the variable = (";
+                for (auto &dim:shape)
+                    amrex::Print() << dim << ", " ;
+                amrex::Print()  << ")" << std::endl;
+#endif
 
                 ncf.var(vname_to_read).get(dataPtr, start, shape);
 
@@ -237,7 +269,7 @@ fill_fab_from_arrays (int iv,
                       NC_Data_Dims_Type& NC_dim_type,
                       FAB& temp)
 {
-    int ns1, ns2, ns3;
+    int ns1, ns2, ns3; // bottom_top, south_north, west_east (these can be staggered or unstaggered)
     if (NC_dim_type == NC_Data_Dims_Type::Time_BT) {
         ns1 = nc_arrays[iv].get_vshape()[1];
         ns2 = 1;
@@ -262,15 +294,14 @@ fill_fab_from_arrays (int iv,
 
     if (var_name == "PH" || var_name == "PHB") {
         my_box.setType(amrex::IndexType(amrex::IntVect(0,0,1)));
-    } else if (var_name == "U" || var_name == "UU" ||
-        var_name == "MAPFAC_U" || var_name == "MAPFAC_UY")
-    {
+    }
+    else if (var_name == "U" || var_name == "UU" || var_name == "MAPFAC_U") {
         my_box.setType(amrex::IndexType(amrex::IntVect(1,0,0)));
-    } else if (var_name == "V" || var_name == "VV" ||
-        var_name == "MAPFAC_V" || var_name == "MAPFAC_VY")
-    {
+    }
+    else if (var_name == "V" || var_name == "VV" || var_name == "MAPFAC_V") {
         my_box.setType(amrex::IndexType(amrex::IntVect(0,1,0)));
-    } else if (var_name == "W" || var_name == "WW") {
+    }
+    else if (var_name == "W" || var_name == "WW") {
         my_box.setType(amrex::IndexType(amrex::IntVect(0,0,1)));
     }
 

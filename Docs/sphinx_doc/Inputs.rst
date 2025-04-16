@@ -80,6 +80,12 @@ Examples of Usage
 
 Domain Boundary Conditions
 ==========================
+Domain boundary conditions in ERF may be broadly categorized as ``ideal`` or ``real`` where
+the ideal BC types correspond those found in classic fluid solvers and real correspond to an
+external data source that may be based upon observation data. The inputs for these types of BCs
+are given in more detail in :ref:`sec:LateralBoundaryConditions`. We briefly note that the supported
+ideal BC types are: ``inflow``, ``outflow``, ``slipwall``, ``noslipwall``, ``symmetry`` or ``MOST``.
+
 
 .. _list-of-parameters-1:
 
@@ -381,31 +387,41 @@ Simulation Time
 List of Parameters
 ------------------
 
-+-----------------+---------------------------+--------------+---------+
-| Parameter       | Definition                | Acceptable   | Default |
-|                 |                           | Values       |         |
-+=================+===========================+==============+=========+
-| **max_step**    | maximum number of level 0 | Integer >= 0 | -1      |
-|                 | time steps                |              |         |
-+-----------------+---------------------------+--------------+---------+
-| **start_time**  | starting simulation       | Real >= 0    |  0.0    |
-|                 | time                      |              |         |
-+-----------------+---------------------------+--------------+---------+
-| **stop_time**   | final simulation          | Real >= 0    | Very    |
-|                 | time                      |              | Large   |
-+-----------------+---------------------------+--------------+---------+
++---------------------+---------------------------+--------------+---------+
+| Parameter           | Definition                | Acceptable   | Default |
+|                     |                           | Values       |         |
++=====================+===========================+==============+=========+
+| **max_step**        | maximum number of level 0 | Integer >= 0 | -1      |
+|                     | time steps                |              |         |
++---------------------+---------------------------+--------------+---------+
+| **start_time**      | starting simulation       | Real >= 0    |  0.0    |
+|                     | time                      |              |         |
++---------------------+---------------------------+--------------+---------+
+| **stop_time**       | final simulation          | Real >= 0    | Very    |
+|                     | time                      |              | Large   |
++---------------------+---------------------------+--------------+---------+
+| **start_datetime**  | starting simulation       | String       | None    |
+|                     | date/time                 | (see notes)  |         |
++---------------------+---------------------------+--------------+---------+
+| **stop_datetime**   | final simulation          | String       | None    |
+|                     | date/time                 | (see notes)  |         |
++---------------------+---------------------------+--------------+---------+
 
 .. _notes-3:
 
 Notes
 -----
 
-To control the number of time steps, you can limit by the maximum number
-of level-0 time steps (**max_step**), or the final simulation time
-(**stop_time**), or both. The code will stop at whichever criterion
-comes first. Note that if the code reaches **stop_time** then the final
-time step will be shortened so as to end exactly at **stop_time**, not
-pass it.
+- To control the number of time steps, you can limit by the maximum number
+  of level-0 time steps (**max_step**), or the final simulation time
+  (**stop_time**), or both. The code will stop at whichever criterion
+  comes first. Note that if the code reaches **stop_time** then the final
+  time step will be shortened so as to end exactly at **stop_time**, not
+  pass it.
+- For real data cases, the start and stop times is the epoch time in seconds.
+- **start_datetime** and **stop_datetime** are in UTC and use the following
+  strftime format: "%Y-%m-%d %H:%M:%S", e.g., "2001-01-01 18:00:00".
+  The start/stop datetime inputs have precedence over the time inputs.
 
 .. _examples-of-usage-4:
 
@@ -617,6 +633,14 @@ List of Parameters
 +===============================+==================+================+================+
 | **erf.data_log**              | Output           | Up to four     | NONE           |
 |                               | filename(s)      | strings        |                |
++-------------------------------+------------------+----------------+----------------+
+| **erf.der_data_log**          | Output           | Up to four     | NONE           |
+|                               | filename(s) for  | strings        |                |
+|                               | derived data     |                |                |
++-------------------------------+------------------+----------------+----------------+
+| **erf.energy_data_log**       | Output           | Up to four     | NONE           |
+|                               | filename(s) for  | strings        |                |
+|                               | total energy     |                |                |
 +-------------------------------+------------------+----------------+----------------+
 | **erf.profile_int**           | Interval (number)| Integer        | -1             |
 |                               | of steps between |                |                |
@@ -1153,6 +1177,10 @@ List of Parameters
 | **erf.use_coriolis**                | Include Coriolis       | true / false      | false               |
 |                                     | forcing                |                   |                     |
 +-------------------------------------+------------------------+-------------------+---------------------+
+| **erf.variable_coriolis**           | Include Coriolis       | true / false      | false               |
+|                                     | forcing that varies    |                   |                     |
+|                                     | with latitude          |                   |                     |
++-------------------------------------+------------------------+-------------------+---------------------+
 | **erf.rotational_time_period**      | Used to calculate the  | Real              | 86400.0             |
 |                                     | Coriolis frequency     |                   |                     |
 +-------------------------------------+------------------------+-------------------+---------------------+
@@ -1281,159 +1309,160 @@ In addition, there is a run-time option to project the initial velocity field to
 List of Parameters
 ------------------
 
-+----------------------------------+-------------------+--------------------+-----------------------+
-| Parameter                        | Definition        | Acceptable         | Default               |
-|                                  |                   | Values             |                       |
-+==================================+===================+====================+=======================+
-| **erf.init_type**                | Initialization    | "None",            | "None"                |
-|                                  | type              | "Ideal",           |                       |
-|                                  |                   | "Real",            |                       |
-|                                  |                   | "Input_Sounding"   |                       |
-|                                  |                   | "Metgrid"          |                       |
-|                                  |                   | "Uniform"          |                       |
-+----------------------------------+-------------------+--------------------+-----------------------+
-| **erf.input_sounding_file**      | Path to WRF-style |  String            | "input_sounding"      |
-|                                  | input sounding    |                    |                       |
-|                                  | file              |                    |                       |
-+----------------------------------+-------------------+--------------------+-----------------------+
-| **erf.init_sounding_ideal**      | Perform           |  true or false     | false                 |
-|                                  | initialization    |                    |                       |
-|                                  | like WRF's        |                    |                       |
-|                                  | ideal.exe         |                    |                       |
-+----------------------------------+-------------------+--------------------+-----------------------+
-| **erf.use_real_bcs**             | If init_type is   | true or false      | true if               |
-|                                  | real or metgrid,  |                    | if init_type          |
-|                                  | do we want to use |                    | is real or            |
-|                                  | these bcs?        |                    | metgrid;              |
-|                                  |                   |                    | else false            |
-+----------------------------------+-------------------+--------------------+-----------------------+
-| **erf.nc_init_file**             | NetCDF file with  |  String            | NONE                  |
-|                                  | initial mesoscale |                    |                       |
-|                                  | data              |                    |                       |
-+----------------------------------+-------------------+--------------------+-----------------------+
-| **erf.nc_bdy_file**              | NetCDF file with  |  String            | NONE                  |
-|                                  | mesoscale data at |                    |                       |
-|                                  | lateral boundaries|                    |                       |
-+----------------------------------+-------------------+--------------------+-----------------------+
-| **erf.project_initial_velocity** | project initial   |  true or false     | true if anelastic;    |
-|                                  | velocity?         |                    | false if compressible |
-+----------------------------------+-------------------+--------------------+-----------------------+
-| **erf.real_width**               | Lateral boundary  |  Integer           | 0                     |
-|                                  | total width if    |                    |                       |
-|                                  | use_real_bcs is   |                    |                       |
-|                                  | true              |                    |                       |
-+----------------------------------+-------------------+--------------------+-----------------------+
-| **erf.real_set_width**           | Lateral boundary  |  Integer           | 0                     |
-|                                  | specified zone    |                    |                       |
-|                                  | width if          |                    |                       |
-|                                  | use_real_bcs is   |                    |                       |
-|                                  | true              |                    |                       |
-+----------------------------------+-------------------+--------------------+-----------------------+
-| **erf.metgrid_debug_quiescent**  | If init_type is   | true or false      | false                 |
-|                                  | metgrid, overwrite|                    |                       |
-|                                  | initial conditions|                    |                       |
-|                                  | and boundary      |                    |                       |
-|                                  | conditions to be  |                    |                       |
-|                                  | quiescent.        |                    |                       |
-+----------------------------------+-------------------+--------------------+-----------------------+
-| **erf.metgrid_debug_isothermal** | If init_type is   | true or false      | false                 |
-|                                  | metgrid, overwrite|                    |                       |
-|                                  | theta to be 300 in|                    |                       |
-|                                  | initial conditions|                    |                       |
-|                                  | and boundary      |                    |                       |
-|                                  | conditions.       |                    |                       |
-+----------------------------------+-------------------+--------------------+-----------------------+
-| **erf.metgrid_debug_dry**        | If init_type is   | true or false      | false                 |
-|                                  | metgrid, overwrite|                    |                       |
-|                                  | qv to be dry in   |                    |                       |
-|                                  | initial conditions|                    |                       |
-|                                  | and boundary      |                    |                       |
-|                                  | conditions.       |                    |                       |
-+----------------------------------+-------------------+--------------------+-----------------------+
-| **erf.metgrid_debug_msf**        | If init_type is   | true or false      | false                 |
-|                                  | metgrid, overwrite|                    |                       |
-|                                  | map scale factors |                    |                       |
-|                                  | to be 1.          |                    |                       |
-+----------------------------------+-------------------+--------------------+-----------------------+
-| **erf.metgrid_debug_psfc**       | If init_type is   | true or false      | false                 |
-|                                  | metgrid, overwrite|                    |                       |
-|                                  | surface pressure  |                    |                       |
-|                                  | to be 10**5.      |                    |                       |
-+----------------------------------+-------------------+--------------------+-----------------------+
-| **erf.metgrid_interp_theta**     | If init_type is   | true or false      | false                 |
-|                                  | metgrid, calculate|                    |                       |
-|                                  | theta on origin   |                    |                       |
-|                                  | model vertical    |                    |                       |
-|                                  | levels and then   |                    |                       |
-|                                  | interpolate onto  |                    |                       |
-|                                  | the ERF vertical  |                    |                       |
-|                                  | levels.           |                    |                       |
-+----------------------------------+-------------------+--------------------+-----------------------+
-| **erf.metgrid_basic_linear**     | If init_type is   | true or false      | false                 |
-|                                  | metgrid, use      |                    |                       |
-|                                  | linear vertical   |                    |                       |
-|                                  | interpolation and |                    |                       |
-|                                  | no quality        |                    |                       |
-|                                  | control?          |                    |                       |
-+----------------------------------+-------------------+--------------------+-----------------------+
-| **erf.metgrid_use_below_sfc**    | If init_type is   | true or false      | true                  |
-|                                  | metgrid, use the  |                    |                       |
-|                                  | origin data levels|                    |                       |
-|                                  | below the surface?|                    |                       |
-+----------------------------------+-------------------+--------------------+-----------------------+
-| **erf.metgrid_use_sfc**          | If init_type is   | true or false      | true                  |
-|                                  | metgrid, use the  |                    |                       |
-|                                  | origin data level |                    |                       |
-|                                  | at the surface?   |                    |                       |
-+----------------------------------+-------------------+--------------------+-----------------------+
-| **erf.metgrid_retain_sfc**       | If init_type is   | true or false      | false                 |
-|                                  | metgrid, assign   |                    |                       |
-|                                  | the lowest level  |                    |                       |
-|                                  | directly using the|                    |                       |
-|                                  | surface value from|                    |                       |
-|                                  | the origin data?  |                    |                       |
-+----------------------------------+-------------------+--------------------+-----------------------+
-| **erf.metgrid_proximity**        | If init_type is   | Real               | 1000.                 |
-|                                  | metgrid, pressure |                    |                       |
-|                                  | differential for  |                    |                       |
-|                                  | detecting origin  |                    |                       |
-|                                  | levels that are   |                    |                       |
-|                                  | problematically   |                    |                       |
-|                                  | close together    |                    |                       |
-+----------------------------------+-------------------+--------------------+-----------------------+
-| **erf.metgrid_order**            | If init_type is   | Integer            | 2                     |
-|                                  | metgrid, order of |                    |                       |
-|                                  | the Lagrange      |                    |                       |
-|                                  | polynomial        |                    |                       |
-|                                  | interpolation     |                    |                       |
-|                                  | scheme for        |                    |                       |
-|                                  | vertical          |                    |                       |
-|                                  | interpolation     |                    |                       |
-+----------------------------------+-------------------+--------------------+-----------------------+
-| **erf.metgrid_force_sfc_k**      | If init_type is   | Integer            | 0                     |
-|                                  | metgrid, force the|                    |                       |
-|                                  | origin data       |                    |                       |
-|                                  | surface level to  |                    |                       |
-|                                  | be included in the|                    |                       |
-|                                  | interpolation for |                    |                       |
-|                                  | this many ERF     |                    |                       |
-|                                  | vertical levels   |                    |                       |
-+----------------------------------+-------------------+--------------------+-----------------------+
++----------------------------------+---------------------+--------------------+-----------------------+
+| Parameter                        | Definition          | Acceptable         | Default               |
+|                                  |                     | Values             |                       |
++==================================+=====================+====================+=======================+
+| **erf.init_type**                | Initialization      | "None",            | "None"                |
+|                                  | type                | "WRFInput",        |                       |
+|                                  |                     | "Input_Sounding"   |                       |
+|                                  |                     | "Metgrid"          |                       |
+|                                  |                     | "Uniform"          |                       |
++----------------------------------+---------------------+--------------------+-----------------------+
+| **erf.input_sounding_file**      | Path to WRF-style   |  String            | "input_sounding"      |
+|                                  | input sounding      |                    |                       |
+|                                  | file                |                    |                       |
++----------------------------------+---------------------+--------------------+-----------------------+
+| **erf.init_sounding_ideal**      | Perform             |  true or false     | false                 |
+|                                  | initialization      |                    |                       |
+|                                  | like WRF's          |                    |                       |
+|                                  | ideal.exe           |                    |                       |
++----------------------------------+---------------------+--------------------+-----------------------+
+| **erf.use_real_bcs**             | If init_type is     | true or false      | true if               |
+|                                  | WRFInput or Metgrid |                    | if init_type          |
+|                                  | do we want to use   |                    | is WRFInput or        |
+|                                  | these bcs?          |                    | Metgrid;              |
+|                                  |                     |                    | else false            |
++----------------------------------+---------------------+--------------------+-----------------------+
+| **erf.nc_init_file**             | NetCDF file with    |  String            | NONE                  |
+|                                  | initial mesoscale   |                    |                       |
+|                                  | data                |                    |                       |
++----------------------------------+---------------------+--------------------+-----------------------+
+| **erf.nc_bdy_file**              | NetCDF file with    |  String            | NONE                  |
+|                                  | mesoscale data at   |                    |                       |
+|                                  | lateral boundaries  |                    |                       |
++----------------------------------+---------------------+--------------------+-----------------------+
+| **erf.project_initial_velocity** | project initial     |  true or false     | true if anelastic;    |
+|                                  | velocity?           |                    | false if compressible |
++----------------------------------+---------------------+--------------------+-----------------------+
+| **erf.real_width**               | Lateral boundary    |  Integer           | 0                     |
+|                                  | total width if      |                    |                       |
+|                                  | use_real_bcs is     |                    |                       |
+|                                  | true                |                    |                       |
++----------------------------------+---------------------+--------------------+-----------------------+
+| **erf.real_set_width**           | Lateral boundary    |  Integer           | 0                     |
+|                                  | specified zone      |                    |                       |
+|                                  | width if            |                    |                       |
+|                                  | use_real_bcs is     |                    |                       |
+|                                  | true                |                    |                       |
++----------------------------------+---------------------+--------------------+-----------------------+
+| **erf.metgrid_debug_quiescent**  | If init_type is     | true or false      | false                 |
+|                                  | Metgrid, overwrite  |                    |                       |
+|                                  | initial conditions  |                    |                       |
+|                                  | and boundary        |                    |                       |
+|                                  | conditions to be    |                    |                       |
+|                                  | quiescent.          |                    |                       |
++----------------------------------+---------------------+--------------------+-----------------------+
+| **erf.metgrid_debug_isothermal** | If init_type is     | true or false      | false                 |
+|                                  | Metgrid, overwrite  |                    |                       |
+|                                  | theta to be 300 in  |                    |                       |
+|                                  | initial conditions  |                    |                       |
+|                                  | and boundary        |                    |                       |
+|                                  | conditions.         |                    |                       |
++----------------------------------+---------------------+--------------------+-----------------------+
+| **erf.metgrid_debug_dry**        | If init_type is     | true or false      | false                 |
+|                                  | Metgrid, overwrite  |                    |                       |
+|                                  | qv to be dry in     |                    |                       |
+|                                  | initial conditions  |                    |                       |
+|                                  | and boundary        |                    |                       |
+|                                  | conditions.         |                    |                       |
++----------------------------------+---------------------+--------------------+-----------------------+
+| **erf.metgrid_debug_msf**        | If init_type is     | true or false      | false                 |
+|                                  | Metgrid, overwrite  |                    |                       |
+|                                  | map scale factors   |                    |                       |
+|                                  | to be 1.            |                    |                       |
++----------------------------------+---------------------+--------------------+-----------------------+
+| **erf.metgrid_debug_psfc**       | If init_type is     | true or false      | false                 |
+|                                  | Metgrid, overwrite  |                    |                       |
+|                                  | surface pressure    |                    |                       |
+|                                  | to be 10**5.        |                    |                       |
++----------------------------------+---------------------+--------------------+-----------------------+
+| **erf.metgrid_interp_theta**     | If init_type is     | true or false      | false                 |
+|                                  | Metgrid, calculate  |                    |                       |
+|                                  | theta on origin     |                    |                       |
+|                                  | model vertical      |                    |                       |
+|                                  | levels and then     |                    |                       |
+|                                  | interpolate onto    |                    |                       |
+|                                  | the ERF vertical    |                    |                       |
+|                                  | levels.             |                    |                       |
++----------------------------------+---------------------+--------------------+-----------------------+
+| **erf.metgrid_basic_linear**     | If init_type is     | true or false      | false                 |
+|                                  | Metgrid, use        |                    |                       |
+|                                  | linear vertical     |                    |                       |
+|                                  | interpolation and   |                    |                       |
+|                                  | no quality          |                    |                       |
+|                                  | control?            |                    |                       |
++----------------------------------+---------------------+--------------------+-----------------------+
+| **erf.metgrid_use_below_sfc**    | If init_type is     | true or false      | true                  |
+|                                  | Metgrid, use the    |                    |                       |
+|                                  | origin data levels  |                    |                       |
+|                                  | below the surface?  |                    |                       |
++----------------------------------+---------------------+--------------------+-----------------------+
+| **erf.metgrid_use_sfc**          | If init_type is     | true or false      | true                  |
+|                                  | Metgrid, use the    |                    |                       |
+|                                  | origin data level   |                    |                       |
+|                                  | at the surface?     |                    |                       |
++----------------------------------+---------------------+--------------------+-----------------------+
+| **erf.metgrid_retain_sfc**       | If init_type is     | true or false      | false                 |
+|                                  | Metgrid, assign     |                    |                       |
+|                                  | the lowest level    |                    |                       |
+|                                  | directly using the  |                    |                       |
+|                                  | surface value from  |                    |                       |
+|                                  | the origin data?    |                    |                       |
++----------------------------------+---------------------+--------------------+-----------------------+
+| **erf.metgrid_proximity**        | If init_type is     | Real               | 1000.                 |
+|                                  | Metgrid, pressure   |                    |                       |
+|                                  | differential for    |                    |                       |
+|                                  | detecting origin    |                    |                       |
+|                                  | levels that are     |                    |                       |
+|                                  | problematically     |                    |                       |
+|                                  | close together      |                    |                       |
++----------------------------------+---------------------+--------------------+-----------------------+
+| **erf.metgrid_order**            | If init_type is     | Integer            | 2                     |
+|                                  | Metgrid, order of   |                    |                       |
+|                                  | the Lagrange        |                    |                       |
+|                                  | polynomial          |                    |                       |
+|                                  | interpolation       |                    |                       |
+|                                  | scheme for          |                    |                       |
+|                                  | vertical            |                    |                       |
+|                                  | interpolation       |                    |                       |
++----------------------------------+---------------------+--------------------+-----------------------+
+| **erf.metgrid_force_sfc_k**      | If init_type is     | Integer            | 0                     |
+|                                  | Metgrid, force the  |                    |                       |
+|                                  | origin data         |                    |                       |
+|                                  | surface level to    |                    |                       |
+|                                  | be included in the  |                    |                       |
+|                                  | interpolation for   |                    |                       |
+|                                  | this many ERF       |                    |                       |
+|                                  | vertical levels     |                    |                       |
++----------------------------------+---------------------+--------------------+-----------------------+
 
 Notes
 -----------------
 
-If **erf.init_type = ideal**, the problem is initialized with mesoscale data contained in a NetCDF file, provided via ``erf.nc_init_file``.
-The mesoscale data are horizontally homogeneous, i.e., there is variation only in the vertical direction.
+If**erf.init_type = WRFInput**, the problem is initialized with mesoscale data contained in a NetCDF file,
+provided via ``erf.nc_init_file`` (e.g., "wrfinput_d01").
 
-If **erf.init_type = real**, the problem is initialized with mesoscale data contained in a NetCDF file,
-provided via ``erf.nc_init_file`` (e.g., "wrfinput_d01"). The mesoscale data are realistic with variation in all three directions.
-In addition, the lateral boundary conditions must be supplied in a NetCDF files specified by ``erf.nc_bdy_file`` (e.g., "wrfbdy_d01").
-The extent of the relaxation zone may be controlled with ``erf.real_width`` (corresponding to WRF's **spec_bdy_width**)
+In addition, if **erf.use_real_bcs = true**, the lateral boundary conditions must be supplied in a NetCDF files
+specified by ``erf.nc_bdy_file`` (e.g., "wrfbdy_d01").  (If **erf.use_real_bcs = false**, no file is read for the
+boundary conditions so they must be specified in the inputs file.)
+
+If **erf.use_real_bcs = true**,
+the extent of the relaxation zone may be controlled with ``erf.real_width`` (corresponding to WRF's **spec_bdy_width**)
 and ``erf.real_set_width`` (corresponding to WRF's **spec_zone**, typically set to 1), which corresponds to a relaxation zone with a
 width of **real_width - real_set_width**.
 
-If **erf.init_type = metgrid**, the problem is initialized with data
+If **erf.init_type = Metgrid**, the problem is initialized with data
 contained in the first NetCDF file provided via ``erf.nc_init_file_0``.
 Lateral boundary conditions are derived from the sequence of NetCDF
 files provided via ``erf.nc_init_file_0``. The sequence of
@@ -1442,7 +1471,7 @@ System (WPS) listed chronologically starting with the earliest
 timestamp. A minimum of two files are required to derive lateral
 boundary conditions.
 
-If **erf.init_type = input_sounding**, a WRF-style input sounding is read from
+If **erf.init_type = Input_Sounding**, a WRF-style input sounding is read from
 ``erf.input_sounding_file``. This text file includes any set of levels that
 goes at least up to the model top height. The first line includes the surface
 pressure [hPa], potential temperature [K], and water vapor mixing ratio [g/kg].
@@ -1453,7 +1482,7 @@ the units of pressure and mixing ratio. If **erf.init_sounding_ideal = true**,
 then moist and dry conditions throughout the air column are determined by
 integrating the hydrostatic equation from the surface.
 
-If **erf.init_type = custom** or **erf.init_type = input_sounding**, ``erf.nc_init_file`` and ``erf.nc_bdy_file`` do not need to be set.
+If **erf.init_type = Uniform** or **erf.init_type = Input_Sounding**, ``erf.nc_init_file`` and ``erf.nc_bdy_file`` do not need to be set.
 
 Note that the **erf.project_initial_velocity** option is available for all **init_type** options.  If using the anelastic
 formulation this will be true regardless of the input; if using the compressible formulation the default is false but

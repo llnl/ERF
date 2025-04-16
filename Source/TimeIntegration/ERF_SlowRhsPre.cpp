@@ -8,6 +8,7 @@
 #include <ERF_EOS.H>
 #include <ERF_Utils.H>
 #include <ERF_EBAdvection.H>
+#include <ERF_EB.H>
 
 using namespace amrex;
 
@@ -61,6 +62,7 @@ using namespace amrex;
  * @param[in] mapfac_m map factor at cell centers
  * @param[in] mapfac_u map factor at x-faces
  * @param[in] mapfac_v map factor at y-faces
+ * @param[in] ebfact EB factories for cell- and face-centered variables
  * @param[inout] fr_as_crse YAFluxRegister at level l at level l   / l+1 interface
  * @param[inout] fr_as_fine YAFluxRegister at level l at level l-1 / l   interface
  */
@@ -111,7 +113,7 @@ void erf_slow_rhs_pre (int level, int finest_level,
                        std::unique_ptr<MultiFab>& mapfac_m,
                        std::unique_ptr<MultiFab>& mapfac_u,
                        std::unique_ptr<MultiFab>& mapfac_v,
-                       EBFArrayBoxFactory const& ebfact,
+                       const eb_& ebfact,
                        YAFluxRegister* fr_as_crse,
                        YAFluxRegister* fr_as_fine)
 {
@@ -238,6 +240,9 @@ void erf_slow_rhs_pre (int level, int finest_level,
 #endif
     {
     std::array<FArrayBox,AMREX_SPACEDIM> flux;
+    std::array<FArrayBox,AMREX_SPACEDIM> flux_u;
+    std::array<FArrayBox,AMREX_SPACEDIM> flux_v;
+    std::array<FArrayBox,AMREX_SPACEDIM> flux_w;
     std::array<FArrayBox,AMREX_SPACEDIM> flux_tmp;
 
     for ( MFIter mfi(S_data[IntVars::cons],TileNoZ()); mfi.isValid(); ++mfi)
@@ -246,6 +251,19 @@ void erf_slow_rhs_pre (int level, int finest_level,
         Box tbx = mfi.nodaltilebox(0);
         Box tby = mfi.nodaltilebox(1);
         Box tbz = mfi.nodaltilebox(2);
+
+        // Boxes for momentum fluxes
+        Vector<Box> tbx_grown(AMREX_SPACEDIM);
+        Vector<Box> tby_grown(AMREX_SPACEDIM);
+        Vector<Box> tbz_grown(AMREX_SPACEDIM);
+        for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+            tbx_grown[dir] = tbx;
+            tby_grown[dir] = tby;
+            tbz_grown[dir] = tbz;
+            tbx_grown[dir] = tbx_grown[dir].growHi(dir,1);
+            tby_grown[dir] = tby_grown[dir].growHi(dir,1);
+            tbz_grown[dir] = tbz_grown[dir].growHi(dir,1);
+        }
 
         // We don't compute a source term for z-momentum on the bottom or top domain boundary
         if (tbz.smallEnd(2) == domain.smallEnd(2)) {
@@ -324,8 +342,26 @@ void erf_slow_rhs_pre (int level, int finest_level,
                 flux_tmp[dir].setVal<RunOn::Device>(0.);
             }
         }
-        const GpuArray<const Array4<Real>, AMREX_SPACEDIM>
-            flx_arr{{AMREX_D_DECL(flux[0].array(), flux[1].array(), flux[2].array())}};
+        const GpuArray<const Array4<Real>, AMREX_SPACEDIM> flx_arr{{AMREX_D_DECL(flux[0].array(), flux[1].array(), flux[2].array())}};
+
+        // Define flux arrays for momentum variables (used only for EB now)
+        GpuArray<Array4<Real>, AMREX_SPACEDIM> flx_u_arr{};
+        GpuArray<Array4<Real>, AMREX_SPACEDIM> flx_v_arr{};
+        GpuArray<Array4<Real>, AMREX_SPACEDIM> flx_w_arr{};
+        if (solverChoice.terrain_type == TerrainType::EB) {
+            for (int dir = 0; dir < AMREX_SPACEDIM; ++dir) {
+                flux_u[dir].resize(tbx_grown[dir],1);
+                flux_v[dir].resize(tby_grown[dir],1);
+                flux_w[dir].resize(tbz_grown[dir],1);
+                flux_u[dir].setVal<RunOn::Device>(0.);
+                flux_v[dir].setVal<RunOn::Device>(0.);
+                flux_w[dir].setVal<RunOn::Device>(0.);
+                flx_u_arr[dir] = flux_u[dir].array();
+                flx_v_arr[dir] = flux_v[dir].array();
+                flx_w_arr[dir] = flux_w[dir].array();
+            }
+        }
+
         Array4<Real> tmpx = (l_use_mono_adv) ? flux_tmp[0].array() : Array4<Real>{};
         Array4<Real> tmpy = (l_use_mono_adv) ? flux_tmp[1].array() : Array4<Real>{};
         Array4<Real> tmpz = (l_use_mono_adv) ? flux_tmp[2].array() : Array4<Real>{};
@@ -455,12 +491,12 @@ void erf_slow_rhs_pre (int level, int finest_level,
         Array4<const EBCellFlag> cfg_arr;
         if (solverChoice.terrain_type == TerrainType::EB)
         {
-            EBCellFlagFab const& cfg = ebfact.getMultiEBCellFlagFab()[mfi];
+            EBCellFlagFab const& cfg = (ebfact.get_const_factory())->getMultiEBCellFlagFab()[mfi];
             cfg_arr  = cfg.const_array();
-            ax_arr   = ebfact.getAreaFrac()[0]->const_array(mfi);
-            ay_arr   = ebfact.getAreaFrac()[1]->const_array(mfi);
-            az_arr   = ebfact.getAreaFrac()[2]->const_array(mfi);
-            detJ_arr = ebfact.getVolFrac().const_array(mfi);
+            ax_arr   = (ebfact.get_const_factory())->getAreaFrac()[0]->const_array(mfi);
+            ay_arr   = (ebfact.get_const_factory())->getAreaFrac()[1]->const_array(mfi);
+            az_arr   = (ebfact.get_const_factory())->getAreaFrac()[2]->const_array(mfi);
+            detJ_arr = (ebfact.get_const_factory())->getVolFrac().const_array(mfi);
         } else {
             ax_arr   = ax->const_array(mfi);
             ay_arr   = ay->const_array(mfi);
@@ -572,7 +608,7 @@ void erf_slow_rhs_pre (int level, int finest_level,
         int lo_z_face = domain.smallEnd(2);
         int hi_z_face = domain.bigEnd(2)+1;
 
-        AdvectionSrcForMom(bx, tbx, tby, tbz,
+        AdvectionSrcForMom(mfi, bx, tbx, tby, tbz, tbx_grown, tby_grown, tbz_grown,
                            rho_u_rhs, rho_v_rhs, rho_w_rhs,
                            cell_data, u, v, w,
                            rho_u, rho_v, omega_arr,
@@ -582,6 +618,7 @@ void erf_slow_rhs_pre (int level, int finest_level,
                            l_horiz_adv_type, l_vert_adv_type,
                            l_horiz_upw_frac, l_vert_upw_frac,
                            solverChoice.mesh_type, solverChoice.terrain_type,
+                           ebfact, flx_u_arr, flx_v_arr, flx_w_arr,
                            lo_z_face, hi_z_face, domain, bc_ptr_h);
 
         if (l_use_diff) {
@@ -714,35 +751,61 @@ void erf_slow_rhs_pre (int level, int finest_level,
         // We need to do this -- even though we call the boundary conditions later --
         // because the slow source is used to update the state in the fast interpolater.
         // *****************************************************************************
-        {
-        if ( (bx.smallEnd(0) == domain.smallEnd(0)) &&
-             (bc_ptr_h[BCVars::xvel_bc].lo(0) == ERFBCType::ext_dir) ) {
+        if (bx.smallEnd(0) == domain.smallEnd(0)) {
             Box lo_x_dom_face(bx); lo_x_dom_face.setBig(0,bx.smallEnd(0));
-            ParallelFor(lo_x_dom_face, [=] AMREX_GPU_DEVICE (int i, int j, int k) {
-                rho_u_rhs(i,j,k) = 0.;
-            });
+            if (bc_ptr_h[BCVars::xvel_bc].lo(0) == ERFBCType::ext_dir) {
+                ParallelFor(lo_x_dom_face, [=] AMREX_GPU_DEVICE (int i, int j, int k) {
+                    rho_u_rhs(i,j,k) = 0.;
+                });
+            } else if (bc_ptr_h[BCVars::xvel_bc].lo(0) == ERFBCType::ext_dir_upwind) {
+                ParallelFor(lo_x_dom_face, [=] AMREX_GPU_DEVICE (int i, int j, int k) {
+                    if (u(i,j,k) >= 0.) {
+                        rho_u_rhs(i,j,k) = 0.;
+                    }
+                });
+            }
         }
-        if ( (bx.bigEnd(0) == domain.bigEnd(0)) &&
-             (bc_ptr_h[BCVars::xvel_bc].hi(0) == ERFBCType::ext_dir) ) {
+        if (bx.bigEnd(0) == domain.bigEnd(0)) {
             Box hi_x_dom_face(bx); hi_x_dom_face.setSmall(0,bx.bigEnd(0)+1); hi_x_dom_face.setBig(0,bx.bigEnd(0)+1);
-            ParallelFor(hi_x_dom_face, [=] AMREX_GPU_DEVICE (int i, int j, int k) {
-                rho_u_rhs(i,j,k) = 0.;
-            });
+            if (bc_ptr_h[BCVars::xvel_bc].hi(0) == ERFBCType::ext_dir) {
+                ParallelFor(hi_x_dom_face, [=] AMREX_GPU_DEVICE (int i, int j, int k) {
+                    rho_u_rhs(i,j,k) = 0.;
+                });
+            } else if (bc_ptr_h[BCVars::xvel_bc].hi(0) == ERFBCType::ext_dir_upwind) {
+                ParallelFor(hi_x_dom_face, [=] AMREX_GPU_DEVICE (int i, int j, int k) {
+                    if (u(i,j,k) <= 0.) {
+                        rho_u_rhs(i,j,k) = 0.;
+                    }
+                });
+            }
         }
-        if ( (bx.smallEnd(1) == domain.smallEnd(1)) &&
-             (bc_ptr_h[BCVars::yvel_bc].lo(1) == ERFBCType::ext_dir) ) {
+        if (bx.smallEnd(1) == domain.smallEnd(1)) {
             Box lo_y_dom_face(bx); lo_y_dom_face.setBig(1,bx.smallEnd(1));
-            ParallelFor(lo_y_dom_face, [=] AMREX_GPU_DEVICE (int i, int j, int k) {
-                rho_v_rhs(i,j,k) = 0.;
-            });
+            if (bc_ptr_h[BCVars::yvel_bc].lo(1) == ERFBCType::ext_dir) {
+                ParallelFor(lo_y_dom_face, [=] AMREX_GPU_DEVICE (int i, int j, int k) {
+                    rho_v_rhs(i,j,k) = 0.;
+                });
+            } else if (bc_ptr_h[BCVars::yvel_bc].lo(1) == ERFBCType::ext_dir_upwind) {
+                ParallelFor(lo_y_dom_face, [=] AMREX_GPU_DEVICE (int i, int j, int k) {
+                    if (v(i,j,k) >= 0.) {
+                        rho_v_rhs(i,j,k) = 0.;
+                    }
+                });
+            }
         }
-        if ( (bx.bigEnd(1) == domain.bigEnd(1)) &&
-             (bc_ptr_h[BCVars::yvel_bc].hi(1) == ERFBCType::ext_dir) ) {
+        if (bx.bigEnd(1) == domain.bigEnd(1)) {
             Box hi_y_dom_face(bx); hi_y_dom_face.setSmall(1,bx.bigEnd(1)+1); hi_y_dom_face.setBig(1,bx.bigEnd(1)+1);
-            ParallelFor(hi_y_dom_face, [=] AMREX_GPU_DEVICE (int i, int j, int k) {
-                rho_v_rhs(i,j,k) = 0.;
-            });
-        }
+            if (bc_ptr_h[BCVars::yvel_bc].hi(1) == ERFBCType::ext_dir) {
+                ParallelFor(hi_y_dom_face, [=] AMREX_GPU_DEVICE (int i, int j, int k) {
+                    rho_v_rhs(i,j,k) = 0.;
+                });
+            } else if (bc_ptr_h[BCVars::yvel_bc].hi(1) == ERFBCType::ext_dir_upwind) {
+                ParallelFor(hi_y_dom_face, [=] AMREX_GPU_DEVICE (int i, int j, int k) {
+                    if (v(i,j,k) <= 0.) {
+                        rho_v_rhs(i,j,k) = 0.;
+                    }
+                });
+            }
         }
 
         ParallelFor(tbz, [=] AMREX_GPU_DEVICE (int i, int j, int k)

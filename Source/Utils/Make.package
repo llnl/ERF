@@ -5,11 +5,12 @@ CEXE_headers += ERF_Interpolation_WENO.H
 CEXE_headers += ERF_Interpolation_WENO_Z.H
 CEXE_headers += ERF_Interpolation.H
 CEXE_headers += ERF_Interpolation_1D.H
+CEXE_headers += ERF_Interpolation_Bilinear.H
 CEXE_headers += ERF_Microphysics_Utils.H
 CEXE_headers += ERF_TerrainMetrics.H
 CEXE_headers += ERF_TileNoZ.H
 CEXE_headers += ERF_Utils.H
-
+CEXE_headers += ERF_EpochTime.H
 CEXE_headers += ERF_ParFunctions.H
 
 CEXE_headers += ERF_SatMethods.H
