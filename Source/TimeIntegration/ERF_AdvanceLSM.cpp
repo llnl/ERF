@@ -17,7 +17,7 @@ void ERF::advance_lsm (int lev,
 #ifdef ERF_USE_RRTMGP
         lsm.set_LSM_flux_inputs(lev, sw_lw_fluxes[lev].get(), solar_zenith[lev].get());
 #endif
-        const bool use_moist = solverChoice.moisture_type != MoistureType::None && solverChoice.moisture_type != MoistureType::Kessler_NoRain;
+        const bool use_moist = solverChoice.moisture_type != MoistureType::None && solverChoice.moisture_type != MoistureType::Kessler_NoRain && solverChoice.moisture_type != MoistureType::SatAdj;
         const int rain_comp = 0;
         if (use_moist) {
             // qmoist[0] is total rain accumulation in mm over entire simulation
