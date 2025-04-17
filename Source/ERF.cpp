@@ -134,6 +134,8 @@ ERF::ERF_shared ()
     solar_zenith.resize(nlevs_max);
 #endif
 
+    micro_src.resize(nlevs_max);
+
     // NOTE: size lsm before readparams (chooses the model at all levels)
     lsm.ReSize(nlevs_max);
     lsm_data.resize(nlevs_max);
@@ -439,6 +441,17 @@ ERF::Evolve ()
         if (writeNow(cur_time, dt[0], step+1, m_plot_int_1, m_plot_per_1)) {
             last_plot_file_step_1 = step+1;
             WritePlotFile(1,plotfile_type_1,plot_var_names_1);
+
+            if (plot_micro_src)
+            {
+                std::string micsrc_plotfilename = amrex::Concatenate(std::string(plot_file_1 + "_microsrc_"), step+1, 5);
+                Vector<std::string> micsrc_varnames(micro_src[0]->nComp());
+                for (int i = 0; i < micsrc_varnames.size(); i++)
+                {
+                    micsrc_varnames[i] = std::string("micsrc_" + cons_names[i]);
+                }
+                WriteSingleLevelPlotfile(micsrc_plotfilename, *micro_src[0], micsrc_varnames, geom[0], cur_time, step+1);
+            }
         }
         if (writeNow(cur_time, dt[0], step+1, m_plot_int_2, m_plot_per_2)) {
             last_plot_file_step_2 = step+1;
@@ -1749,6 +1762,7 @@ ERF::ReadParameters ()
 #ifdef ERF_USE_RRTMGP
         pp.query("plot_rad", plot_rad);
 #endif
+        pp.query("plot_micro_src", plot_micro_src);
 
         pp.query("output_1d_column", output_1d_column);
         pp.query("column_per", column_per);

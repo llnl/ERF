@@ -331,6 +331,11 @@ ERF::init_stuff (int lev, const BoxArray& ba, const DistributionMapping& dm,
     qheating_rates[lev] = std::make_unique<MultiFab>(ba, dm, 2, ngrow_state);
     qheating_rates[lev]->setVal(0.);
 
+    if (plot_micro_src) {
+        micro_src[lev] = std::make_unique<MultiFab>(ba, dm, ncomp, ngrow_state);
+        micro_src[lev]->setVal(0.);
+    }
+
 #if defined(ERF_USE_RRTMGP)
     //*********************************************************
     // Radiation fluxes for coupling to LSM

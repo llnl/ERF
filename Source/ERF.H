@@ -808,6 +808,9 @@ private:
     amrex::Vector<std::unique_ptr<amrex::MultiFab>> qrad_forcings; // qrad src over time
     amrex::Vector<amrex::Real> rad_times;
 
+    amrex::Vector<std::unique_ptr<amrex::MultiFab>> micro_src; // microphysics source terms
+    bool plot_micro_src = false;
+
     // Fillpatcher classes for coarse-fine boundaries
     int cf_width{0};
     int cf_set_width{0};
