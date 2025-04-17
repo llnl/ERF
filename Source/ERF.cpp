@@ -135,6 +135,7 @@ ERF::ERF_shared ()
 #endif
 
     micro_src.resize(nlevs_max);
+    buoy_src.resize(nlevs_max);
 
     // NOTE: size lsm before readparams (chooses the model at all levels)
     lsm.ReSize(nlevs_max);
@@ -451,6 +452,13 @@ ERF::Evolve ()
                     micsrc_varnames[i] = std::string("micsrc_" + cons_names[i]);
                 }
                 WriteSingleLevelPlotfile(micsrc_plotfilename, *micro_src[0], micsrc_varnames, geom[0], cur_time, step+1);
+            }
+
+            if (plot_buoy_src)
+            {
+                std::string buoysrc_plotfilename = amrex::Concatenate(std::string(plot_file_1 + "_buoysrc_"), step+1, 5);
+                Vector<std::string> buoysrc_varnames = {"buoysrc_zmom"};
+                WriteSingleLevelPlotfile(buoysrc_plotfilename, *buoy_src[0], buoysrc_varnames, geom[0], cur_time, step+1);
             }
         }
         if (writeNow(cur_time, dt[0], step+1, m_plot_int_2, m_plot_per_2)) {
@@ -1763,6 +1771,7 @@ ERF::ReadParameters ()
         pp.query("plot_rad", plot_rad);
 #endif
         pp.query("plot_micro_src", plot_micro_src);
+        pp.query("plot_buoy_src", plot_buoy_src);
 
         pp.query("output_1d_column", output_1d_column);
         pp.query("column_per", column_per);

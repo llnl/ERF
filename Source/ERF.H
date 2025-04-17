@@ -810,6 +810,8 @@ private:
 
     amrex::Vector<std::unique_ptr<amrex::MultiFab>> micro_src; // microphysics source terms
     bool plot_micro_src = false;
+    amrex::Vector<std::unique_ptr<amrex::MultiFab>> buoy_src; // buoyancy source term
+    bool plot_buoy_src = false;
 
     // Fillpatcher classes for coarse-fine boundaries
     int cf_width{0};

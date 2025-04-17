@@ -175,6 +175,11 @@ ERF::Advance (int lev, Real time, Real dt_lev, int iteration, int /*ncycle*/)
                    cc_source, xmom_source, ymom_source, zmom_source,
                    Geom(lev), dt_lev, time);
 
+    if (plot_buoy_src)
+    {
+        MultiFab::Copy(*buoy_src[lev], zmom_source, 0, 0, 1, zmom_source.nGrowVect());
+    }
+
     // **************************************************************************************
     // Update the microphysics (moisture)
     // **************************************************************************************

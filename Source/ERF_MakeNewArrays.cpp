@@ -336,6 +336,11 @@ ERF::init_stuff (int lev, const BoxArray& ba, const DistributionMapping& dm,
         micro_src[lev]->setVal(0.);
     }
 
+    if (plot_buoy_src) {
+        buoy_src[lev] = std::make_unique<MultiFab>(convert(ba, IntVect(0,0,1)), dm, 1, ngrow_vels);
+        buoy_src[lev]->setVal(0.);
+    }
+
 #if defined(ERF_USE_RRTMGP)
     //*********************************************************
     // Radiation fluxes for coupling to LSM
