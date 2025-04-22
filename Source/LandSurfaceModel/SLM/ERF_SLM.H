@@ -332,6 +332,11 @@ public:
         m_dt = dt;
     }
 
+    const amrex::Vector<const amrex::MultiFab*> &export_to_RRTMGP()
+    {
+        return slm_to_rad_vars;
+    }
+
 private:
     // number of lsm variables (theta)
     int m_lsm_size = 31;
@@ -549,6 +554,8 @@ private:
 
     // Extra MFs for output:
     amrex::MultiFab slm_diag;
+
+    amrex::Vector<const amrex::MultiFab*> slm_to_rad_vars;
 
     // List of 2D output variables that are declared as 3D
     // These will only be saved at k = 0 (surface level) to save space

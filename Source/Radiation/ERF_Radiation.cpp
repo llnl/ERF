@@ -32,6 +32,9 @@ Radiation::Radiation (const int& lev,
     // Check if we have a moisture model with ice
     if (sc.moisture_type == MoistureType::SAM)  { m_ice = true; }
 
+    // Check if we have a land surface model enabled
+    if (sc.lsm_type != LandSurfaceType::None) { m_lsm = true; }
+
     // Construct parser object for following reads
     ParmParse pp("erf");
 
@@ -225,6 +228,9 @@ Radiation::alloc_buffers ()
     sfc_flux_dif_nir = real1d("sfc_flux_dif_nir", m_ncol);
     lat              = real1d("lat"             , m_ncol);
     lon              = real1d("lon"             , m_ncol);;
+    sfc_emis         = real1d("sfc_emis"        , m_ncol);
+    t_sfc            = real1d("t_sfc"           , m_ncol);
+    lw_src           = real1d("lw_src"          , m_ncol);
 
     // 2d size (ncol, nlay)
     r_lay         = real2d("r_lay"        , m_ncol, m_nlay);
@@ -283,6 +289,10 @@ Radiation::alloc_buffers ()
     sfc_alb_dir = real2d("sfc_alb_dir", m_ncol, m_nswbands);
     sfc_alb_dif = real2d("sfc_alb_dif", m_ncol, m_nswbands);
 
+    // 2d size (ncol, nlwbands)
+    emis_sfc    = real2d("emis_sfc", m_ncol, m_nlwbands);
+    lw_sfc_src  = real2d("lw_sfc_src", m_ncol, m_nlwbands);
+
     // 3d size (ncol, nlay, n[sw,lw]bands)
     aero_tau_sw = real3d("aero_tau_sw", m_ncol, m_nlay, m_nswbands);
     aero_ssa_sw = real3d("aero_ssa_sw", m_ncol, m_nlay, m_nswbands);
@@ -320,6 +330,9 @@ Radiation::dealloc_buffers ()
     sfc_flux_dif_nir.deallocate();
     lat.deallocate();
     lon.deallocate();
+    sfc_emis.deallocate();
+    t_sfc.deallocate();
+    lw_src.deallocate();
 
     // 2d size (ncol, nlay)
     r_lay.deallocate();
@@ -380,6 +393,10 @@ Radiation::dealloc_buffers ()
     sfc_alb_dir.deallocate();
     sfc_alb_dif.deallocate();
 
+    // 2d size (ncol, nlwbands)
+    emis_sfc.deallocate();
+    lw_sfc_src.deallocate();
+
     // 3d size (ncol, nlay, n[sw,lw]bands)
     aero_tau_sw.deallocate();
     aero_ssa_sw.deallocate();
@@ -401,6 +418,7 @@ Radiation::mf_to_yakl_buffers ()
 {
     bool moist = m_moist;
     bool ice   = m_ice;
+    const bool lsm = m_lsm;
     int  ncol  = m_ncol;
     int  nlay  = m_nlay;
     Real dz    = m_geom.CellSize(2);
@@ -479,6 +497,11 @@ Radiation::mf_to_yakl_buffers ()
             if (k==0) {
                 lat(icol) = (m_lat) ? lat_arr(i,j,0) : cons_lat;
                 lon(icol) = (m_lon) ? lon_arr(i,j,0) : cons_lon;
+
+                if (!lsm) {
+                    // if no LSM, then set surface temperature as temperature at k=0
+                    t_sfc(icol) = t_lev(icol, 1);
+                }
             }
 
         });
@@ -493,10 +516,10 @@ Radiation::mf_to_yakl_buffers ()
     // TODO: Fill properly
     // No LSM, so follow EAMXX dummy atmos and set constants
     yakl::memset(mu0, 0.86);
-    yakl::memset(sfc_alb_dir_vis, 0.06);
-    yakl::memset(sfc_alb_dir_nir, 0.06);
-    yakl::memset(sfc_alb_dif_vis, 0.06);
-    yakl::memset(sfc_alb_dif_nir, 0.06);
+    //yakl::memset(sfc_alb_dir_vis, 0.06);
+    //yakl::memset(sfc_alb_dir_nir, 0.06);
+    //yakl::memset(sfc_alb_dif_vis, 0.06);
+    //yakl::memset(sfc_alb_dif_nir, 0.06);
 
     // TODO: Fill properly
     yakl::memset(aero_tau_sw, 0.0);
@@ -697,7 +720,18 @@ Radiation::run_impl ()
     // TODO: No LSM so leaving comment for code
     // Calculate T_int from longwave flux up from the surface, assuming
     // blackbody emission with emissivity of 1.
+    if (!m_lsm) {
+        yakl::memset(emis_sfc, 0.98);
+        yakl::memset(lw_src, 0.0);
+        //yakl::memset(lw_sfc_src, 0.0);
 
+        // if no LSM, then surface temp is lowest atmosphere temperature
+        const bool top_at_1 = false; // TODO: this assumes bottom is at 1
+        parallel_for(SimpleBounds<1>(ncol), YAKL_LAMBDA(int icol)
+        {
+            t_sfc(icol) = t_lev(icol, yakl::intrinsics::merge(nlay+1, 1, top_at_1));
+        });
+    }
 
     // Determine the cosine zenith angle.
     // This must be done on HOST and copied to device.
@@ -745,6 +779,7 @@ Radiation::run_impl ()
                         p_lay, t_lay, p_lev, t_lev,
                         m_gas_concs,
                         sfc_alb_dir, sfc_alb_dif, mu0,
+                        t_sfc, emis_sfc, lw_src,
                         lwp, iwp, eff_radius_qc, eff_radius_qi, cldfrac_tot,
                         aero_tau_sw, aero_ssa_sw, aero_g_sw, aero_tau_lw,
                         cld_tau_sw_bnd, cld_tau_lw_bnd,

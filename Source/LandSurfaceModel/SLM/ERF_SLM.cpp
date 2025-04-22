@@ -239,6 +239,8 @@ SLM::Init (const MultiFab& cons_in,
     } else {
 	zrefxy.setVal(zref);  // set zrefxy with the value read from inputs file
     }
+
+    slm_to_rad_vars = {Lsm_Data_Ptr(LsmVar_SLM::tsurf), &albedovis_s, &albedovis_v, &albedonir_s, &albedonir_v, &IR_emis_vege, &net_rad};
 }
 /**
  * Initialize SLM from input data - used for testing only
