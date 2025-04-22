@@ -187,6 +187,12 @@ Radiation::set_grids (int& level,
 
         // Fill the YAKL Arrays from AMReX MFs
         mf_to_yakl_buffers();
+
+        if (m_first_step) {
+            m_first_step = false;
+            datalog_mf.define(cons_in->boxArray(), cons_in->DistributionMap(), 7, 0);
+            datalog_mf.setVal(0.0);
+        }
     }
 }
 
@@ -627,6 +633,89 @@ Radiation::write_rrtmgp_fluxes ()
    WriteSingleLevelPlotfile(plotfilename, mf_flux, flux_names, m_geom, m_time, m_step);
 }
 
+void Radiation::populateDatalogMF()
+{
+    for (MFIter mfi(datalog_mf); mfi.isValid(); ++mfi) {
+        const auto& vbx      = mfi.validbox();
+        const int nx         = vbx.length(0);
+        const int imin       = vbx.smallEnd(0);
+        const int jmin       = vbx.smallEnd(1);
+        const int offset     = m_col_offsets[mfi.index()];
+        const Array4<Real>& dst_arr = datalog_mf.array(mfi);
+        const Array4<Real>& q_arr = m_qheating_rates->array(mfi);
+        ParallelFor(vbx, [=] AMREX_GPU_DEVICE (int i, int j, int k)
+        {
+            // map [i,j,k] 0-based to [icol, ilay] 1-based
+            const int icol = (j-jmin)*nx + (i-imin) + 1 + offset;
+            const int ilay = k+1;
+
+            // Convert the rates for theta_d
+            Real exner = getExnergivenP(Real(p_lay(icol,ilay)), R_d/Cp_d);
+            dst_arr(i,j,k,0) = q_arr(i, j, k, 0) / exner;
+            dst_arr(i,j,k,1) = q_arr(i, j, k, 1) / exner;
+
+            // SW and LW fluxes
+            dst_arr(i,j,k,2) = sw_flux_up(icol,ilay);
+            dst_arr(i,j,k,3) = sw_flux_dn(icol,ilay);
+            dst_arr(i,j,k,4) = sw_flux_dn_dir(icol,ilay);
+            dst_arr(i,j,k,5) = lw_flux_up(icol,ilay);
+            dst_arr(i,j,k,6) = lw_flux_dn(icol,ilay);
+        });
+   }
+}
+
+void Radiation::WriteDataLog(const amrex::Real &time)
+{
+    constexpr int datwidth = 14;
+    constexpr int datprecision = 9;
+    constexpr int timeprecision = 13;
+
+    Gpu::HostVector<Real> h_avg_radqrsw, h_avg_radqrlw, h_avg_sw_up, h_avg_sw_dn, h_avg_sw_dn_dir, h_avg_lw_up, h_avg_lw_dn;
+
+    auto domain = m_geom.Domain();
+    h_avg_radqrsw    = sumToLine(datalog_mf, 0, 1, domain, 2);
+    h_avg_radqrlw    = sumToLine(datalog_mf, 1, 1, domain, 2);
+    h_avg_sw_up      = sumToLine(datalog_mf, 2, 1, domain, 2);
+    h_avg_sw_dn      = sumToLine(datalog_mf, 3, 1, domain, 2);
+    h_avg_sw_dn_dir  = sumToLine(datalog_mf, 4, 1, domain, 2);
+    h_avg_lw_up      = sumToLine(datalog_mf, 5, 1, domain, 2);
+    h_avg_lw_dn      = sumToLine(datalog_mf, 6, 1, domain, 2);
+
+    Real area_z = static_cast<Real>(domain.length(0)*domain.length(1));
+    int nz = domain.length(2);
+    for (int k = 0; k < nz; k++) {
+        h_avg_radqrsw[k] /= area_z;
+        h_avg_radqrlw[k] /= area_z;
+        h_avg_sw_up[k] /= area_z;
+        h_avg_sw_dn[k] /= area_z;
+        h_avg_sw_dn_dir[k] /= area_z;
+        h_avg_lw_up[k] /= area_z;
+        h_avg_lw_dn[k] /= area_z;
+    }
+
+    if (ParallelDescriptor::IOProcessor()) {
+        std::ostream& log = *datalog;
+        if (log.good()) {
+
+            for (int k = 0; k < nz; k++)
+            {
+                Real z = k * m_geom.CellSize(2);
+                log << std::setw(datwidth) << std::setprecision(timeprecision) << time << " "
+                    << std::setw(datwidth) << std::setprecision(datprecision) << z << " "
+                    << h_avg_radqrsw[k] << " " << h_avg_radqrlw[k] << " " << h_avg_sw_up[k] << " "
+                    << h_avg_sw_dn[k] << " " << h_avg_sw_dn_dir[k] << " " << h_avg_lw_up[k] << " "
+                    << h_avg_lw_dn[k] << std::endl;
+            }
+            // Write top face values
+            Real z = nz * m_geom.CellSize(2);
+            log << std::setw(datwidth) << std::setprecision(timeprecision) << time << " "
+                << std::setw(datwidth) << std::setprecision(datprecision) << z << " "
+                << 0.0 << " " << 0.0 << " " << 0.0 << " " << 0.0 << " " << 0.0 << " " << 0.0 << " "
+                << 0.0 << std::endl;
+        }
+    }
+}
+
 void
 Radiation::initialize_impl ()
 {
@@ -886,6 +975,9 @@ Radiation::finalize_impl ()
 
     // Write fluxes if requested
     if (m_rad_write_fluxes) { write_rrtmgp_fluxes(); }
+
+    // Fill output data for datalog before deallocating
+    populateDatalogMF();
 
     // Deallocate the buffer arrays
     dealloc_buffers();

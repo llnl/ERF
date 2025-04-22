@@ -129,10 +129,8 @@ ERF::ERF_shared ()
 #endif
 
     qheating_rates.resize(nlevs_max);
-#if defined(ERF_USE_RRTMGP)
     sw_lw_fluxes.resize(nlevs_max);
     solar_zenith.resize(nlevs_max);
-#endif
 
     micro_src.resize(nlevs_max);
     buoy_src.resize(nlevs_max);
@@ -158,10 +156,16 @@ ERF::ERF_shared ()
     initializeWindFarm(nlevs_max);
 #endif
 
-#ifdef ERF_USE_RRTMGP
     rad.resize(nlevs_max);
-    for (int lev = 0; lev <= max_level; ++lev) { rad[lev] = std::make_unique<Radiation>(lev,solverChoice); }
+    for (int lev = 0; lev <= max_level; ++lev) {
+        if (solverChoice.rad_type == RadiationType::RRTMGP) {
+#ifdef ERF_USE_RRTMGP
+            rad[lev] = std::make_unique<Radiation>(lev,solverChoice);
 #endif
+        } else if (solverChoice.rad_type != RadiationType::None) {
+            Abort("Don't know this radiation model!");
+        }
+    }
 
     const std::string& pv1 = "plot_vars_1"; setPlotVariables(pv1,plot_var_names_1);
     const std::string& pv2 = "plot_vars_2"; setPlotVariables(pv2,plot_var_names_2);
@@ -611,6 +615,13 @@ ERF::post_timestep (int nstep, Real time, Real dt_lev0)
         } else {
             // some variables staggered
             write_1D_profiles_stag(time);
+        }
+
+        if (solverChoice.rad_type != RadiationType::None)
+        {
+            if (rad[0]->hasDatalog()) {
+                rad[0]->WriteDataLog(time);
+            }
         }
     }
 
@@ -1251,6 +1262,11 @@ ERF::InitData_post ()
         }
     }
 
+    if (solverChoice.rad_type != RadiationType::None)
+    {
+        // Create data log for radiation model if requested
+        rad[0]->setupDataLog();
+    }
 
     if (restart_chkfile.empty() && profile_int > 0) {
         if (destag_profiles) {

@@ -61,6 +61,10 @@ AMREX_ENUM(LandSurfaceType,
     SLM, MM5, None, NOAH
 );
 
+AMREX_ENUM(RadiationType,
+    None, RRTMGP
+);
+
 AMREX_ENUM(PerturbationType,
     Source, Direct, None
 );
@@ -395,7 +399,19 @@ struct SolverChoice {
         AMREX_ALWAYS_ASSERT_WITH_MESSAGE(do_radiation == false, "do_radiation forcing option incompatible with RRTMG!");
 #endif
 
-        have_geo_wind_profile = (!abl_geo_wind_table.empty() || custom_geostrophic_profile);
+        // What type of radiation model to use
+        rad_type = RadiationType::None; // Default
+        pp.query_enum_case_insensitive("radiation_model", rad_type);
+
+        // Verify that radiation model cannot be RRTMGP if ERF was not compiled with RRTMGP
+#ifndef ERF_USE_RRTMGP
+        if (rad_type == RadiationType::RRTMGP)
+        {
+            amrex::Abort("ERF was not compiled with RRTMGP enabled!");
+        }
+#endif
+
+	have_geo_wind_profile = (!abl_geo_wind_table.empty() || custom_geostrophic_profile);
         AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!(!abl_geo_wind_table.empty() && custom_geostrophic_profile),
             "Should not have both abl_geo_wind_table and custom_geostrophic_profile set.");
 
@@ -597,6 +613,12 @@ struct SolverChoice {
             }
         }
 
+        if (rad_type == RadiationType::RRTMGP) {
+            amrex::Print() << "Radiation Model: RRTMGP" << std::endl;
+        } else {
+            amrex::Print() << "Radiation Model: None" << std::endl;
+        }
+
         amrex::Print() << "Buoyancy_type               : " << buoyancy_type << std::endl;
 
            advChoice.display(pp_prefix);
@@ -784,6 +806,7 @@ struct SolverChoice {
     WindFarmType windfarm_type;
     WindFarmLocType windfarm_loc_type;
     LandSurfaceType lsm_type;
+    RadiationType rad_type;
 
     ABLDriverType abl_driver_type;
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> abl_pressure_grad;

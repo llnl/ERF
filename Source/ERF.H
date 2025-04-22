@@ -63,9 +63,7 @@
 #include "ERF_WindFarm.H"
 #endif
 
-#ifdef ERF_USE_RRTMGP
-#include "ERF_Radiation.H"
-#endif
+#include <ERF_RadiationModels.H>
 
 #include <iostream>
 
@@ -793,15 +791,13 @@ private:
     amrex::Vector<std::unique_ptr<amrex::MultiFab>> nudge_data; // holds nudging inputs: tnudge, qnudge, unudge, vnudge
     amrex::Vector<std::unique_ptr<amrex::MultiFab>> lsf_data; //  holds large scale forcing tendencies: ttend, qtend, wsub
 
-#if defined(ERF_USE_RRTMGP)
-    amrex::Vector<std::unique_ptr<Radiation>> rad;
+    amrex::Vector<std::unique_ptr<IRadiation>> rad;
 
     // Containers for additional SLM inputs
     amrex::Vector<std::unique_ptr<amrex::MultiFab>> sw_lw_fluxes; // Direct SW (visible, NIR), Diffuse SW (visible, NIR), LW flux
     amrex::Vector<std::unique_ptr<amrex::MultiFab>> solar_zenith; // Solar zenith angle
 
     bool plot_rad = false;
-#endif
 
     amrex::Vector<std::unique_ptr<amrex::MultiFab>> qheating_rates;  // radiation heating rate source terms
     int num_rad_times = -1;

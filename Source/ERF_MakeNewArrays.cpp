@@ -328,8 +328,11 @@ ERF::init_stuff (int lev, const BoxArray& ba, const DistributionMapping& dm,
     //*********************************************************
     // Radiation heating source terms
     //*********************************************************
-    qheating_rates[lev] = std::make_unique<MultiFab>(ba, dm, 2, ngrow_state);
-    qheating_rates[lev]->setVal(0.);
+    if (solverChoice.rad_type != RadiationType::None || solverChoice.lsm_type != LandSurfaceType::None)
+    {
+        qheating_rates[lev] = std::make_unique<MultiFab>(ba, dm, 2, ngrow_state);
+        qheating_rates[lev]->setVal(0.);
+    }
 
     if (plot_micro_src) {
         micro_src[lev] = std::make_unique<MultiFab>(ba, dm, ncomp, ngrow_state);
@@ -341,17 +344,16 @@ ERF::init_stuff (int lev, const BoxArray& ba, const DistributionMapping& dm,
         buoy_src[lev]->setVal(0.);
     }
 
-#if defined(ERF_USE_RRTMGP)
     //*********************************************************
     // Radiation fluxes for coupling to LSM
     //*********************************************************
-
     // NOTE: Finer levels do not need to coincide with the bottom domain boundary
     //       at k=0. We make slabs here with the kmin for a given box. Therefore,
     //       care must be taken before applying these fluxes to an LSM model. For
 
     // Radiative fluxes for LSM
-    if (solverChoice.lsm_type != LandSurfaceType::None)
+    if (solverChoice.lsm_type != LandSurfaceType::None &&
+        solverChoice.rad_type != RadiationType::None)
     {
         BoxList m_bl = ba.boxList();
         for (auto& b : m_bl) {
@@ -366,8 +368,7 @@ ERF::init_stuff (int lev, const BoxArray& ba, const DistributionMapping& dm,
         sw_lw_fluxes[lev]->setVal(0.);
         solar_zenith[lev]->setVal(0.);
     }
-#endif
-
+	
     //*********************************************************
     // Turbulent perturbation region initialization
     //*********************************************************

@@ -35,9 +35,7 @@ void make_sources (int level,
                    const  MultiFab & S_prim,
                           MultiFab & source,
                    std::unique_ptr<MultiFab>& z_phys_cc,
-//#ifdef ERF_USE_RRTMGP
                    const MultiFab* qheating_rates,
-//#endif
                           MultiFab* terrain_blank,
                    const Geometry geom,
                    const SolverChoice& solverChoice,
@@ -194,18 +192,17 @@ void make_sources (int level,
         const Array4<const Real>& t_blank_arr = (terrain_blank) ? terrain_blank->const_array(mfi) :
                                                                Array4<const Real>{};
 
-#ifdef ERF_USE_RRTMGP
-        // *************************************************************************************
-        // 2. Add radiation source terms to (rho theta)
-        // *************************************************************************************
-        auto const& qheating_arr = qheating_rates->const_array(mfi);
-        ParallelFor(bx, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
-        {
-            // Short-wavelength and long-wavelength radiation source terms
-            cell_src(i,j,k,RhoTheta_comp) += cell_data(i,j,k,Rho_comp) * ( qheating_arr(i,j,k,0) + qheating_arr(i,j,k,1) );
-        });
-#else
-        if (solverChoice.do_radiation) {
+        if (solverChoice.rad_type != RadiationType::None) {
+            // *************************************************************************************
+            // 2. Add radiation source terms to (rho theta)
+            // *************************************************************************************
+            auto const& qheating_arr = qheating_rates->const_array(mfi);
+            ParallelFor(bx, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
+            {
+                // Short-wavelength and long-wavelength radiation source terms
+                cell_src(i,j,k,RhoTheta_comp) += cell_data(i,j,k,Rho_comp) * ( qheating_arr(i,j,k,0) + qheating_arr(i,j,k,1) );
+            });
+        } else if (solverChoice.do_radiation) {
             // add time interpolated QRAD forcing
             auto const& qheating_arr = qheating_rates->const_array(mfi);
             const int nr = Rho_comp;
@@ -215,7 +212,6 @@ void make_sources (int level,
                 cell_src(i,j,k,n) += cell_data(i, j, k, nr) * (qheating_arr(i,j,k,0) + qheating_arr(i,j,k,1));
             });
         }
-#endif
 
         // *************************************************************************************
         // 3. Add Rayleigh damping for (rho theta)
