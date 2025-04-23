@@ -65,10 +65,6 @@ AMREX_ENUM(RadiationType,
     None, RRTMGP
 );
 
-AMREX_ENUM(PerturbationType,
-    Source, Direct, None
-);
-
 /**
  * Enum of possible plotfile types
 */
