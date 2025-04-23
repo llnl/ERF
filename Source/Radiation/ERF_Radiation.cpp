@@ -982,7 +982,7 @@ Radiation::finalize_impl ()
     if (m_rad_write_fluxes) { write_rrtmgp_fluxes(); }
 
     // Fill output data for datalog before deallocating
-    if (datalog_int > 0 && (m_step+1) % datalog_int == 0) {
+    if (datalog_int > 0 && m_step % datalog_int == 0) {
         populateDatalogMF();
     }
 
