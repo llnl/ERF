@@ -161,6 +161,8 @@ ERF::ERF_shared ()
         if (solverChoice.rad_type == RadiationType::RRTMGP) {
 #ifdef ERF_USE_RRTMGP
             rad[lev] = std::make_unique<Radiation>(lev,solverChoice);
+            // pass radiation datalog frequency to model - RRTMGP needs to know when to save data for profiles
+            rad[lev]->setDataLogFrequency(rad_datalog_int);
 #endif
         } else if (solverChoice.rad_type != RadiationType::None) {
             Abort("Don't know this radiation model!");
@@ -616,9 +618,11 @@ ERF::post_timestep (int nstep, Real time, Real dt_lev0)
             // some variables staggered
             write_1D_profiles_stag(time);
         }
+    }
 
-        if (solverChoice.rad_type != RadiationType::None)
-        {
+    if (solverChoice.rad_type != RadiationType::None)
+    {
+        if (rad_datalog_int > 0 && (nstep+1) % rad_datalog_int == 0) {
             if (rad[0]->hasDatalog()) {
                 rad[0]->WriteDataLog(time);
             }
@@ -1786,6 +1790,7 @@ ERF::ReadParameters ()
 #ifdef ERF_USE_RRTMGP
         pp.query("plot_rad", plot_rad);
 #endif
+        pp.query("profile_rad_int", rad_datalog_int);
         pp.query("plot_micro_src", plot_micro_src);
         pp.query("plot_buoy_src", plot_buoy_src);
 

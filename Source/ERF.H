@@ -800,6 +800,8 @@ private:
     amrex::Vector<std::unique_ptr<amrex::MultiFab>> solar_zenith; // Solar zenith angle
 
     bool plot_rad = false;
+    int plot_rad_int = -1;
+    int rad_datalog_int = -1;
 
     amrex::Vector<std::unique_ptr<amrex::MultiFab>> qheating_rates;  // radiation heating rate source terms
     int num_rad_times = -1;

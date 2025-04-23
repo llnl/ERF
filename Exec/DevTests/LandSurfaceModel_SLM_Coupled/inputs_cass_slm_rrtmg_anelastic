@@ -199,6 +199,7 @@ prob.custom_TKE      = false
 # RADIATION INPUTS
 erf.radiation_model = "RRTMGP"
 erf.rad.datalog = "radiation"  # datalog for RRTMGP
+erf.profile_rad_int = 30 # radiation datalog frequency in steps
 
 # start time for CASS - 6AM LST
 start_datetime = "2010-06-24_12:00:00UTC"

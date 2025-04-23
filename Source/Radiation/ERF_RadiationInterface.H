@@ -45,11 +45,17 @@ public:
         }
     }
 
+    void setDataLogFrequency(const int nstep) {
+        datalog_int = nstep;
+    }
+
     bool hasDatalog() { return (datalog != nullptr && datalog->good()); }
 
 protected:
     std::unique_ptr<std::fstream> datalog = nullptr;
     std::string datalogname;
+
+    int datalog_int = -1; // datalog frequency in steps
 
 private:
     void setRecordDataInfo (const std::string& filename)
