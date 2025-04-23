@@ -190,7 +190,7 @@ Radiation::set_grids (int& level,
 
         if (m_first_step) {
             m_first_step = false;
-            datalog_mf.define(cons_in->boxArray(), cons_in->DistributionMap(), 7, 0);
+            datalog_mf.define(cons_in->boxArray(), cons_in->DistributionMap(), 8, 0);
             datalog_mf.setVal(0.0);
         }
     }
@@ -660,6 +660,9 @@ void Radiation::populateDatalogMF()
             dst_arr(i,j,k,4) = sw_flux_dn_dir(icol,ilay);
             dst_arr(i,j,k,5) = lw_flux_up(icol,ilay);
             dst_arr(i,j,k,6) = lw_flux_dn(icol,ilay);
+
+            // Cosine zenith angle
+            dst_arr(i,j,k,7) = mu0(icol);
         });
    }
 }
@@ -670,7 +673,7 @@ void Radiation::WriteDataLog(const amrex::Real &time)
     constexpr int datprecision = 9;
     constexpr int timeprecision = 13;
 
-    Gpu::HostVector<Real> h_avg_radqrsw, h_avg_radqrlw, h_avg_sw_up, h_avg_sw_dn, h_avg_sw_dn_dir, h_avg_lw_up, h_avg_lw_dn;
+    Gpu::HostVector<Real> h_avg_radqrsw, h_avg_radqrlw, h_avg_sw_up, h_avg_sw_dn, h_avg_sw_dn_dir, h_avg_lw_up, h_avg_lw_dn, h_avg_zenith;
 
     auto domain = m_geom.Domain();
     h_avg_radqrsw    = sumToLine(datalog_mf, 0, 1, domain, 2);
@@ -680,6 +683,7 @@ void Radiation::WriteDataLog(const amrex::Real &time)
     h_avg_sw_dn_dir  = sumToLine(datalog_mf, 4, 1, domain, 2);
     h_avg_lw_up      = sumToLine(datalog_mf, 5, 1, domain, 2);
     h_avg_lw_dn      = sumToLine(datalog_mf, 6, 1, domain, 2);
+    h_avg_zenith     = sumToLine(datalog_mf, 7, 1, domain, 2);
 
     Real area_z = static_cast<Real>(domain.length(0)*domain.length(1));
     int nz = domain.length(2);
@@ -691,6 +695,7 @@ void Radiation::WriteDataLog(const amrex::Real &time)
         h_avg_sw_dn_dir[k] /= area_z;
         h_avg_lw_up[k] /= area_z;
         h_avg_lw_dn[k] /= area_z;
+        h_avg_zenith[k] /= area_z;
     }
 
     if (ParallelDescriptor::IOProcessor()) {
@@ -704,14 +709,14 @@ void Radiation::WriteDataLog(const amrex::Real &time)
                     << std::setw(datwidth) << std::setprecision(datprecision) << z << " "
                     << h_avg_radqrsw[k] << " " << h_avg_radqrlw[k] << " " << h_avg_sw_up[k] << " "
                     << h_avg_sw_dn[k] << " " << h_avg_sw_dn_dir[k] << " " << h_avg_lw_up[k] << " "
-                    << h_avg_lw_dn[k] << std::endl;
+                    << h_avg_lw_dn[k] << " " << h_avg_zenith[k] << std::endl;
             }
             // Write top face values
             Real z = nz * m_geom.CellSize(2);
             log << std::setw(datwidth) << std::setprecision(timeprecision) << time << " "
                 << std::setw(datwidth) << std::setprecision(datprecision) << z << " "
                 << 0.0 << " " << 0.0 << " " << 0.0 << " " << 0.0 << " " << 0.0 << " " << 0.0 << " "
-                << 0.0 << std::endl;
+                << 0.0 << " " << 0.0 << std::endl;
         }
     }
 }
