@@ -142,6 +142,7 @@ Radiation::set_grids (int& level,
     m_geom           = geom;
     m_cons_in        = cons_in;
     m_lsm_fluxes     = lsm_fluxes;
+    m_lsm_zenith     = lsm_zenith;
     m_qheating_rates = qheating_rates;
     m_z_phys         = z_phys;
     m_lat            = lat;
@@ -595,6 +596,17 @@ Radiation::yakl_buffers_to_mf ()
                 lsm_arr(i,j,k,5) = lw_flux_dn(icol,1);
             });
         }
+        if (m_lsm_zenith) {
+            const Array4<Real>& lsm_zenith_arr =  m_lsm_zenith->array(mfi);
+            ParallelFor(sbx, [=] AMREX_GPU_DEVICE (int i, int j, int k)
+            {
+                // map [i,j,k] 0-based to [icol, ilay] 1-based
+                const int icol = (j-jmin)*nx + (i-imin) + 1 + offset;
+
+                // export cosine zenith angle for LSM
+                lsm_zenith_arr(i,j,k) = mu0(icol);
+            });
+        }
     }
 }
 
@@ -757,10 +769,15 @@ Radiation::run_impl ()
 
     // Use the orbital parameters to calculate the solar declination and eccentricity factor
     real delta, eccf;
-    // TODO: Generalize the days per month.
     // Want day + fraction; calday 1 == Jan 1 0Z
-    static constexpr real dpm = (365.0/12.0);
-    real calday = (m_orbital_mon-1.0)*dpm + std::min(m_orbital_day-1.0,dpm-1.0) + m_orbital_sec/86400.0;
+    // cumulative number of days in the year at the start of each month
+    static constexpr real dpy[] = {0.0, 31.0, 59.0, 90.0, 120.0, 151.0, 181.0, 212.0, 243.0, 273.0, 304.0, 334.0};
+    bool leap = (m_orbital_year % 4 == 0 && (!(m_orbital_year % 100 == 0) || (m_orbital_year % 400 == 0))) ? true : false;
+    real calday = dpy[m_orbital_mon] + m_orbital_day + m_orbital_sec/86400.0;
+    // add extra day if leap year
+    if (leap) {
+        calday += 1.0;
+    }
     orbital_decl(calday, eccen, mvelpp, lambm0, obliqr, delta, eccf);
 
     // Overwrite eccf if using a fixed solar constant.

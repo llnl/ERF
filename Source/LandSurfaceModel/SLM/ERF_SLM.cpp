@@ -2963,8 +2963,8 @@ SLM::set_flux_inputs(const amrex::MultiFab* sw_lw_fluxes_in,
             slm_diff_sw_nir(i, j, k) = sw_lw_fluxes_arr(i, j, k, 3);
 
             slm_lw(i, j, k) = sw_lw_fluxes_arr(i, j, k, 5);
-            //slm_zenith(i, j, k) = zenith_array(i, j, k, 0);
-            slm_zenith(i, j, k) = 1.0;
+            slm_zenith(i, j, k) = zenith_array(i, j, k, 0);
+            //slm_zenith(i, j, k) = 1.0;
 
 
             // TODO: this is for plotting purposes.. state arrays are at k=0 which is ghost cell for SLM values
