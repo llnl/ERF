@@ -399,6 +399,8 @@ private:
     real2d iwp;
     real2d sw_heating;
     real2d lw_heating;
+    real2d sw_clrsky_heating;
+    real2d lw_clrsky_heating;
 
     // 2d size (ncol, nlay+1)
     real2d d_tint;
