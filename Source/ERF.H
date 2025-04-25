@@ -351,11 +351,9 @@ public:
                       amrex::MultiFab& yvel_in,
                       const amrex::Real& dt_advance);
 
-#if defined(ERF_USE_RRTMGP)
     void advance_radiation (int lev,
                             amrex::MultiFab& cons_in,
                             const amrex::Real& dt_advance);
-#endif
 
     amrex::MultiFab& build_fine_mask (int lev);
 

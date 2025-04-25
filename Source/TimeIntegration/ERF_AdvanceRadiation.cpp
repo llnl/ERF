@@ -18,6 +18,7 @@ void ERF::advance_radiation (int lev,
             */
 
             // TODO: fix this - can't use set_lsm_inputs with IRadiation::Run()
+#ifdef ERF_USE_RRTMGP
             if (solverChoice.rad_type == RadiationType::RRTMGP)
             {
                 Radiation *rrtmgp = static_cast<Radiation*>(rad[lev].get());
@@ -33,6 +34,7 @@ void ERF::advance_radiation (int lev,
 
                 rrtmgp->rad_run_impl();
             }
+#endif
         }
     }
 }
