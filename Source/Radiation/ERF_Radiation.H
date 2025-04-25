@@ -147,13 +147,19 @@ public:
                 });
             }
 
+        /*
             // expand sfc_emis and lw_src over nlwbands
             // TODO: check if this is correct - should emissivity vary based on band?
             yakl::fortran::parallel_for(yakl::fortran::SimpleBounds<2>(m_nlwbands, m_ncol), YAKL_LAMBDA(const int ibnd, const int icol)
             {
-                emis_sfc(ibnd, icol) = sfc_emis(icol);
+                emis_sfc(icol, ibnd) = sfc_emis(icol);
                 //lw_sfc_src(ibnd, icol) = lw_src(icol);
             });
+            */
+
+           yakl::memset(sfc_emis, 0.95);
+           yakl::memset(emis_sfc, 0.95);
+           yakl::memset(lw_sfc_src, 0.0);
 
         }
     }

@@ -170,7 +170,7 @@ Radiation::set_grids (int& level,
 
     if (m_update_rad) {
         // Reset vector of offsets for columnar data
-        m_nlay = geom.Domain().length(2);
+        m_nlay = geom.Domain().length(2) + 1; // add extra layer at top
 
         m_ncol = 0;
         m_col_offsets.clear();
@@ -208,18 +208,23 @@ Radiation::alloc_buffers ()
     {
         m_gas_mol_weights_h(igas)   = m_mol_weight_gas[igas-1];
         gas_names_yakl_offset.push_back(m_gas_names[igas-1]);
+        //amrex::Print() << " igas = " << igas << " name = " << m_gas_names[igas-1] << ": mol weight = " << m_gas_mol_weights_h(igas) << std::endl;
     });
     m_gas_mol_weights_h.deep_copy_to(m_gas_mol_weights);
 
     // 1d size (1 or nlay)
-    m_o3_size = m_o3vmr.size();
-    AMREX_ASSERT_WITH_MESSAGE(((m_o3_size==1) || (m_o3_size==m_nlay)), "O3 VMR array must be length 1 or nlay");
+    m_o3_size = m_o3vmr.size()+1;
+    AMREX_ASSERT_WITH_MESSAGE(((m_o3_size==2) || (m_o3_size==m_nlay)), "O3 VMR array must be length 1 or nlay");
     o3_lay = real1d("o3_lay", m_o3_size);
     realHost1d o3_lay_h("o3_lay_h", m_o3_size);
-    parallel_for(m_o3_size, YAKL_LAMBDA (int io3)
+    parallel_for(m_o3_size-1, YAKL_LAMBDA (int io3)
     {
         o3_lay_h(io3) = m_o3vmr[io3-1];
+        //amrex::Print() << " io3 = " << io3 << " O3 lay = " << o3_lay_h(io3) << std::endl;
     });
+    // extrapolate to extra model top
+    o3_lay_h(m_o3_size) = o3_lay_h(m_o3_size-1);
+
     o3_lay_h.deep_copy_to(o3_lay);
 
     // 1d size (ncol)
@@ -493,7 +498,16 @@ Radiation::mf_to_yakl_buffers ()
             // Buffers on z-faces (nlay+1)
             p_lev(icol,ilay) = getPgivenRTh(rt_avg, qv_avg);
             t_lev(icol,ilay) = getTgivenRandRTh(r_avg, rt_avg, qv_avg);
-            if (ilay==nlay) {
+
+/*
+            if (icol == 1) {
+                amrex::Print() << " i = " << i << " j = " << j << " k = " << k << " (icol = " << icol << " ilay = " << ilay << "):" << std::endl;
+                amrex::Print() << "     r_lay = " << r_lay(icol, ilay) << " p_lay = " << p_lay(icol, ilay) << " t_lay = " << t_lay(icol, ilay) << std::endl;
+                amrex::Print() << "     z_del = " << z_del(icol, ilay) << " qv_lay = " << qv_lay(icol, ilay) << " qc_lay = " << qc_lay(icol, ilay) << std::endl;
+                amrex::Print() << "     p_lev = " << p_lev(icol, ilay) << " t_lev = " << t_lev(icol, ilay) << std::endl;
+            }
+*/
+            if (ilay==nlay-1) {
                 Real r_hi  = cons_arr(i,j,k+1,Rho_comp);
                 Real rt_hi = cons_arr(i,j,k+1,RhoTheta_comp);
                 Real qv_hi = (moist) ? cons_arr(i,j,k+1,RhoQ1_comp)/r_hi : 0.0;
@@ -502,6 +516,13 @@ Radiation::mf_to_yakl_buffers ()
                 qv_avg = 0.5 * (qv + qv_hi);
                 p_lev(icol,ilay+1) = getPgivenRTh(rt_avg, qv_avg);
                 t_lev(icol,ilay+1) = getTgivenRandRTh(r_avg, rt_avg, qv_avg);
+                z_del(icol,ilay+1) = z_del(icol, ilay);
+/*
+                if (icol == 1) {
+                    amrex::Print() << "  -> ilay == nlay " << std::endl;
+                    amrex::Print() << "      icol = " << icol << " ilay = " << ilay+1 << " k = " << k << ": p_lev = " << p_lev(icol, ilay+1) << " t_lev = " << t_lev(icol, ilay+1) << std::endl;
+                }
+*/
             }
 
             // 1D data structures
@@ -518,15 +539,36 @@ Radiation::mf_to_yakl_buffers ()
         });
     }
 
+    yakl::fence();
+
+    // extrapolate to additional layer at model top
+    parallel_for(ncol, YAKL_LAMBDA (int icol)
+    {
+        t_lay(icol, nlay) = 2.0 * t_lay(icol, nlay-1) - t_lay(icol, nlay-2);
+        t_lev(icol, nlay+1) = 2.0 * t_lay(icol, nlay) - t_lev(icol, nlay);
+
+        p_lay(icol, nlay) = 0.5 * p_lev(icol, nlay-1);
+        // top pressure <= 0.01 Pa
+        //p_lev(icol, nlay) = min(1.0e-4, 0.25*p_lay(icol, nlay));
+        //p_lev(icol, nlay) = 0.25 * p_lay(icol, nlay);
+        p_lev(icol, nlay+1) = 2.0 * p_lay(icol, nlay) - p_lev(icol, nlay);
+        
+        qv_lay(icol, nlay) = 2.0 * qv_lay(icol, nlay-1) - qv_lay(icol, nlay-2);
+        qc_lay(icol, nlay) = 0.0;
+        qi_lay(icol, nlay) = 0.0;
+    });
+
+    yakl::fence();
+
     // Separate YAKL kernel for derived quantities
-    parallel_for(SimpleBounds<2>(ncol, nlay), YAKL_LAMBDA (int icol, int ilay)
+    parallel_for(SimpleBounds<2>(ncol, nlay-1), YAKL_LAMBDA (int icol, int ilay)
     {
         p_del(icol,ilay)  = p_lev(icol,ilay+1) - p_lev(icol,ilay);
     });
 
     // TODO: Fill properly
     // No LSM, so follow EAMXX dummy atmos and set constants
-    yakl::memset(mu0, 0.86);
+    //yakl::memset(mu0, 0.86);
     //yakl::memset(sfc_alb_dir_vis, 0.06);
     //yakl::memset(sfc_alb_dir_nir, 0.06);
     //yakl::memset(sfc_alb_dif_vis, 0.06);
@@ -666,7 +708,8 @@ void Radiation::populateDatalogMF()
             const int ilay = k+1;
 
             // Convert the rates for theta_d
-            Real exner = getExnergivenP(Real(p_lay(icol,ilay)), R_d/Cp_d);
+            //Real exner = getExnergivenP(Real(p_lay(icol,ilay)), R_d/Cp_d);
+            Real exner = 1.0;
             dst_arr(i,j,k,0) = q_arr(i, j, k, 0) / exner;
             dst_arr(i,j,k,1) = q_arr(i, j, k, 1) / exner;
 
@@ -890,6 +933,8 @@ Radiation::run_impl ()
     if (leap) {
         calday += 1.0;
     }
+    //amrex::Print() << "  m_orbital_mon = " << m_orbital_mon << " m_orbital_day = " << m_orbital_day << " m_orbital_sec = " << m_orbital_sec << " LEAP = " << leap << std::endl;
+    //amrex::Print() << "  CALDAY = " << calday << std::endl;
     orbital_decl(calday, eccen, mvelpp, lambm0, obliqr, delta, eccf);
 
     // Overwrite eccf if using a fixed solar constant.
@@ -939,6 +984,7 @@ Radiation::run_impl ()
       m_gas_concs.set_vmr(name, tmp2d);
     }
 
+    //m_gas_concs.print_norms();
 
     // TODO: No LSM so leaving comment for code
     // Calculate T_int from longwave flux up from the surface, assuming
@@ -953,6 +999,17 @@ Radiation::run_impl ()
         parallel_for(SimpleBounds<1>(ncol), YAKL_LAMBDA(int icol)
         {
             t_sfc(icol) = t_lev(icol, yakl::intrinsics::merge(nlay+1, 1, top_at_1));
+        });
+    }
+
+    if (m_lsm)
+    {
+        // update t_lev at bottom with LSM surface temperature
+        const int kbot = 1; // TODO: assumes bottom is at 1
+        parallel_for(SimpleBounds<1>(ncol), YAKL_LAMBDA(int icol)
+        {
+            //t_lev(icol, 1) = t_sfc(icol);
+            //t_lay(icol, 1) = 0.5 * (t_lev(icol, 1) + t_lev(icol, 2));
         });
     }
 
@@ -976,12 +1033,17 @@ Radiation::run_impl ()
             real ldelta  = delta;
             h_mu0(icol)  = orbital_cos_zenith(lcalday, lat_col, lon_col, ldelta, m_rad_freq_in_steps * dt);
         });
+        //amrex::Print() << " Radiation cosine zenith angle: " << std::endl;
+        //amrex::Print() << h_mu0 << std::endl;
+        //amrex::Print() << std::endl;
     }
     h_mu0.deep_copy_to(mu0);
 
     // Compute layer cloud mass (per unit area), populates lwp/iwp
     rrtmgp::mixing_ratio_to_cloud_mass(qc_lay, cldfrac_tot, p_del, lwp);
     rrtmgp::mixing_ratio_to_cloud_mass(qi_lay, cldfrac_tot, p_del, iwp);
+
+    yakl::fence();
 
     // Convert to g/m2 (needed by RRTMGP)
     parallel_for(SimpleBounds<2>(ncol, nlay), YAKL_LAMBDA (int icol, int ilay)
@@ -996,6 +1058,37 @@ Radiation::run_impl ()
                                                  sfc_alb_dir_vis, sfc_alb_dir_nir,
                                                  sfc_alb_dif_vis, sfc_alb_dif_nir,
                                                  sfc_alb_dir    , sfc_alb_dif);
+
+/*
+    // For debugging ERF inputs to RRTMGP
+    std::fstream fout;
+    if (amrex::ParallelDescriptor::IOProcessor()) {
+        std::string fname = std::string("rad_sounding_" + std::to_string(m_step) + ".rad");
+        fout.open(fname.c_str(), std::ios::out);
+        if (!fout.good()) {
+            amrex::FileOpenFailed(fname);
+        }
+        
+        fout << nlay << " " << t_sfc(1) << std::endl;
+        for (int ilay = 1; ilay <= nlay; ilay++)
+        {
+            const int icol = 1;
+            // z p_lay p_lev p_del t_lay t_lev qv_lay lwp iwp
+            fout << z_del(icol, ilay) * ilay << " " << p_lay(icol, ilay) << " " << p_lev(icol, ilay) << " " << p_del(icol, ilay) << " " << t_lay(icol, ilay) << " "
+                 << t_lev(icol, ilay) << " " << qv_lay(icol, ilay) << " " << lwp(icol, ilay) << " " << iwp(icol, ilay)
+                 << std::endl;
+        }
+        // write out bottom lev
+        fout << z_del(1, nlay-1) * (nlay+1) << " " << 0.0 << " " << p_lev(1, nlay+1) << " " << 0.0 << " " << 0.0 << " " << t_lev(1, nlay+1)
+             << " " << 0.0 << " " << 0.0 << " " << 0.0 << std::endl;
+
+        fout.close();
+    }
+*/
+
+    amrex::ParallelDescriptor::Barrier();
+    yakl::fence();
+
 
     // Run RRTMGP driver
     rrtmgp::rrtmgp_main(ncol, m_nlay,
@@ -1078,6 +1171,8 @@ Radiation::run_impl ()
                         1.0);
     //================================================================================
 #endif
+
+    yakl::fence();
 
     // Update heating tendency
     rrtmgp::compute_heating_rate(sw_flux_up, sw_flux_dn, r_lay, z_del, sw_heating);
