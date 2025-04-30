@@ -18,8 +18,13 @@ void ERF::advance_lsm (int lev,
         lsm.set_LSM_flux_inputs(lev, sw_lw_fluxes[lev].get(), solar_zenith[lev].get());
 #endif
         const bool use_moist = solverChoice.moisture_type != MoistureType::None && solverChoice.moisture_type != MoistureType::Kessler_NoRain && solverChoice.moisture_type != MoistureType::SatAdj;
-        const int rain_comp = 0;
+        int rain_comp = 0;
         if (use_moist) {
+            if (solverChoice.moisture_type == MoistureType::Morrison || solverChoice.moisture_type == MoistureType::Morrison_NoIce)
+            {
+                rain_comp = 5;
+            }
+
             // qmoist[0] is total rain accumulation in mm over entire simulation
             // Convert to a rate of mm/s for SLM
             for ( MFIter mfi(*precip[lev], TileNoZ()); mfi.isValid(); ++mfi) {
