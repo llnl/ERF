@@ -76,7 +76,8 @@ DiffusionSrcForState_T (const Box& bx, const Box& domain,
                         const Array4<const Real>& tm_arr,
                         const GpuArray<Real,AMREX_SPACEDIM> grav_gpu,
                         const BCRec* bc_ptr,
-                        const bool use_most)
+                        const bool use_most,
+                              Array4<      Real>& buoy_fluxes)
 {
     BL_PROFILE_VAR("DiffusionSrcForState_T()",DiffusionSrcForState_T);
 
@@ -820,6 +821,13 @@ DiffusionSrcForState_T (const Box& bx, const Box& domain,
             // TKE dissipation
             cell_rhs(i,j,k,qty_index) -= diss(i,j,k);
         });
+
+        if (solverChoice.buoy_datalog) {
+            ParallelFor(bx,[=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
+            {
+                buoy_fluxes(i, j, k) = l_abs_g * l_inv_theta0 * hfx_z(i,j,k);
+            });
+        }
     }
 
     // Using PBL

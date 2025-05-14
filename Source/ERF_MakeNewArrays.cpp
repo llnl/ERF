@@ -344,6 +344,11 @@ ERF::init_stuff (int lev, const BoxArray& ba, const DistributionMapping& dm,
         buoy_src[lev]->setVal(0.);
     }
 
+    if (solverChoice.buoy_datalog) {
+        solverChoice.buoy_fluxes = std::make_unique<MultiFab>(ba, dm, ncomp, ngrow_state);
+        solverChoice.buoy_fluxes->setVal(0.0);
+    }
+
     //*********************************************************
     // Radiation fluxes for coupling to LSM
     //*********************************************************

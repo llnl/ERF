@@ -547,6 +547,8 @@ void erf_slow_rhs_pre (int level, int finest_level,
             Array4<Real> q2fx_z = (Q2fx3) ? Q2fx3->array(mfi) : Array4<Real>{};
             Array4<Real> diss  = Diss->array(mfi);
 
+            Array4<Real> buoy_fluxes_arr = (solverChoice.buoy_datalog) ? solverChoice.buoy_fluxes->array(mfi) : Array4<Real>{};
+
             const Array4<const Real> tm_arr = t_mean_mf ? t_mean_mf->const_array(mfi) : Array4<const Real>{};
 
             // NOTE: No diffusion for continuity, so n starts at 1.
@@ -561,7 +563,7 @@ void erf_slow_rhs_pre (int level, int finest_level,
                                        dxInv, SmnSmn_a, mf_m, mf_u, mf_v,
                                        hfx_x, hfx_y, hfx_z, q1fx_x, q1fx_y, q1fx_z, q2fx_z, diss,
                                        mu_turb, solverChoice, level,
-                                       tm_arr, grav_gpu, bc_ptr_d, l_use_most);
+                                       tm_arr, grav_gpu, bc_ptr_d, l_use_most, buoy_fluxes_arr);
             } else {
                 DiffusionSrcForState_N(bx, domain, n_start, n_comp, l_exp_most, u, v,
                                        cell_data, cell_prim, cell_rhs,
@@ -569,7 +571,7 @@ void erf_slow_rhs_pre (int level, int finest_level,
                                        dxInv, SmnSmn_a, mf_m, mf_u, mf_v,
                                        hfx_z, q1fx_z, q2fx_z, diss,
                                        mu_turb, solverChoice, level,
-                                       tm_arr, grav_gpu, bc_ptr_d, l_use_most);
+                                       tm_arr, grav_gpu, bc_ptr_d, l_use_most, buoy_fluxes_arr);
             }
         }
 

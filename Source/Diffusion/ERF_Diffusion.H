@@ -66,7 +66,8 @@ void DiffusionSrcForState_N (const amrex::Box& bx, const amrex::Box& domain,
                              const amrex::Array4<const amrex::Real>& tm_arr,
                              const amrex::GpuArray<amrex::Real,AMREX_SPACEDIM> grav_gpu,
                              const amrex::BCRec* bc_ptr,
-                             const bool use_most);
+                             const bool use_most,
+                                   amrex::Array4<      amrex::Real>& buoy_fluxes);
 
 void DiffusionSrcForState_T (const amrex::Box& bx, const amrex::Box& domain,
                              int start_comp, int num_comp,
@@ -104,7 +105,8 @@ void DiffusionSrcForState_T (const amrex::Box& bx, const amrex::Box& domain,
                              const amrex::Array4<const amrex::Real>& tm_arr,
                              const amrex::GpuArray<amrex::Real,AMREX_SPACEDIM> grav_gpu,
                              const amrex::BCRec* bc_ptr,
-                             const bool use_most);
+                             const bool use_most,
+                                   amrex::Array4<      amrex::Real>& buoy_fluxes);
 
 void ComputeStressConsVisc_N (amrex::Box bxcc, amrex::Box tbxxy, amrex::Box tbxxz, amrex::Box tbxyz, amrex::Real mu_eff,
                               const amrex::Array4<const amrex::Real>& cell_data,

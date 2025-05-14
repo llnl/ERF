@@ -430,6 +430,8 @@ void erf_slow_rhs_post (int level, int finest_level,
 
                 if (l_use_diff) {
                     const Array4<const Real> tm_arr = t_mean_mf ? t_mean_mf->const_array(mfi) : Array4<const Real>{};
+                    Array4<Real> buoy_fluxes_arr = (solverChoice.buoy_datalog) ? solverChoice.buoy_fluxes->array(mfi) : Array4<Real>{};
+
                     if (l_use_terrain) {
                         DiffusionSrcForState_T(tbx, domain, start_comp, num_comp, exp_most, rot_most, u, v,
                                                new_cons, cur_prim, cell_rhs,
@@ -438,7 +440,7 @@ void erf_slow_rhs_post (int level, int finest_level,
                                                dxInv, SmnSmn_a, mf_m, mf_u, mf_v,
                                                hfx_x, hfx_y, hfx_z, q1fx_x, q1fx_y, q1fx_z,q2fx_z, diss,
                                                mu_turb, solverChoice, level,
-                                               tm_arr, grav_gpu, bc_ptr_d, use_most);
+                                               tm_arr, grav_gpu, bc_ptr_d, use_most, buoy_fluxes_arr);
                     } else {
                         DiffusionSrcForState_N(tbx, domain, start_comp, num_comp, exp_most, u, v,
                                                new_cons, cur_prim, cell_rhs,
@@ -446,7 +448,7 @@ void erf_slow_rhs_post (int level, int finest_level,
                                                dxInv, SmnSmn_a, mf_m, mf_u, mf_v,
                                                hfx_z, q1fx_z, q2fx_z, diss,
                                                mu_turb, solverChoice, level,
-                                               tm_arr, grav_gpu, bc_ptr_d, use_most);
+                                               tm_arr, grav_gpu, bc_ptr_d, use_most, buoy_fluxes_arr);
                     }
                 } // use_diff
             } // valid slow var

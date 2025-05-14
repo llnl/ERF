@@ -618,6 +618,37 @@ ERF::post_timestep (int nstep, Real time, Real dt_lev0)
             // some variables staggered
             write_1D_profiles_stag(time);
         }
+
+        if (solverChoice.buoy_datalog) {
+            constexpr int datwidth = 14;
+            constexpr int datprecision = 9;
+            constexpr int timeprecision = 13;
+
+            Gpu::HostVector<Real> h_avg_buoy;
+            auto domain = geom[0].Domain();
+            h_avg_buoy    = sumToLine(*solverChoice.buoy_fluxes, 0, 1, domain, 2);
+            Real area_z = static_cast<Real>(domain.length(0)*domain.length(1));
+            int nz = domain.length(2);
+            for (int k = 0; k < nz; k++) {
+                h_avg_buoy[k] /= area_z;
+            }
+
+            if (ParallelDescriptor::IOProcessor()) {
+                std::ostream& log = *solverChoice.buoy_datalog;
+
+                for (int k = 0; k < nz; k++) {
+                    Real z = k * geom[0].CellSize(2);
+                    log << std::setw(datwidth) << std::setprecision(timeprecision) << time << " "
+                        << std::setw(datwidth) << std::setprecision(datprecision) << z << " "
+                        << h_avg_buoy[k] << std::endl;
+                }
+                // Write top face values
+                Real z = nz * geom[0].CellSize(2);
+                log << std::setw(datwidth) << std::setprecision(timeprecision) << time << " "
+                    << std::setw(datwidth) << std::setprecision(datprecision) << z << " "
+                    << 0.0 << std::endl;
+            }
+        }
     }
 
     if (solverChoice.rad_type != RadiationType::None)

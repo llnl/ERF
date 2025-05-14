@@ -407,6 +407,19 @@ struct SolverChoice {
         }
 #endif
 
+        pp.query("buoy_datalog", buoy_datalog_fname);
+        if (buoy_datalog_fname != "") {
+            buoy_datalog = std::make_unique<std::fstream>();
+            if (amrex::ParallelDescriptor::IOProcessor())
+            {
+                buoy_datalog->open(buoy_datalog_fname.c_str(),std::ios::out|std::ios::app);
+                if (!buoy_datalog->good()) {
+                    amrex::FileOpenFailed(buoy_datalog_fname);
+                }
+            }
+        }
+
+
 	have_geo_wind_profile = (!abl_geo_wind_table.empty() || custom_geostrophic_profile);
         AMREX_ALWAYS_ASSERT_WITH_MESSAGE(!(!abl_geo_wind_table.empty() && custom_geostrophic_profile),
             "Should not have both abl_geo_wind_table and custom_geostrophic_profile set.");
@@ -828,6 +841,11 @@ struct SolverChoice {
     // Radiation model params
     bool do_radiation {false};
     std::string qrad_file;
+
+    // datalog for buoyancy
+    std::string buoy_datalog_fname = "";
+    std::unique_ptr<amrex::MultiFab> buoy_fluxes;
+    std::unique_ptr<std::fstream> buoy_datalog = nullptr;
 
     std::string windfarm_loc_table, windfarm_spec_table, windfarm_spec_table_extra;
     std::string windfarm_blade_table, windfarm_airfoil_tables;
