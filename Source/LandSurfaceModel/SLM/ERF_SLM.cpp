@@ -2860,6 +2860,7 @@ void SLM::Copy_State_to_Lsm(const MultiFab& cons_in, const MultiFab& u_in, const
         });
     }
 
+#ifdef ERF_USE_NETCDF
     if (rad_input_file != "")
     {
         int tindex = 0;
@@ -2926,6 +2927,7 @@ void SLM::Copy_State_to_Lsm(const MultiFab& cons_in, const MultiFab& u_in, const
         }
         return;
     }
+#endif
 }
 
 void
