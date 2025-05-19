@@ -620,6 +620,22 @@ void ERF::advance_dycore(int level,
         qheating_rates[level]->mult(coeff_curr, 0, 1, 0);
         qheating_rates[level]->mult(coeff_next, 1, 1, 0);
 
+        for ( MFIter mfi(state_old[IntVars::cons]); mfi.isValid(); ++mfi)
+        {
+            Box bx = mfi.tilebox();
+            const Array4<const Real>& cell_data  = state_old[IntVars::cons].const_array(mfi);
+            const Array4<Real> &qheating_arr = qheating_rates[level]->array(mfi);
+
+            ParallelFor(bx, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
+            {
+                Real pres = getPgivenRTh(cell_data(i, j, k, RhoTheta_comp), cell_data(i, j, k, RhoQ1_comp) / cell_data(i, j, k, Rho_comp));
+                Real exner = getExnergivenP(pres, R_d / Cp_d);
+
+                qheating_arr(i, j, k, 0) *= exner;
+                qheating_arr(i, j, k, 1) *= exner;
+            });
+        }
+
         Print() << "  QSRC curr time = " << curr << " next time = " << next << " (ccurr = " << coeff_curr << " cnext = " << coeff_next << ")" << std::endl;
     }
 
