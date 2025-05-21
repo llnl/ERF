@@ -228,16 +228,17 @@ public:
         w_int_lsf_d.resize(num_times);
         for (int itime = 0; itime < num_times; itime++)
         {
-            z_int_lsf[itime].resize(Nz+2);
-            t_int_lsf[itime].resize(Nz+2);
-            q_int_lsf[itime].resize(Nz+2);
-            u_int_lsf[itime].resize(Nz+2);
-            v_int_lsf[itime].resize(Nz+2);
-            w_int_lsf[itime].resize(Nz+2);
+            z_int_lsf[itime].resize(Nz+1);
+            t_int_lsf[itime].resize(Nz+1);
+            q_int_lsf[itime].resize(Nz+1);
+            u_int_lsf[itime].resize(Nz+1);
+            v_int_lsf[itime].resize(Nz+1);
+            w_int_lsf[itime].resize(Nz+1);
 
             for (int k = 0; k < Nz; k++)
             {
-                for (int lk = 2; lk < nz_lsf + 1; lk++)
+                bool set = false;
+                for (int lk = 1; lk < nz_lsf + 1; lk++)
                 {
                     z_int_lsf[itime][k] = (use_terrain) ? 0.5 * (zlevels_stag[k] + zlevels_stag[k+1])
                                                         : zbot + (k + 0.5) * dz;
@@ -249,16 +250,29 @@ public:
                         u_int_lsf[itime][k] = u_lsf[itime][lk - 1] + (u_lsf[itime][lk] - u_lsf[itime][lk-1])*coef;
                         v_int_lsf[itime][k] = v_lsf[itime][lk - 1] + (v_lsf[itime][lk] - v_lsf[itime][lk-1])*coef;
                         w_int_lsf[itime][k] = w_lsf[itime][lk - 1] + (w_lsf[itime][lk] - w_lsf[itime][lk-1])*coef;
+                        set = true;
                         break;
                     }
                 }
+
+                if (set) {
+                    set = false;
+                    continue;
+                }
+
+                t_int_lsf[itime][k] = 0.0;
+                q_int_lsf[itime][k] = 0.0;
+                u_int_lsf[itime][k] = u_int_lsf[itime][k-1];
+                v_int_lsf[itime][k] = v_int_lsf[itime][k-1];
+                w_int_lsf[itime][k] = 0.0;
             }
-            z_int_lsf[itime][Nz+1] = ztop;
-            t_int_lsf[itime][Nz+1] = 0.0;
-            q_int_lsf[itime][Nz+1] = 0.0;
-            u_int_lsf[itime][Nz+1] = u_int_lsf[itime][Nz];
-            v_int_lsf[itime][Nz+1] = v_int_lsf[itime][Nz];
-            w_int_lsf[itime][Nz+1] = 0.0;
+
+            z_int_lsf[itime][Nz] = ztop;
+            t_int_lsf[itime][Nz] = 0.0;
+            q_int_lsf[itime][Nz] = 0.0;
+            u_int_lsf[itime][Nz] = u_int_lsf[itime][Nz-1];
+            v_int_lsf[itime][Nz] = v_int_lsf[itime][Nz-1];
+            w_int_lsf[itime][Nz] = 0.0;
 
             host_to_device(itime);
         }
@@ -267,7 +281,7 @@ public:
         for (int i = 0; i < times_lsf.size(); i++)
         {
             amrex::Print() << " INTERPOLATED LSF at time = " << times_lsf[i] << std::endl;
-            for (int k = 0; k <= Nz + 1; k++)
+            for (int k = 0; k <= Nz; k++)
             {
                 amrex::Print() << "   level " << k << ": z = " << z_int_lsf[i][k] << " tls = " << t_int_lsf[i][k] << " qls = " << q_int_lsf[i][k] << " uls = " << u_int_lsf[i][k] << " vls = " << v_int_lsf[i][k] << " wls = " << w_int_lsf[i][k] << std::endl;
             }

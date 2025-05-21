@@ -522,7 +522,7 @@ void make_mom_sources (int level,
             auto lsf_arr = lsf_tendencies->const_array(mfi);
 
             const int kmin = domain.smallEnd(2) + 1; // minimum k for vertical subsidence
-            const int kmax = domain.bigEnd(2) - 1;   // maximum k for vertical subsidence
+            const int kmax = domain.bigEnd(2) - 2;   // maximum k for vertical subsidence
 
             ParallelFor(tbx, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
             {
@@ -547,8 +547,8 @@ void make_mom_sources (int level,
                         dzInv = 1.0 / (z_xf_hi - z_xf_lo);
                     }
                     Real rho_on_u_face = 0.5 * ( cell_data(i,j,k,Rho_comp) + cell_data(i-1,j,k,Rho_comp) );
-                    amrex::Real utend = -(dzInv * lsf_arr(i, j, k, 2)) * ( (rho_u(i, j, k1) / rho_on_u_face) - (rho_u(i, j, k2) / rho_on_u_face));
-                    xmom_src_arr(i, j, k) += utend;
+                    amrex::Real utend = -(dzInv * lsf_arr(i, j, k, 2)) * ( u(i, j, k1) - u(i, j, k2) );
+                    xmom_src_arr(i, j, k) += utend * rho_on_u_face;
                 }
             });
 
@@ -575,8 +575,8 @@ void make_mom_sources (int level,
                         dzInv = 1.0 / (z_yf_hi - z_yf_lo);
                     }
                     Real rho_on_v_face = 0.5 * ( cell_data(i,j,k,Rho_comp) + cell_data(i,j-1,k,Rho_comp) );
-                    amrex::Real vtend = -(dzInv * lsf_arr(i, j, k, 2)) * ( (rho_v(i, j, k1) / rho_on_v_face) - (rho_v(i, j, k2) / rho_on_v_face));
-                    ymom_src_arr(i, j, k) += vtend;
+                    amrex::Real vtend = -(dzInv * lsf_arr(i, j, k, 2)) * ( v(i, j, k1) - v(i, j, k2) );
+                    ymom_src_arr(i, j, k) += vtend * rho_on_v_face;
                 }
             });
         }

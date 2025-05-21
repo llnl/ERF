@@ -261,7 +261,7 @@ void ERF::advance_dycore(int level,
         {
         for ( MFIter mfi(state_old[IntVars::cons],TileNoZ()); mfi.isValid(); ++mfi)
         {
-            Box bx  = mfi.tilebox();
+            Box bx  = mfi.growntilebox(IntVect(1, 1, 0));
             const Array4<Real>& cell_data = state_old[IntVars::cons].array(mfi);
             const Array4<Real>& lsf_arr = lsf_data[0]->array(mfi);
             Real zlo = fine_geom.ProbLo(2);
