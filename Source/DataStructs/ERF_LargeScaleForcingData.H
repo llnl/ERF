@@ -238,7 +238,7 @@ public:
             for (int k = 0; k < Nz; k++)
             {
                 bool set = false;
-                for (int lk = 1; lk < nz_lsf + 1; lk++)
+                for (int lk = 2; lk < nz_lsf + 1; lk++)
                 {
                     z_int_lsf[itime][k] = (use_terrain) ? 0.5 * (zlevels_stag[k] + zlevels_stag[k+1])
                                                         : zbot + (k + 0.5) * dz;
