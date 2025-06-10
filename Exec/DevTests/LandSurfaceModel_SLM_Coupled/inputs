@@ -19,8 +19,8 @@ amr.n_cell           =  32    32    156    # dx=dy=dz=50 m
 geometry.is_periodic = 1 1 0
 
 # MOST BOUNDARY (DEFAULT IS ADIABATIC FOR THETA)
-zlo.type = "Most"
-erf.most.flux_type = "custom"
+zlo.type = "surface_layer"
+erf.surface_layer.flux_type = "custom"
 erf.most.ustar  = 0.28   # ustar
 erf.most.tstar  = 8.0e-3 # theta flux
 erf.most.qstar  = 5.2e-5 # qv    flux
@@ -72,8 +72,6 @@ erf.dryscal_horiz_adv_type   = Upwind_3rd
 erf.dryscal_vert_adv_type    = Upwind_3rd
 erf.moistscal_horiz_adv_type = WENO5
 erf.moistscal_vert_adv_type  = WENO5
-
-erf.use_terrain = false
 
 # erf.terrain_z_levels =  0.00000     25.00000    75.00000    127.84810   186.71687 \
 #                         252.29221   325.33817   406.70581   497.34317   598.30627 \

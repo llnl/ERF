@@ -41,8 +41,8 @@ erf.use_fft = 1
 geometry.is_periodic = 1 1 0
 
 # MOST BOUNDARY (DEFAULT IS ADIABATIC FOR THETA)
-zlo.type = "Most"
-erf.most.flux_type = "custom"
+zlo.type = "surface_layer"
+erf.surface_layer.flux_type = "custom"
 erf.most.ustar  = 0.0  # ustar
 erf.most.tstar  = 0.0 # theta flux
 erf.most.qstar  = 0.0 # qv    flux
@@ -107,7 +107,6 @@ erf.dryscal_vert_adv_type    = Upwind_3rd
 erf.moistscal_horiz_adv_type = WENO5
 erf.moistscal_vert_adv_type  = WENO5
 
-erf.use_terrain = true
 erf.terrain_z_levels = 0.0      75.0     153.3     241.1     341.7     457.7     593.8     755.7     953.0    1197.0    1498.4    1860.2    2274.2    2729.5    3212.6    3709.2    4209.2    4709.2    5209.2    5709.2    6209.2    6709.2    7209.2    7709.2    8209.2    8709.2    9209.2    9709.2   10209.2   10709.2   11209.2   11709.2   12209.2   12709.2   13209.2   13709.2   14209.2   14709.2   15209.2   15709.2   16209.2   16709.2   17209.2   17709.2   18209.2   18709.2   19209.2   19709.2   20209.2   20709.2   21209.2   21709.2   22209.2   22709.2   23209.2   23709.2   24209.2 
 #erf.moisture_model  = "SAM_NoIce"
 erf.moisture_model  = "SAM"
