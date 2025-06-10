@@ -1,3 +1,31 @@
+#25.06
+    -- Optimize diffusion (#2356, 2355, 2351, 2349, 2348, 2346)
+
+    -- Fix initial projection w/ anelastic (#2344)
+
+    -- EB pressure gradient least squares (#2339)
+
+    -- Converter for AMReX --> Netcdf plotfiles (#2328)
+
+    -- RRTMGP radiation fixes (#2330)
+
+    -- Allow for sources to be added in acoustic steps (#2293, 2320)
+    
+#25.05
+    -- EB interpolation of momentum (#2283)
+
+    -- Metric discrete cancellation (#2280)
+
+    -- Init from NCFile (#2281)
+
+    -- Read WRF BDY in time slices (#2271)
+
+    -- EB interp scalars (#2257)
+
+    -- SurfaceLayer replaces MOST (#2216)
+
+    -- LES diffusion limiter (#2222)
+
 #25.04
     -- Fix anelastic RK2 for slow vars (#2226)
 

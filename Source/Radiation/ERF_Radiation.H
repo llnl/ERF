@@ -272,6 +272,7 @@ private:
     amrex::MultiFab* m_lsm_fluxes = nullptr;
     amrex::MultiFab* m_lsm_zenith = nullptr;
 
+    // Holds output from YAKL arrays used in the datalog
     amrex::MultiFab datalog_mf;
 
     // Path, data file, and coefficient file for K-distribution
@@ -449,7 +450,6 @@ private:
 
     // 2d size (ncol, nlwbands)
     real2d emis_sfc;
-    real2d lw_sfc_src;
 
     // 3d size (ncol, nlay, n[sw,lw]bands)
     real3d aero_tau_sw;

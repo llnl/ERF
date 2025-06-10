@@ -17,6 +17,19 @@
 #include <ERF_TurbStruct.H>
 #include <ERF_TurbPertStruct.H>
 
+enum MapFacType {
+//  This version assumes isotropic
+    m_x, u_x, v_x, num,
+    m_y = 0, u_y = 1, v_y = 2
+//  This version allows for non-isotropic
+//  m_x, u_x, v_x,
+//  m_y, u_y, v_y, num
+};
+
+enum TauType {
+    tau11, tau22, tau33, tau12, tau13, tau23, tau21, tau31, tau32
+};
+
 AMREX_ENUM(InitType,
     None, Input_Sounding, NCFile, WRFInput, Metgrid, Uniform
 );
@@ -93,7 +106,7 @@ enum Sponge {
 
 struct SolverChoice {
   public:
-    void init_params(int max_level, std::string pp_prefix)
+    void init_params (int max_level, std::string pp_prefix)
     {
         amrex::ParmParse pp(pp_prefix);
 
@@ -173,6 +186,18 @@ struct SolverChoice {
         // What type of land surface model to use
         lsm_type = LandSurfaceType::None; // Default
         pp.query_enum_case_insensitive("land_surface_model",lsm_type);
+
+        // What type of radiation model to use
+        rad_type = RadiationType::None; // Default
+        pp.query_enum_case_insensitive("radiation_model", rad_type);
+
+        // Verify that radiation model cannot be RRTMGP if ERF was not compiled with RRTMGP
+#ifndef ERF_USE_RRTMGP
+        if (rad_type == RadiationType::RRTMGP)
+        {
+            amrex::Abort("ERF was not compiled with RRTMGP enabled!");
+        }
+#endif
 
         // Is the terrain none, static or moving?
         std::string terrain_type_temp = "";
@@ -327,7 +352,7 @@ struct SolverChoice {
         // Include Coriolis forcing?
         pp.query("use_coriolis", use_coriolis);
         pp.query("has_lat_lon", has_lat_lon);
-        if (has_lat_lon) { pp.query("variable_coriolis", variable_coriolis); }
+        pp.query("variable_coriolis", variable_coriolis);
 
         // Include Rayleigh damping (separate flags for each variable)
         pp.query("rayleigh_damp_U", rayleigh_damp_U);
@@ -336,15 +361,16 @@ struct SolverChoice {
         pp.query("rayleigh_damp_T", rayleigh_damp_T);
         pp.query("rayleigh_dampcoef", rayleigh_dampcoef);
         pp.query("rayleigh_zdamp", rayleigh_zdamp);
+        pp.query("rayleigh_damp_substep", rayleigh_damp_substep); // apply Rayleigh damping source terms in substep only
 
-        // Flag to do explicit MOST formulation
-        pp.query("use_explicit_most",use_explicit_most);
+        // flags for whether to apply other source terms in substep only
+        pp.query("immersed_forcing_substep", immersed_forcing_substep); // apply Rayleigh damping source terms in substep only
+        pp.query("forest_substep", forest_substep); // apply Rayleigh damping source terms in substep only
 
         // Flag to do MOST rotations with terrain
-        pp.query("use_rotate_most",use_rotate_most);
-        if (use_rotate_most) {
+        pp.query("use_rotate_surface_flux",use_rotate_surface_flux);
+        if (use_rotate_surface_flux) {
             AMREX_ASSERT_WITH_MESSAGE(terrain_type != TerrainType::None,"MOST stress rotations are only valid with terrain!");
-            AMREX_ASSERT_WITH_MESSAGE(use_explicit_most, "MOST Stress rotations are only valid with explicit MOST!");
         }
 
         // Which external forcings?
@@ -464,7 +490,19 @@ struct SolverChoice {
                 }
             }
         }
-
+        // MRF
+        for (int lev = 0; lev <= max_level; lev++) {
+            if (turbChoice[lev].pbl_ysu_use_consistent_coriolis) {
+                if (use_coriolis) {
+                    turbChoice[lev].pbl_ysu_coriolis_freq = coriolis_factor * sinphi;
+                    if (lev == 0) {
+                        amrex::Print() << "MRF PBL using ERF coriolis frequency: " << turbChoice[lev].pbl_ysu_coriolis_freq << std::endl;
+                    }
+                } else {
+                    amrex::Abort("MRF cannot use ERF coriolis frequency if not using coriolis");
+                }
+            }
+        }
 
         // Which type of multilevel coupling
         coupling_type = CouplingType::TwoWay; // Default
@@ -499,7 +537,7 @@ struct SolverChoice {
         check_params(max_level);
     }
 
-    void check_params(int max_level)
+    void check_params (int max_level)
     {
         // Warn for PBL models and moisture - these may not yet be compatible
         for (int lev = 0; lev <= max_level; lev++) {
@@ -542,7 +580,7 @@ struct SolverChoice {
         }
     }
 
-    void display(int max_level, std::string pp_prefix)
+    void display (int max_level, std::string pp_prefix)
     {
         amrex::Print() << "SOLVER CHOICE: " << std::endl;
         amrex::Print() << "force_stage1_single_substep : "  << force_stage1_single_substep << std::endl;
@@ -747,6 +785,11 @@ struct SolverChoice {
     amrex::Real rayleigh_dampcoef      = 0.2; // inverse time scale [1/s]
     amrex::Real rayleigh_zdamp         = 500.0; // damping layer depth [m]
     amrex::Real rayleigh_ztop;
+    bool        rayleigh_damp_substep  = false; // use Rayleigh on substep only?
+
+    // Specify whether to apply other various source terms on substep only
+    bool        immersed_forcing_substep  = false;
+    bool        forest_substep            = false;
 
     // This defaults to true but can be set to false for moving terrain cases only
     bool        use_lagged_delta_rt    = true;
@@ -792,7 +835,7 @@ struct SolverChoice {
     bool use_explicit_most = false;
 
     // MOST stress rotations
-    bool use_rotate_most = false;
+    bool use_rotate_surface_flux = false;
 
     // User wishes to output time averaged velocity fields
     bool time_avg_vel = false;
@@ -827,6 +870,7 @@ struct SolverChoice {
     bool variable_coriolis{false};
 
     int ave_plane {2};
+
     // Microphysics params
     bool use_moist_background {false};
     int RhoQv_comp {-1};

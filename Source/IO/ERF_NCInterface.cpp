@@ -713,7 +713,7 @@ NCFile NCFile::open (const std::string& name, const int cmode)
     check_nc_error(nc_open(name.data(), cmode, &ncid));
     return NCFile(ncid);
 }
-//Uncomment for parallel NetCDF
+
 NCFile NCFile::create_par (const std::string& name, const int cmode, MPI_Comm comm, MPI_Info info)
 {
     int ncid;
@@ -726,7 +726,6 @@ NCFile NCFile::create_par (const std::string& name, const int cmode, MPI_Comm co
     return NCFile(ncid);
 }
 
-//Uncomment for parallel NetCDF
 NCFile NCFile::open_par (const std::string& name, const int cmode, MPI_Comm comm, MPI_Info info)
 {
     int ncid;

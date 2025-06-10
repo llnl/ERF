@@ -149,7 +149,7 @@ Radiation::set_grids (int& level,
     m_lon            = lon;
 
     // Update the day and month
-    time_t timestamp = time_t(time+rad_day0);
+    time_t timestamp = time_t(time);
     struct tm *timeinfo = gmtime(&timestamp);
     if (m_fixed_orbital_year) {
         m_orbital_mon  = timeinfo->tm_mon + 1;
@@ -170,7 +170,8 @@ Radiation::set_grids (int& level,
 
     if (m_update_rad) {
         // Reset vector of offsets for columnar data
-        m_nlay = geom.Domain().length(2) + 1; // add extra layer at top
+        //m_nlay = geom.Domain().length(2) + 1; // add extra layer at top
+        m_nlay = geom.Domain().length(2);
 
         m_ncol = 0;
         m_col_offsets.clear();
@@ -190,6 +191,7 @@ Radiation::set_grids (int& level,
         mf_to_yakl_buffers();
 
         if (m_first_step) {
+            // Initialize datalog MF on first step
             m_first_step = false;
             datalog_mf.define(cons_in->boxArray(), cons_in->DistributionMap(), 25, 0);
             datalog_mf.setVal(0.0);
@@ -213,17 +215,17 @@ Radiation::alloc_buffers ()
     m_gas_mol_weights_h.deep_copy_to(m_gas_mol_weights);
 
     // 1d size (1 or nlay)
-    m_o3_size = m_o3vmr.size()+1;
-    AMREX_ASSERT_WITH_MESSAGE(((m_o3_size==2) || (m_o3_size==m_nlay)), "O3 VMR array must be length 1 or nlay");
+    m_o3_size = m_o3vmr.size();
+    AMREX_ASSERT_WITH_MESSAGE(((m_o3_size==1) || (m_o3_size==m_nlay)), "O3 VMR array must be length 1 or nlay");
     o3_lay = real1d("o3_lay", m_o3_size);
     realHost1d o3_lay_h("o3_lay_h", m_o3_size);
-    parallel_for(m_o3_size-1, YAKL_LAMBDA (int io3)
+    parallel_for(m_o3_size, YAKL_LAMBDA (int io3)
     {
         o3_lay_h(io3) = m_o3vmr[io3-1];
         //amrex::Print() << " io3 = " << io3 << " O3 lay = " << o3_lay_h(io3) << std::endl;
     });
     // extrapolate to extra model top
-    o3_lay_h(m_o3_size) = o3_lay_h(m_o3_size-1);
+    //o3_lay_h(m_o3_size) = o3_lay_h(m_o3_size-1);
 
     o3_lay_h.deep_copy_to(o3_lay);
 
@@ -305,7 +307,6 @@ Radiation::alloc_buffers ()
 
     // 2d size (ncol, nlwbands)
     emis_sfc    = real2d("emis_sfc", m_ncol, m_nlwbands);
-    lw_sfc_src  = real2d("lw_sfc_src", m_ncol, m_nlwbands);
 
     // 3d size (ncol, nlay, n[sw,lw]bands)
     aero_tau_sw = real3d("aero_tau_sw", m_ncol, m_nlay, m_nswbands);
@@ -411,7 +412,6 @@ Radiation::dealloc_buffers ()
 
     // 2d size (ncol, nlwbands)
     emis_sfc.deallocate();
-    lw_sfc_src.deallocate();
 
     // 3d size (ncol, nlay, n[sw,lw]bands)
     aero_tau_sw.deallocate();
@@ -507,7 +507,8 @@ Radiation::mf_to_yakl_buffers ()
                 amrex::Print() << "     p_lev = " << p_lev(icol, ilay) << " t_lev = " << t_lev(icol, ilay) << std::endl;
             }
 */
-            if (ilay==nlay-1) {
+            //if (ilay==nlay-1) {
+            if (ilay == nlay) {
                 Real r_hi  = cons_arr(i,j,k+1,Rho_comp);
                 Real rt_hi = cons_arr(i,j,k+1,RhoTheta_comp);
                 Real qv_hi = (moist) ? cons_arr(i,j,k+1,RhoQ1_comp)/r_hi : 0.0;
@@ -516,7 +517,7 @@ Radiation::mf_to_yakl_buffers ()
                 qv_avg = 0.5 * (qv + qv_hi);
                 p_lev(icol,ilay+1) = getPgivenRTh(rt_avg, qv_avg);
                 t_lev(icol,ilay+1) = getTgivenRandRTh(r_avg, rt_avg, qv_avg);
-                z_del(icol,ilay+1) = z_del(icol, ilay);
+                //z_del(icol,ilay+1) = z_del(icol, ilay);
 /*
                 if (icol == 1) {
                     amrex::Print() << "  -> ilay == nlay " << std::endl;
@@ -539,6 +540,7 @@ Radiation::mf_to_yakl_buffers ()
         });
     }
 
+    /*
     yakl::fence();
 
     // extrapolate to additional layer at model top
@@ -559,20 +561,22 @@ Radiation::mf_to_yakl_buffers ()
     });
 
     yakl::fence();
-
+    */
     // Separate YAKL kernel for derived quantities
-    parallel_for(SimpleBounds<2>(ncol, nlay-1), YAKL_LAMBDA (int icol, int ilay)
+    parallel_for(SimpleBounds<2>(ncol, nlay), YAKL_LAMBDA (int icol, int ilay)
     {
-        p_del(icol,ilay)  = p_lev(icol,ilay+1) - p_lev(icol,ilay);
+        p_del(icol,ilay)  = std::abs(p_lev(icol,ilay+1) - p_lev(icol,ilay));
     });
 
     // TODO: Fill properly
     // No LSM, so follow EAMXX dummy atmos and set constants
-    //yakl::memset(mu0, 0.86);
-    //yakl::memset(sfc_alb_dir_vis, 0.06);
-    //yakl::memset(sfc_alb_dir_nir, 0.06);
-    //yakl::memset(sfc_alb_dif_vis, 0.06);
-    //yakl::memset(sfc_alb_dif_nir, 0.06);
+    if (!lsm) {
+        yakl::memset(mu0, 0.86);
+        yakl::memset(sfc_alb_dir_vis, 0.06);
+        yakl::memset(sfc_alb_dir_nir, 0.06);
+        yakl::memset(sfc_alb_dif_vis, 0.06);
+        yakl::memset(sfc_alb_dif_nir, 0.06);
+    }
 
     // TODO: Fill properly
     yakl::memset(aero_tau_sw, 0.0);
@@ -707,11 +711,8 @@ void Radiation::populateDatalogMF()
             const int icol = (j-jmin)*nx + (i-imin) + 1 + offset;
             const int ilay = k+1;
 
-            // Convert the rates for theta_d
-            //Real exner = getExnergivenP(Real(p_lay(icol,ilay)), R_d/Cp_d);
-            Real exner = 1.0;
-            dst_arr(i,j,k,0) = q_arr(i, j, k, 0) / exner;
-            dst_arr(i,j,k,1) = q_arr(i, j, k, 1) / exner;
+            dst_arr(i,j,k,0) = q_arr(i, j, k, 0);
+            dst_arr(i,j,k,1) = q_arr(i, j, k, 1);
 
             // SW and LW fluxes
             dst_arr(i,j,k,2) = sw_flux_up(icol,ilay);
@@ -724,8 +725,8 @@ void Radiation::populateDatalogMF()
             dst_arr(i,j,k,7) = mu0(icol);
 
             // Clear sky heating rates and fluxes:
-            dst_arr(i,j,k,8) = sw_clrsky_heating(icol, ilay) / exner;
-            dst_arr(i,j,k,9) = lw_clrsky_heating(icol, ilay) / exner;
+            dst_arr(i,j,k,8) = sw_clrsky_heating(icol, ilay);
+            dst_arr(i,j,k,9) = lw_clrsky_heating(icol, ilay);
 
             dst_arr(i,j,k,10) = sw_clrsky_flux_up(icol,ilay);
             dst_arr(i,j,k,11) = sw_clrsky_flux_dn(icol,ilay);
@@ -925,7 +926,6 @@ Radiation::run_impl ()
     // Use the orbital parameters to calculate the solar declination and eccentricity factor
     real delta, eccf;
     // Want day + fraction; calday 1 == Jan 1 0Z
-    // cumulative number of days in the year at the start of each month
     static constexpr real dpy[] = {0.0, 31.0, 59.0, 90.0, 120.0, 151.0, 181.0, 212.0, 243.0, 273.0, 304.0, 334.0};
     bool leap = (m_orbital_year % 4 == 0 && (!(m_orbital_year % 100 == 0) || (m_orbital_year % 400 == 0))) ? true : false;
     real calday = dpy[m_orbital_mon] + m_orbital_day + m_orbital_sec/86400.0;
@@ -933,8 +933,6 @@ Radiation::run_impl ()
     if (leap) {
         calday += 1.0;
     }
-    //amrex::Print() << "  m_orbital_mon = " << m_orbital_mon << " m_orbital_day = " << m_orbital_day << " m_orbital_sec = " << m_orbital_sec << " LEAP = " << leap << std::endl;
-    //amrex::Print() << "  CALDAY = " << calday << std::endl;
     orbital_decl(calday, eccen, mvelpp, lambm0, obliqr, delta, eccf);
 
     // Overwrite eccf if using a fixed solar constant.
@@ -990,6 +988,7 @@ Radiation::run_impl ()
     // Calculate T_int from longwave flux up from the surface, assuming
     // blackbody emission with emissivity of 1.
     if (!m_lsm) {
+        // If no LSM, set default values for surface emissivity and LW src
         yakl::memset(emis_sfc, 0.98);
         yakl::memset(lw_src, 0.0);
         //yakl::memset(lw_sfc_src, 0.0);
@@ -1043,7 +1042,7 @@ Radiation::run_impl ()
     rrtmgp::mixing_ratio_to_cloud_mass(qc_lay, cldfrac_tot, p_del, lwp);
     rrtmgp::mixing_ratio_to_cloud_mass(qi_lay, cldfrac_tot, p_del, iwp);
 
-    yakl::fence();
+    //yakl::fence();
 
     // Convert to g/m2 (needed by RRTMGP)
     parallel_for(SimpleBounds<2>(ncol, nlay), YAKL_LAMBDA (int icol, int ilay)
@@ -1086,8 +1085,8 @@ Radiation::run_impl ()
     }
 */
 
-    amrex::ParallelDescriptor::Barrier();
-    yakl::fence();
+    //amrex::ParallelDescriptor::Barrier();
+    //yakl::fence();
 
 
     // Run RRTMGP driver
@@ -1180,7 +1179,7 @@ Radiation::run_impl ()
 
     // Compute surface fluxes
     //const int kbot = nlay + 1; // Should this be 1 for our layout?
-    const int kbot = 1; // Should this be 1 for our layout?
+    const int kbot = 1;
     parallel_for(SimpleBounds<3>(ncol, nlay+1, nswbands), YAKL_LAMBDA (int icol, int ilay, int ibnd)
     {
         sw_bnd_flux_dif(icol,ilay,ibnd) = sw_bnd_flux_dn(icol,ilay,ibnd) - sw_bnd_flux_dir(icol,ilay,ibnd);

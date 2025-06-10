@@ -1,9 +1,9 @@
 #include "AMReX_BCRec.H"
 
-#include <ERF_Advection.H>
-#include <ERF_AdvectionSrcForMom_N.H>
-#include <ERF_AdvectionSrcForMom_T.H>
-#include <ERF_EB.H>
+#include "ERF_Advection.H"
+#include "ERF_AdvectionSrcForMom_N.H"
+#include "ERF_AdvectionSrcForMom_T.H"
+#include "ERF_EB.H"
 
 using namespace amrex;
 
@@ -35,12 +35,19 @@ using namespace amrex;
  * @param[in] az   Area fraction of z-faces
  * @param[in] detJ Jacobian of the metric transformation (= 1 if use_terrain_fitted_coords is false)
  * @param[in] cellSizeInv inverse of the mesh spacing
- * @param[in] mf_m map factor at cell centers
- * @param[in] mf_u map factor at x-faces
- * @param[in] mf_v map factor at y-faces
+ * @param[in] mf_mx map factor at cell centers
+ * @param[in] mf_my map factor at cell centers
+ * @param[in] mf_ux map factor at x-faces
+ * @param[in] mf_vy map factor at y-faces
  * @param[in] ebfact EB factories for cell- and face-centered variables
  * @param[in] horiz_adv_type sets the spatial order to be used for lateral derivatives
  * @param[in] vert_adv_type  sets the spatial order to be used for vertical derivatives
+ * @param[in] ebfact EB factories for cell- and face-centered variables
+ * @param[in] flx_u_arr Container of fluxes for x-momentum
+ * @param[in] flx_v_arr Container of fluxes for y-momentum
+ * @param[in] flx_w_arr Container of fluxes for z-momentum
+ * @param[in] physbnd_mask Vector of masks for flux interpolation (=1 otherwise, =0 if physbnd)
+ * @param[in] already_on_centroids flag whether flux interpolation is unnecessary
  */
 void
 AdvectionSrcForMom (const MFIter& mfi,
@@ -66,9 +73,12 @@ AdvectionSrcForMom (const MFIter& mfi,
                     const Array4<const Real>& detJ,
                           Gpu::DeviceVector<Real>& stretched_dz_d,
                     const GpuArray<Real, AMREX_SPACEDIM>& cellSizeInv,
-                    const Array4<const Real>& mf_m,
-                    const Array4<const Real>& mf_u,
-                    const Array4<const Real>& mf_v,
+                    const Array4<const Real>& mf_mx,
+                    const Array4<const Real>& mf_ux,
+                    const Array4<const Real>& mf_vx,
+                    const Array4<const Real>& mf_my,
+                    const Array4<const Real>& mf_uy,
+                    const Array4<const Real>& mf_vy,
                     const AdvType horiz_adv_type,
                     const AdvType vert_adv_type,
                     const Real horiz_upw_frac,
@@ -79,6 +89,8 @@ AdvectionSrcForMom (const MFIter& mfi,
                           GpuArray<Array4<Real>, AMREX_SPACEDIM>& flx_u_arr,
                           GpuArray<Array4<Real>, AMREX_SPACEDIM>& flx_v_arr,
                           GpuArray<Array4<Real>, AMREX_SPACEDIM>& flx_w_arr,
+                    const Vector<iMultiFab>& physbnd_mask,
+                    const bool already_on_centroids,
                     const int lo_z_face, const int hi_z_face,
                     const Box& domain,
                     const BCRec* bc_ptr_h)
@@ -101,11 +113,11 @@ AdvectionSrcForMom (const MFIter& mfi,
     ParallelFor(box2d_u, box2d_v,
     [=] AMREX_GPU_DEVICE (int i, int j, int) noexcept
     {
-        mf_u_inv(i,j,0) = 1. / mf_u(i,j,0);
+        mf_u_inv(i,j,0) = 1. / mf_ux(i,j,0);
     },
     [=] AMREX_GPU_DEVICE (int i, int j, int) noexcept
     {
-        mf_v_inv(i,j,0) = 1. / mf_v(i,j,0);
+        mf_v_inv(i,j,0) = 1. / mf_vy(i,j,0);
     });
 
     if (mesh_type == MeshType::ConstantDz && terrain_type != TerrainType::EB)
@@ -115,7 +127,7 @@ AdvectionSrcForMom (const MFIter& mfi,
                                       rho_u_rhs, rho_v_rhs, rho_w_rhs, u, v, w,
                                       rho_u, rho_v, omega,
                                       cellSizeInv, stretched_dz_d,
-                                      mf_m, mf_u, mf_v,
+                                      mf_mx, mf_ux, mf_vx, mf_my, mf_uy, mf_vy,
                                       horiz_adv_type, vert_adv_type,
                                       horiz_upw_frac, vert_upw_frac,
                                       terrain_type, lo_z_face, hi_z_face);
@@ -127,7 +139,7 @@ AdvectionSrcForMom (const MFIter& mfi,
                                        rho_u_rhs, rho_v_rhs, rho_w_rhs,
                                        u, v, w, rho_u, rho_v, omega,
                                        cellSizeInv, stretched_dz_d,
-                                       mf_m, mf_u, mf_v,
+                                       mf_mx, mf_ux, mf_vx, mf_my, mf_uy, mf_vy,
                                        horiz_adv_type, vert_adv_type,
                                        horiz_upw_frac, vert_upw_frac,
                                        lo_z_face, hi_z_face);
@@ -139,10 +151,12 @@ AdvectionSrcForMom (const MFIter& mfi,
                               rho_u_rhs, rho_v_rhs, rho_w_rhs,
                               u, v, w,
                               rho_u, rho_v, omega,
-                              cellSizeInv, mf_m, mf_u, mf_v,
+                              cellSizeInv,
+                              mf_mx, mf_ux, mf_vx, mf_my, mf_uy, mf_vy,
                               horiz_adv_type, vert_adv_type,
                               horiz_upw_frac, vert_upw_frac,
                               ebfact, flx_u_arr, flx_v_arr, flx_w_arr,
+                              physbnd_mask, already_on_centroids,
                               lo_z_face, hi_z_face, domain);
     }
     else
@@ -154,7 +168,8 @@ AdvectionSrcForMom (const MFIter& mfi,
                               u, v, w,
                               rho_u, rho_v, omega,
                               z_nd, ax, ay, az, detJ,
-                              cellSizeInv, mf_m, mf_u, mf_v,
+                              cellSizeInv,
+                              mf_mx, mf_ux, mf_vx, mf_my, mf_uy, mf_vy,
                               horiz_adv_type, vert_adv_type,
                               horiz_upw_frac, vert_upw_frac,
                               lo_z_face, hi_z_face);

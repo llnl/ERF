@@ -938,24 +938,29 @@ rrtmgp_lw (const int ncol,
     // Boundary conditions
     SourceFuncLW lw_sources;
     lw_sources.alloc(ncol, nlay, k_dist);
-    //lw_sources.sfc_source = lw_src;
-    //real1d t_sfc   ("t_sfc"        ,ncol);
-    //real2d emis_sfc("emis_sfc",nbnd,ncol);
+    // set the LW source
+    //   TODO: figure out how to do this correctly?
     YAKL_SCOPE(d_lw_src, lw_sources.sfc_source);
     //parallel_for(SimpleBounds<2>(ncol,m_nlwgpts), YAKL_LAMBDA(int icol, int igpt)
     parallel_for(SimpleBounds<1>(ncol), YAKL_LAMBDA(int icol)
     {
-        //lw_sources.sfc_source(icol,1) = lw_src(icol);
         d_lw_src(icol, 1) = lw_src(icol);
     });
+    //real1d t_sfc   ("t_sfc"        ,ncol);
 
     // Surface temperature
     auto p_lay_host = p_lay.createHostCopy();
     bool top_at_1 = p_lay_host(1, 1) < p_lay_host(1, nlay);
     /*
     parallel_for(SimpleBounds<1>(ncol), YAKL_LAMBDA(int icol)
+    real2d emis_sfc_T("emis_sfc",nbnd,ncol);
+    //memset(emis_sfc , amrex::Real(0.98));
+    // RRTMGP assumes surface albedos have a screwy dimension ordering
+    // for some strange reason, so we need to transpose these; also do
+    // daytime subsetting in the same kernel
+    parallel_for(SimpleBounds<2>(nbnd,ncol), YAKL_LAMBDA(int ibnd, int icol)
     {
-        t_sfc(icol) = t_lev(icol, merge(nlay+1, 1, top_at_1));
+        emis_sfc_T(ibnd,icol) = emis_sfc(icol,ibnd);
     });
     */
     //memset(emis_sfc , amrex::Real(0.98));
