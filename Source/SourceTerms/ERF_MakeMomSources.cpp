@@ -511,7 +511,7 @@ void make_mom_sources (Real time,
         }
         */
 
-        if (solverChoice.large_scale_forcing)
+        if (solverChoice.large_scale_forcing && is_slow_step)
         {
             // subsidence terms for U and V
             auto lsf_arr = lsf_tendencies->const_array(mfi);
@@ -576,7 +576,7 @@ void make_mom_sources (Real time,
             });
         }
 
-        if (solverChoice.nudging_from_input_sounding)
+        if (solverChoice.nudging_from_input_sounding && is_slow_step)
         {
             Real uv_coeff_n = 1.0;
             Real uv_coeff_np1 = 0.0;
