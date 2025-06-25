@@ -58,7 +58,7 @@ namespace HSEutils
             AMREX_ALWAYS_ASSERT(P > 0.0);
 
             // Diagnose density and residual
-            rd = getRhogivenThetaPress(T, P, RdOCp, 0.0);
+            rd = getRhogivenThetaPress(T, P, RdOCp, qv);
             AMREX_ALWAYS_ASSERT(rd > 0.0);
             Real r_tot = rd * (1. + qt);
             F = P + 0.5*r_tot*g*dz + C;
