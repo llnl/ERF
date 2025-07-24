@@ -20,7 +20,8 @@ class NullSurf {
 
     // u_in and v_in might not be needed in all LSM models (e.g MM5), maybe refactor?
     virtual
-    void Init (const amrex::MultiFab& /*cons_in*/,
+    void Init (const int& /*lev*/,
+               const amrex::MultiFab& /*cons_in*/,
                const amrex::MultiFab& /*u_in*/,
                const amrex::MultiFab& /*v_in*/,
                const amrex::Geometry& /*geom*/,

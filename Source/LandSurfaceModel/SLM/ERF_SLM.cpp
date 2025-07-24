@@ -9,7 +9,8 @@ using namespace amrex;
 
 /* Initialize lsm data structures */
 void
-SLM::Init (const MultiFab& cons_in,
+SLM::Init (const int& /*lev*/,
+           const MultiFab& cons_in,
            const MultiFab& u_in,
            const MultiFab& v_in,
            const Geometry& geom,

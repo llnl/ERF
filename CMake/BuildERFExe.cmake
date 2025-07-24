@@ -17,6 +17,10 @@ function(build_erf_lib erf_lib_name)
 
   target_compile_definitions(${erf_lib_name} PUBLIC ERF_USE_MOISTURE)
 
+  if(ERF_ENABLE_KOKKOS)
+    target_compile_definitions(${erf_lib_name} PUBLIC ERF_USE_KOKKOS)
+  endif()
+
   if(ERF_ENABLE_MULTIBLOCK)
     target_compile_definitions(${erf_lib_name} PUBLIC ERF_USE_MULTIBLOCK)
   endif()
@@ -35,6 +39,10 @@ function(build_erf_lib erf_lib_name)
     target_sources(${erf_lib_name} PRIVATE
                    ${SRC_DIR}/LinearSolvers/ERF_SolveWithFFT.cpp)
     target_compile_definitions(${erf_lib_name} PUBLIC ERF_USE_FFT)
+  endif()
+
+  if(ERF_ENABLE_KOKKOS)
+    target_compile_definitions(${erf_lib_name} PUBLIC ERF_USE_KOKKOS)
   endif()
 
   if(ERF_ENABLE_NETCDF)
@@ -63,6 +71,15 @@ function(build_erf_lib erf_lib_name)
   endif()
 
   if(ERF_ENABLE_RRTMGP)
+    if(ERF_ENABLE_CUDA)
+        target_compile_definitions(${erf_lib_name} PUBLIC ERF_USE_CUDA)
+    endif()
+    if(ERF_ENABLE_HIP)
+        target_compile_definitions(${erf_lib_name} PUBLIC ERF_USE_HIP)
+    endif()
+    if(ERF_ENABLE_SYCL)
+        target_compile_definitions(${erf_lib_name} PUBLIC ERF_USE_SYCL)
+    endif()
     target_include_directories(${erf_lib_name} PUBLIC
                                $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/Source/Radiation>
                                $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/Submodules/RRTMGP/cpp>
@@ -91,8 +108,7 @@ function(build_erf_lib erf_lib_name)
                    ${CMAKE_SOURCE_DIR}/Submodules/RRTMGP/cpp/extensions/fluxes_byband/mo_fluxes_byband_kernels.cpp
                   )
     target_compile_definitions(${erf_lib_name} PUBLIC ERF_USE_RRTMGP)
-    target_compile_definitions(${erf_lib_name} PUBLIC RRTMGP_ENABLE_YAKL)
-    target_link_libraries(${erf_lib_name} PUBLIC yakl)
+    target_compile_definitions(${erf_lib_name} PUBLIC RRTMGP_ENABLE_KOKKOS)
   endif()
 
   if(ERF_ENABLE_MORR_FORT)
@@ -231,6 +247,7 @@ function(build_erf_lib erf_lib_name)
        ${SRC_DIR}/Utils/ERF_ChopGrids.cpp
        ${SRC_DIR}/Utils/ERF_ConvertForProjection.cpp
        ${SRC_DIR}/Utils/ERF_InitZLevels.cpp
+       ${SRC_DIR}/Utils/ERF_MakeSubdomains.cpp
        ${SRC_DIR}/Utils/ERF_MomentumToVelocity.cpp
        ${SRC_DIR}/Utils/ERF_TerrainMetrics.cpp
        ${SRC_DIR}/Utils/ERF_VelocityToMomentum.cpp
@@ -254,14 +271,20 @@ function(build_erf_lib erf_lib_name)
 
   if(ERF_ENABLE_NETCDF)
     if(NETCDF_FOUND)
-      #Link our executable to the NETCDF libraries, etc
       target_link_libraries(${erf_lib_name} PUBLIC ${NETCDF_LINK_LIBRARIES})
       target_include_directories(${erf_lib_name} PUBLIC ${NETCDF_INCLUDE_DIRS})
     endif()
   endif()
 
+  if(ERF_ENABLE_KOKKOS)
+      target_link_libraries(${erf_lib_name} PUBLIC Kokkos::kokkos)
+  endif()
+
   if(ERF_ENABLE_MPI)
     target_link_libraries(${erf_lib_name} PUBLIC $<$<BOOL:${MPI_CXX_FOUND}>:MPI::MPI_CXX>)
+    if(ERF_ENABLE_MORR_FORT OR ERF_ENABLE_NOAH)
+      target_link_libraries(${erf_lib_name} PUBLIC $<$<BOOL:${MPI_CXX_FOUND}>:MPI::MPI_Fortran>)
+    endif()
   endif()
 
   # Workaround for gcc-8 where std::filesystem is in libstdc++fs. Starting with

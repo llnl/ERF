@@ -49,7 +49,7 @@ public:
           const amrex::Real& dt_advance,
           std::unique_ptr<amrex::MultiFab>& z_phys_cc)
     {
-        m_lsm_model[lev]->Init(cons_in, u_in, v_in, geom, dt_advance, z_phys_cc);
+        m_lsm_model[lev]->Init(lev, cons_in, u_in, v_in, geom, dt_advance, z_phys_cc);
     }
 
     void
