@@ -581,8 +581,8 @@ Radiation::kokkos_buffers_to_mf ()
             const Array4<Real>& lsm_arr =  m_lsm_fluxes->array(mfi);
             ParallelFor(sbx, [=] AMREX_GPU_DEVICE (int i, int j, int k)
             {
-                // map [i,j,k] 0-based to [icol, ilay] 1-based
-                const int icol = (j-jmin)*nx + (i-imin) + 1 + offset;
+                // map [i,j,k] 0-based to [icol, ilay] 0-based
+                const int icol = (j-jmin)*nx + (i-imin) + offset;
 
                 // SW fluxes for LSM
                 lsm_arr(i,j,k,0) = sfc_flux_dir_vis(icol);
@@ -603,8 +603,8 @@ Radiation::kokkos_buffers_to_mf ()
             const Array4<Real>& lsm_zenith_arr =  m_lsm_zenith->array(mfi);
             ParallelFor(sbx, [=] AMREX_GPU_DEVICE (int i, int j, int k)
             {
-                // map [i,j,k] 0-based to [icol, ilay] 1-based
-                const int icol = (j-jmin)*nx + (i-imin) + 1 + offset;
+                // map [i,j,k] 0-based to [icol, ilay] 0-based
+                const int icol = (j-jmin)*nx + (i-imin) + offset;
 
                 // export cosine zenith angle for LSM
                 lsm_zenith_arr(i,j,k) = mu0(icol);

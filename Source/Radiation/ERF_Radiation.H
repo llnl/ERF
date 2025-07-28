@@ -106,6 +106,8 @@ public:
             }
             amrex::Print() << " RADIATION: SETTING LSM INPUTS" << std::endl;
 
+            // get surface temperature, LW flux, and emissivities from SLM
+            ///*
             auto slm_to_rad_vars = model->export_to_RRTMGP();
 
             for (amrex::MFIter mfi(*slm_to_rad_vars[0]); mfi.isValid(); ++mfi) {
@@ -124,8 +126,8 @@ public:
                 const auto &slm_net_rad_arr     = slm_to_rad_vars[6]->const_array(mfi);
                 amrex::ParallelFor(sbx, [=] AMREX_GPU_DEVICE (int i, int j, int k)
                 {
-                    // map [i,j,k] 0-based to [icol, ilay] 1-based
-                    const int icol = (j-jmin)*nx + (i-imin) + 1 + offset;
+                    // map [i,j,k] 0-based to [icol, ilay] 0-based
+                    const int icol = (j-jmin)*nx + (i-imin) + offset;
                     const int ilay = 0;
 
                     //yakl::memset(mu0, 0.86);
@@ -151,7 +153,7 @@ public:
                 });
             }
 
-        /*
+            /*
             // expand sfc_emis and lw_src over nlwbands
             // TODO: check if this is correct - should emissivity vary based on band?
             Kokkos::parallel_for(Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {m_nlwbands, m_ncol}),
