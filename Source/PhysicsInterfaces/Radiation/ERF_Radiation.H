@@ -97,8 +97,8 @@ public:
          amrex::MultiFab* cons_in,
          amrex::MultiFab* lsm_fluxes,
          amrex::MultiFab* lsm_zenith,
-         amrex::Vector<amrex::MultiFab*>& lsm_input_ptrs,
-         amrex::Vector<amrex::MultiFab*>& lsm_output_ptrs,
+         const amrex::Vector<const amrex::MultiFab*>& lsm_input_ptrs,
+         const amrex::Vector<amrex::MultiFab*>& lsm_output_ptrs,
          amrex::MultiFab* qheating_rates,
          amrex::MultiFab* z_phys,
          amrex::MultiFab* lat,
@@ -122,7 +122,7 @@ public:
                amrex::MultiFab* cons_in,
                amrex::MultiFab* lsm_fluxes,
                amrex::MultiFab* lsm_zenith,
-               amrex::Vector<amrex::MultiFab*>& lsm_input_ptrs,
+               const amrex::Vector<const amrex::MultiFab*>& lsm_input_ptrs,
                amrex::MultiFab* qheating_rates,
                amrex::MultiFab* z_phys,
                amrex::MultiFab* lat,
@@ -213,11 +213,11 @@ public:
 
     // Fill KOKKOS Views from AMReX MultiFabs
     void
-    mf_to_kokkos_buffers(amrex::Vector<amrex::MultiFab*>& lsm_input_ptrs);
+    mf_to_kokkos_buffers(const amrex::Vector<const amrex::MultiFab*>& lsm_input_ptrs);
 
     // Fill AMReX MultiFabs from KOKKOS Views
     void
-    kokkos_buffers_to_mf (amrex::Vector<amrex::MultiFab*>& lsm_output_ptrs);
+    kokkos_buffers_to_mf (const amrex::Vector<amrex::MultiFab*>& lsm_output_ptrs);
 
     // Write the rrtmgp fluxes
     void
@@ -233,11 +233,11 @@ public:
 
     // Finalize the implementation
     void
-    finalize_impl (amrex::Vector<amrex::MultiFab*>& lsm_output_ptrs);
+    finalize_impl (const amrex::Vector<amrex::MultiFab*>& lsm_output_ptrs);
 
     // Wrapper for implementation steps
     void
-    rad_run_impl (amrex::Vector<amrex::MultiFab*>& lsm_output_ptrs)
+    rad_run_impl (const amrex::Vector<amrex::MultiFab*>& lsm_output_ptrs)
     {
         if (m_update_rad) {
             amrex::Print() << "Advancing radiation at level: " << m_lev << " ...";

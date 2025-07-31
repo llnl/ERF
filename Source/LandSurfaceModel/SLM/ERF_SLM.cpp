@@ -241,7 +241,8 @@ SLM::Init (const int& /*lev*/,
 	zrefxy.setVal(zref);  // set zrefxy with the value read from inputs file
     }
 
-    slm_to_rad_vars = {Lsm_Data_Ptr(LsmVar_SLM::tsurf), &albedovis_s, &albedovis_v, &albedonir_s, &albedonir_v, &IR_emis_vege, &net_rad};
+    //slm_to_rad_vars = {Lsm_Data_Ptr(LsmVar_SLM::tsurf), &albedovis_s, &albedovis_v, &albedonir_s, &albedonir_v, &IR_emis_vege, &net_rad};
+    slm_to_rad_vars = {Lsm_Data_Ptr(LsmVar_SLM::tsurf), &IR_emis_vege, &albedovis_v, &albedonir_v, &albedovis_v, &albedonir_v};
 }
 /**
  * Initialize SLM from input data - used for testing only

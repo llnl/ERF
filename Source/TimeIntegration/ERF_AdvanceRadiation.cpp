@@ -15,19 +15,32 @@ void ERF::advance_radiation (int lev,
         MultiFab *lon_ptr = nullptr;
 #endif
         // RRTMGP inputs names and pointers
-        Vector<std::string> lsm_input_names = rad[lev]->get_lsm_input_varnames();
-        Vector<MultiFab*> lsm_input_ptrs(lsm_input_names.size(),nullptr);
-        for (int i(0); i<lsm_input_ptrs.size(); ++i) {
-            int varIdx = lsm.Get_VarIdx(lev,lsm_input_names[i]);
-            lsm_input_ptrs[i] = lsm.Get_Data_Ptr(lev,varIdx);
-        }
+        Vector<const MultiFab*> lsm_input_ptrs;
+        Vector<MultiFab*> lsm_output_ptrs;
 
-        // RRTMGP output names and pointers
-        Vector<std::string> lsm_output_names = rad[lev]->get_lsm_output_varnames();
-        Vector<MultiFab*> lsm_output_ptrs(lsm_output_names.size(),nullptr);
-        for (int i(0); i<lsm_output_ptrs.size(); ++i) {
-            int varIdx = lsm.Get_VarIdx(lev,lsm_output_names[i]);
-            lsm_output_ptrs[i] = lsm.Get_Data_Ptr(lev,varIdx);
+        if (solverChoice.lsm_type == LandSurfaceType::SLM) {
+            //rad[lev]->set_lsm_inputs(lsm.get_model_lev<SLM>(lev));
+
+            // TODO: rename SLM variables to match those expected by RRMTGP
+            //       for now, pointers are directly returned without name lookup
+            lsm_input_ptrs = lsm.get_model_lev<SLM>(lev)->export_to_RRTMGP();
+
+            // TODO: no lsm_output_ptrs defined, existing coupling via sw_lw_fluxes and solar_zenith works for now
+        } else {
+            Vector<std::string> lsm_input_names = rad[lev]->get_lsm_input_varnames();
+            lsm_input_ptrs = Vector<const MultiFab*>(lsm_input_names.size(),nullptr);
+            for (int i(0); i<lsm_input_ptrs.size(); ++i) {
+                int varIdx = lsm.Get_VarIdx(lev,lsm_input_names[i]);
+                lsm_input_ptrs[i] = lsm.Get_Data_Ptr(lev,varIdx);
+            }
+
+            // RRTMGP output names and pointers
+            Vector<std::string> lsm_output_names = rad[lev]->get_lsm_output_varnames();
+            lsm_output_ptrs = Vector<MultiFab*>(lsm_output_names.size(),nullptr);
+            for (int i(0); i<lsm_output_ptrs.size(); ++i) {
+                int varIdx = lsm.Get_VarIdx(lev,lsm_output_names[i]);
+                lsm_output_ptrs[i] = lsm.Get_Data_Ptr(lev,varIdx);
+            }
         }
 
         // Enter radiation class driver
@@ -37,11 +50,5 @@ void ERF::advance_radiation (int lev,
                       lsm_input_ptrs   , lsm_output_ptrs,
                       qheating_rates[lev].get(), z_phys_nd[lev].get()   ,
                       lat_ptr, lon_ptr);
-        /*
-        // TODO: fix this - can't use set_lsm_inputs with IRadiation::Run()
-        if (solverChoice.lsm_type == LandSurfaceType::SLM) {
-        rad[lev]->set_lsm_inputs(lsm.get_model_lev<SLM>(lev));
-        }
-        */
     }
 }

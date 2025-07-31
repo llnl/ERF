@@ -127,7 +127,7 @@ Radiation::set_grids (int& level,
                       MultiFab* cons_in,
                       MultiFab* lsm_fluxes,
                       MultiFab* lsm_zenith,
-                      Vector<MultiFab*>& lsm_input_ptrs,
+                      const Vector<const MultiFab*>& lsm_input_ptrs,
                       MultiFab* qheating_rates,
                       MultiFab* z_phys,
                       MultiFab* lat,
@@ -421,7 +421,7 @@ Radiation::dealloc_buffers ()
 
 
 void
-Radiation::mf_to_kokkos_buffers (Vector<MultiFab*>& lsm_input_ptrs)
+Radiation::mf_to_kokkos_buffers (const Vector<const MultiFab*>& lsm_input_ptrs)
 {
     // Expose for device
     auto r_lay_d  = r_lay;
@@ -593,7 +593,7 @@ Radiation::mf_to_kokkos_buffers (Vector<MultiFab*>& lsm_input_ptrs)
 
 
 void
-Radiation::kokkos_buffers_to_mf (Vector<MultiFab*>& lsm_output_ptrs)
+Radiation::kokkos_buffers_to_mf (const Vector<MultiFab*>& lsm_output_ptrs)
 {
     // Heating rate, fluxes, zenith, lsm ptrs
     Vector<real2d_k> rrtmgp_out_vars = {sw_flux_dn, lw_flux_dn};
@@ -1280,7 +1280,7 @@ Radiation::run_impl ()
 
 
 void
-Radiation::finalize_impl (Vector<MultiFab*>& lsm_output_ptrs)
+Radiation::finalize_impl (const Vector<MultiFab*>& lsm_output_ptrs)
 {
     // Finish rrtmgp
     m_gas_concs.reset();
