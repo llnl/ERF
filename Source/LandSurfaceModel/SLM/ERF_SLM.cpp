@@ -441,7 +441,7 @@ void SLM::init_from_file()
 
         const amrex::Real pres = sounding[1][time_index] * 100.0;
         const amrex::Real qv = sounding[3][time_index] / 1000.0;
-        const amrex::Real theta = getThgivenPandT(sounding[2][time_index], pres, R_d / Cp_d);
+        const amrex::Real theta = getThgivenTandP(sounding[2][time_index], pres, R_d / Cp_d);
         lsm_fab_vars[LsmVar_SLM::tref]->setVal(sounding[2][time_index]);
         lsm_fab_vars[LsmVar_SLM::qref]->setVal(qv);
         lsm_fab_vars[LsmVar_SLM::pref]->setVal(pres / 100.0);
@@ -520,7 +520,7 @@ void SLM::time_interp_from_ref()
 
         const amrex::Real pres = p_interp * 100.0;
         const amrex::Real qv = q_interp / 1000.0;
-        const amrex::Real theta = getThgivenPandT(t_interp, pres, R_d / Cp_d);
+        const amrex::Real theta = getThgivenTandP(t_interp, pres, R_d / Cp_d);
         lsm_fab_vars[LsmVar_SLM::tref]->setVal(t_interp);
         lsm_fab_vars[LsmVar_SLM::qref]->setVal(qv);
         lsm_fab_vars[LsmVar_SLM::pref]->setVal(pres / 100.0);
