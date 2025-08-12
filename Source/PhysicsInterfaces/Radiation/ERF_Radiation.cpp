@@ -488,6 +488,9 @@ Radiation::mf_to_kokkos_buffers (const Vector<const MultiFab*>& lsm_input_ptrs)
             Real rt_avg = 0.5 * (rt + rt_lo);
             Real qv_avg = 0.5 * (qv + qv_lo);
 
+            if (qv < 0.0) qv = 0.0;
+            if (qv_lo < 0.0) qv_lo = 0.0;
+
             // Views at CC
             r_lay_d(icol,ilay) = r;
             p_lay_d(icol,ilay) = getPgivenRTh(rt, qv);
@@ -516,6 +519,7 @@ Radiation::mf_to_kokkos_buffers (const Vector<const MultiFab*>& lsm_input_ptrs)
                 Real r_hi  = cons_arr(i,j,k+1,Rho_comp);
                 Real rt_hi = cons_arr(i,j,k+1,RhoTheta_comp);
                 Real qv_hi = (moist) ? cons_arr(i,j,k+1,RhoQ1_comp)/r_hi : 0.0;
+                if (qv_hi < 0.0) qv_hi = 0.0;
                 r_avg  = 0.5 * (r  + r_hi);
                 rt_avg = 0.5 * (rt + rt_hi);
                 qv_avg = 0.5 * (qv + qv_hi);
