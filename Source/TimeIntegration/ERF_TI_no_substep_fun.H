@@ -303,7 +303,8 @@
         }
 
         // SK ********************************************************************************
-        if ( ( std::fmod(time_for_fp, 5.0) < 0.5*slow_dt ) &&nrk == 2) {
+        // if ( ( std::fmod(time_for_fp, 5.0) < 0.5*slow_dt ) &&nrk == 2) {
+        if ( nrk == 2) {
             for ( MFIter mfi(S_sum[IntVars::cons],TilingIfNotGPU()); mfi.isValid(); ++mfi)
             {
                 const Box bx = mfi.tilebox();
@@ -395,36 +396,59 @@
                 const Real w300lo = 1.0 - w300hi;
                 const Real w500lo = 1.0 - w500hi;
 
-                Vector<Array4<Real> >  ssum_h(n_data);
-
+                Vector<Array4<Real>> ssum_h(n_data);
                 for (int i = 0; i < n_data; ++i) {
-                     ssum_h[i]  = S_sum[i].array(mfi);
+                     ssum_h[i] = S_sum[i].array(mfi);
                 }
+                Gpu::AsyncVector<Array4<Real>> ssum_d(n_data);
+                Gpu::copy(Gpu::hostToDevice, ssum_h.begin(), ssum_h.end(), ssum_d.begin());
+                Array4<Real>* ssum = ssum_d.dataPtr();
 
-                Gpu::AsyncVector<Array4<Real> >  ssum_d(n_data);
-
-                Gpu::copy(Gpu::hostToDevice,  ssum_h.begin(),  ssum_h.end(),  ssum_d.begin());
-
-                Array4<Real>*  ssum =  ssum_d.dataPtr();
+                Gpu::DeviceScalar<Real> u110_d(0.0);
+                Gpu::DeviceScalar<Real> u300_d(0.0);
+                Gpu::DeviceScalar<Real> u500_d(0.0);
+                Real* u110_d_ptr = u110_d.dataPtr();
+                Real* u300_d_ptr = u300_d.dataPtr();
+                Real* u500_d_ptr = u500_d.dataPtr();
 
                 if (ilo<icen && icen<ihi) {
-                    Real u110_lo = ssum[IntVars::xmom](icen,jcen,k110lo) * 2.0 / ( ssum[IntVars::cons](icen  ,jcen,k110lo,Rho_comp) 
-                                                                                 + ssum[IntVars::cons](icen-1,jcen,k110lo,Rho_comp) );
-                    Real u110_hi = ssum[IntVars::xmom](icen,jcen,k110hi) * 2.0 / ( ssum[IntVars::cons](icen  ,jcen,k110hi,Rho_comp) 
-                                                                                 + ssum[IntVars::cons](icen-1,jcen,k110hi,Rho_comp) );
-                    Real u110 = w110lo * u110_lo + w110hi * u110_hi;
+                    amrex::ParallelFor(1, [=] AMREX_GPU_DEVICE (int /*dummy*/) {
 
-                    Real u300_lo = ssum[IntVars::xmom](icen,jcen,k300lo) * 2.0 / ( ssum[IntVars::cons](icen  ,jcen,k300lo,Rho_comp) 
-                                                                                 + ssum[IntVars::cons](icen-1,jcen,k300lo,Rho_comp) );
-                    Real u300_hi = ssum[IntVars::xmom](icen,jcen,k300hi) * 2.0 / ( ssum[IntVars::cons](icen  ,jcen,k300hi,Rho_comp) 
-                                                                                 + ssum[IntVars::cons](icen-1,jcen,k300hi,Rho_comp) );
-                    Real u300 = w300lo * u300_lo + w300hi * u300_hi;
+                        Real u110_lo = ssum[IntVars::xmom](icen,jcen,k110lo) * 2.0 / 
+                                    ( ssum[IntVars::cons](icen  ,jcen,k110lo,Rho_comp) 
+                                    + ssum[IntVars::cons](icen-1,jcen,k110lo,Rho_comp) );
+                        Real u110_hi = ssum[IntVars::xmom](icen,jcen,k110hi) * 2.0 /
+                                    ( ssum[IntVars::cons](icen  ,jcen,k110hi,Rho_comp) 
+                                    + ssum[IntVars::cons](icen-1,jcen,k110hi,Rho_comp) );
+                        Real u110 = w110lo * u110_lo + w110hi * u110_hi;
 
-                    Real u500_lo = ssum[IntVars::xmom](icen,jcen,k500lo) * 2.0 / ( ssum[IntVars::cons](icen  ,jcen,k500lo,Rho_comp) 
-                                                                                 + ssum[IntVars::cons](icen-1,jcen,k500lo,Rho_comp) );
-                    Real u500_hi = ssum[IntVars::xmom](icen,jcen,k500hi) * 2.0 / ( ssum[IntVars::cons](icen  ,jcen,k500hi,Rho_comp) 
-                                                                                 + ssum[IntVars::cons](icen-1,jcen,k500hi,Rho_comp) );
-                    Real u500 = w500lo * u500_lo + w500hi * u500_hi;
+                        Real u300_lo = ssum[IntVars::xmom](icen,jcen,k300lo) * 2.0 /
+                                    ( ssum[IntVars::cons](icen  ,jcen,k300lo,Rho_comp) 
+                                    + ssum[IntVars::cons](icen-1,jcen,k300lo,Rho_comp) );
+                        Real u300_hi = ssum[IntVars::xmom](icen,jcen,k300hi) * 2.0 /
+                                    ( ssum[IntVars::cons](icen  ,jcen,k300hi,Rho_comp) 
+                                    + ssum[IntVars::cons](icen-1,jcen,k300hi,Rho_comp) );
+                        Real u300 = w300lo * u300_lo + w300hi * u300_hi;
+
+                        Real u500_lo = ssum[IntVars::xmom](icen,jcen,k500lo) * 2.0 /
+                                    ( ssum[IntVars::cons](icen  ,jcen,k500lo,Rho_comp) 
+                                    + ssum[IntVars::cons](icen-1,jcen,k500lo,Rho_comp) );
+                        Real u500_hi = ssum[IntVars::xmom](icen,jcen,k500hi) * 2.0 /
+                                    ( ssum[IntVars::cons](icen  ,jcen,k500hi,Rho_comp) 
+                                    + ssum[IntVars::cons](icen-1,jcen,k500hi,Rho_comp) );
+                        Real u500 = w500lo * u500_lo + w500hi * u500_hi;
+
+                        Gpu::Atomic::Add(u110_d_ptr,u110);
+                        Gpu::Atomic::Add(u300_d_ptr,u300);
+                        Gpu::Atomic::Add(u500_d_ptr,u500);
+                    });                        
+
+                    // copy back to host
+                    Real u110 = u110_d.dataValue();
+                    Real u300 = u300_d.dataValue();
+                    Real u500 = u500_d.dataValue();
+
+                    // Gpu::copy(Gpu::deviceToHost, u110_d.dataPtr(), u110_d.dataPtr()+1, &h_total_power);
 
                     std::string terrain_type_str;
                     switch (solverChoice.terrain_type) {
