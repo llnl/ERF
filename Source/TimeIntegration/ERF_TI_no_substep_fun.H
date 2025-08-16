@@ -338,31 +338,33 @@
                 if (solverChoice.terrain_type == TerrainType::StaticFittedMesh) {
                     if (ilo<icen && icen<ihi) {
                         const Array4<const Real>& z_nd_old = z_phys_nd[level]->const_array(mfi);
-                        std::vector<bool> exceed{false, false, false};
+                        // std::vector<bool> exceed{false, false, false};
+                        bool exceed0 = false;
+                        bool exceed1 = false;
+                        bool exceed2 = false;
                         for (int k=0; k<=khi+1; ++k) {
                             Real z = z_nd_old(icen,jcen,k);
-                            if (!exceed[0] && z > 110.0) {
+                            if (!exceed0 && z > 110.0) {
                                 k110lo = k-1;
                                 z110lo = z_nd_old(icen,jcen,k-1);
                                 z110hi = z_nd_old(icen,jcen,k);
                                 dz[0] = z110hi - z110lo;
-                                exceed[0] = true;
+                                exceed0 = true;
                             }
-                            if (!exceed[1] && z > 300.0) {
+                            if (!exceed1 && z > 300.0) {
                                 k300lo = k-1;
                                 z300lo = z_nd_old(icen,jcen,k-1);
                                 z300hi = z_nd_old(icen,jcen,k);
                                 dz[1] = z300hi - z300lo;
-                                exceed[1] = true;
+                                exceed1 = true;
                             }
-                            if (!exceed[2] && z > 500.0) {
+                            if (!exceed2 && z > 500.0) {
                                 k500lo = k-1;
                                 z500lo = z_nd_old(icen,jcen,k-1);
                                 z500hi = z_nd_old(icen,jcen,k);
                                 dz[2] = z500hi - z500lo;
-                                exceed[2] = true;
+                                exceed2 = true;
                             }
-                            // std::cout << "SK: no_substep_fun: k = " << k <<", z = " << z <<", k110lo = " << k110lo <<", k300lo = " << k300lo <<", k500lo = " << k500lo << std::endl;
                         }
                     }
 
