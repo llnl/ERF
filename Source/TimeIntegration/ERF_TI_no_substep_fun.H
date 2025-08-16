@@ -333,11 +333,18 @@
                 Real z300hi = 0;
                 Real z500hi = 0;
 
-                Vector<Real> dz(3, 0.0);
+                // Vector<Real> dz(3, 0.0);
+                Real dz[3] = {0.0,0.0,0.0};
 
                 if (solverChoice.terrain_type == TerrainType::StaticFittedMesh) {
                     if (ilo<icen && icen<ihi) {
                         const Array4<const Real>& z_nd_old = z_phys_nd[level]->const_array(mfi);
+#ifdef AMREX_USE_GPU
+                        amrex::Gpu::DeviceScalar<int> dk110(0), dk300(0), dk500(0);
+                        amrex::Gpu::DeviceScalar<Real> dz110(0), dz300(0), dz500(0);
+                        int* k_lo_ptr[3] = {dk110.dataPtr(), dk300.dataPtr(), dk500.dataPtr()};
+                        Real* z_lo_ptr[3] = {dz110.dataPtr(), dz300.dataPtr(), dz500.dataPtr()};
+
                         amrex::ParallelFor(1, [=] AMREX_GPU_DEVICE (int /*dummy*/) {
                             bool exceed0 = false;
                             bool exceed1 = false;
@@ -345,34 +352,50 @@
                             for (int k=0; k<=khi+1; ++k) {
                                 Real z = z_nd_old(icen,jcen,k);
                                 if (!exceed0 && z > 110.0) {
-                                    k110lo = k-1;
-                                    z110lo = z_nd_old(icen,jcen,k-1);
-                                    z110hi = z_nd_old(icen,jcen,k);
-                                    dz[0] = z110hi - z110lo;
+                                    k_lo_ptr[0][0] = k-1;
+                                    z_lo_ptr[0][0] = z_nd_old(icen,jcen,k-1);
                                     exceed0 = true;
                                 }
                                 if (!exceed1 && z > 300.0) {
-                                    k300lo = k-1;
-                                    z300lo = z_nd_old(icen,jcen,k-1);
-                                    z300hi = z_nd_old(icen,jcen,k);
-                                    dz[1] = z300hi - z300lo;
+                                    k_lo_ptr[1][0] = k-1;
+                                    z_lo_ptr[1][0] = z_nd_old(icen,jcen,k-1);
                                     exceed1 = true;
                                 }
                                 if (!exceed2 && z > 500.0) {
-                                    k500lo = k-1;
-                                    z500lo = z_nd_old(icen,jcen,k-1);
-                                    z500hi = z_nd_old(icen,jcen,k);
-                                    dz[2] = z500hi - z500lo;
+                                    k_lo_ptr[2][0] = k-1;
+                                    z_lo_ptr[2][0] = z_nd_old(icen,jcen,k-1);
                                     exceed2 = true;
                                 }
                             }
                         });
+                        k110lo = dk110.dataValue(); z110lo = dz110.dataValue();
+                        k300lo = dk300.dataValue(); z300lo = dz300.dataValue();
+                        k500lo = dk500.dataValue(); z500lo = dz500.dataValue();
+#else
+                        // CPU
+                        bool e0=false, e1=false, e2=false;
+                        for (int k=0;k<=khi+1;++k) {
+                            Real z = z_nd_old(icen,jcen,k);
+                            if(!e0 && z>110.) { k110lo=k-1; z110lo=z_nd_old(icen,jcen,k-1); e0=true; }
+                            if(!e1 && z>300.) { k300lo=k-1; z300lo=z_nd_old(icen,jcen,k-1); e1=true; }
+                            if(!e2 && z>500.) { k500lo=k-1; z500lo=z_nd_old(icen,jcen,k-1); e2=true; }
+                        }
+#endif
+                        dz[0] = z_nd_old(icen,jcen,k110lo+1) - z110lo;
+                        dz[1] = z_nd_old(icen,jcen,k300lo+1) - z300lo;
+                        dz[2] = z_nd_old(icen,jcen,k500lo+1) - z500lo;
+                        z110hi = z110lo + dz[0];
+                        z300hi = z300lo + dz[1];
+                        z500hi = z500lo + dz[2];
                     }
 
                 } else if (solverChoice.terrain_type == TerrainType::EB) {
 
                     const Real* dx = fine_geom.CellSize();
-                    dz.assign(3, dx[2]);
+                    // dz.assign(3, dx[2]);
+                    dz[0] = dx[2];
+                    dz[1] = dx[2];
+                    dz[2] = dx[2];
 
                     k110lo = std::floor(110.0/dz[0] - 0.5); // low index
                     k300lo = std::floor(300.0/dz[1] - 0.5);
