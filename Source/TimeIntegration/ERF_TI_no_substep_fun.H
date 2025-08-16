@@ -303,8 +303,8 @@
         }
 
         // SK ********************************************************************************
-        // if ( ( std::fmod(time_for_fp, 5.0) < 0.5*slow_dt ) &&nrk == 2) {
-        if ( nrk == 2) {
+        if ( ( std::fmod(time_for_fp, 5.0) < 0.5*slow_dt ) &&nrk == 2) {
+        // if ( nrk == 2) {
             for ( MFIter mfi(S_sum[IntVars::cons],TilingIfNotGPU()); mfi.isValid(); ++mfi)
             {
                 const Box bx = mfi.tilebox();
