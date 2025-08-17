@@ -329,10 +329,6 @@
                 Real z300lo = 0;
                 Real z500lo = 0;
 
-                Real z110hi = 0;
-                Real z300hi = 0;
-                Real z500hi = 0;
-
                 // Vector<Real> dz(3, 0.0);
                 Real dz[3] = {0.0,0.0,0.0};
 
@@ -340,10 +336,13 @@
                     if (ilo<icen && icen<ihi) {
                         const Array4<const Real>& z_nd_old = z_phys_nd[level]->const_array(mfi);
 #ifdef AMREX_USE_GPU
-                        amrex::Gpu::DeviceScalar<int> dk110(0), dk300(0), dk500(0);
-                        amrex::Gpu::DeviceScalar<Real> dz110(0), dz300(0), dz500(0);
-                        int* k_lo_ptr[3] = {dk110.dataPtr(), dk300.dataPtr(), dk500.dataPtr()};
-                        Real* z_lo_ptr[3] = {dz110.dataPtr(), dz300.dataPtr(), dz500.dataPtr()};
+                        amrex::Gpu::DeviceScalar<int> d_k110(0), d_k300(0), d_k500(0);
+                        amrex::Gpu::DeviceScalar<Real> d_z110(0.0), d_z300(0.0), d_z500(0.0);
+                        int* k_lo_ptr[3] = {d_k110.dataPtr(), d_k300.dataPtr(), d_k500.dataPtr()};
+                        Real* z_lo_ptr[3] = {d_z110.dataPtr(), d_z300.dataPtr(), d_z500.dataPtr()};
+
+                        amrex::Gpu::DeviceScalar<Real> d_dz[3] = {0.0,0.0,0.0};
+                        Real* dz_ptr[3] = {d_dz[0].dataPtr(), d_dz[1].dataPtr(), d_dz[2].dataPtr()};
 
                         amrex::ParallelFor(1, [=] AMREX_GPU_DEVICE (int /*dummy*/) {
                             bool exceed0 = false;
@@ -352,25 +351,32 @@
                             for (int k=0; k<=khi+1; ++k) {
                                 Real z = z_nd_old(icen,jcen,k);
                                 if (!exceed0 && z > 110.0) {
-                                    k_lo_ptr[0][0] = k-1;
-                                    z_lo_ptr[0][0] = z_nd_old(icen,jcen,k-1);
+                                    *k_lo_ptr[0] = k-1;
+                                    *z_lo_ptr[0] = z_nd_old(icen,jcen,k-1);
+                                    *dz_ptr[0] = z_nd_old(icen,jcen,k) - z_nd_old(icen,jcen,k-1);
                                     exceed0 = true;
                                 }
                                 if (!exceed1 && z > 300.0) {
-                                    k_lo_ptr[1][0] = k-1;
-                                    z_lo_ptr[1][0] = z_nd_old(icen,jcen,k-1);
+                                    *k_lo_ptr[1] = k-1;
+                                    *z_lo_ptr[1] = z_nd_old(icen,jcen,k-1);
+                                    *dz_ptr[1] = z_nd_old(icen,jcen,k) - z_nd_old(icen,jcen,k-1);
                                     exceed1 = true;
                                 }
                                 if (!exceed2 && z > 500.0) {
-                                    k_lo_ptr[2][0] = k-1;
-                                    z_lo_ptr[2][0] = z_nd_old(icen,jcen,k-1);
+                                    *k_lo_ptr[2] = k-1;
+                                    *z_lo_ptr[2] = z_nd_old(icen,jcen,k-1);
+                                    *dz_ptr[2] = z_nd_old(icen,jcen,k) - z_nd_old(icen,jcen,k-1);
                                     exceed2 = true;
                                 }
                             }
                         });
-                        k110lo = dk110.dataValue(); z110lo = dz110.dataValue();
-                        k300lo = dk300.dataValue(); z300lo = dz300.dataValue();
-                        k500lo = dk500.dataValue(); z500lo = dz500.dataValue();
+                        k110lo = d_k110.dataValue(); z110lo = d_z110.dataValue();
+                        k300lo = d_k300.dataValue(); z300lo = d_z300.dataValue();
+                        k500lo = d_k500.dataValue(); z500lo = d_z500.dataValue();
+
+                        dz[0] = d_dz[0].dataValue();
+                        dz[1] = d_dz[1].dataValue();
+                        dz[2] = d_dz[2].dataValue();
 #else
                         // CPU
                         bool e0=false, e1=false, e2=false;
@@ -380,13 +386,10 @@
                             if(!e1 && z>300.) { k300lo=k-1; z300lo=z_nd_old(icen,jcen,k-1); e1=true; }
                             if(!e2 && z>500.) { k500lo=k-1; z500lo=z_nd_old(icen,jcen,k-1); e2=true; }
                         }
-#endif
                         dz[0] = z_nd_old(icen,jcen,k110lo+1) - z110lo;
                         dz[1] = z_nd_old(icen,jcen,k300lo+1) - z300lo;
                         dz[2] = z_nd_old(icen,jcen,k500lo+1) - z500lo;
-                        z110hi = z110lo + dz[0];
-                        z300hi = z300lo + dz[1];
-                        z500hi = z500lo + dz[2];
+#endif
                     }
 
                 } else if (solverChoice.terrain_type == TerrainType::EB) {
@@ -404,10 +407,6 @@
                     z110lo = (0.5+k110lo)*dz[0]; // low height
                     z300lo = (0.5+k300lo)*dz[1];
                     z500lo = (0.5+k500lo)*dz[2];
-
-                    z110hi = z110lo + dz[0]; // high height
-                    z300hi = z300lo + dz[1];
-                    z500hi = z500lo + dz[2];
                 }
 
                 const int k110hi = k110lo + 1; // high index
