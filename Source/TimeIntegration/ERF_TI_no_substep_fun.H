@@ -303,7 +303,7 @@
         }
 
         // SK ********************************************************************************
-        if ( ( std::fmod(time_for_fp, 5.0) < 0.5*slow_dt ) &&nrk == 2) {
+        if ( ( std::fmod(time_for_fp, 5.0) < slow_dt ) &&nrk == 2) {
         // if ( nrk == 2) {
             for ( MFIter mfi(S_sum[IntVars::cons],TilingIfNotGPU()); mfi.isValid(); ++mfi)
             {
@@ -341,7 +341,9 @@
                         int* k_lo_ptr[3] = {d_k110.dataPtr(), d_k300.dataPtr(), d_k500.dataPtr()};
                         Real* z_lo_ptr[3] = {d_z110.dataPtr(), d_z300.dataPtr(), d_z500.dataPtr()};
 
-                        amrex::Gpu::DeviceScalar<Real> d_dz[3] = {0.0,0.0,0.0};
+                        amrex::Gpu::DeviceScalar<Real> d_dz[3] = {amrex::Gpu::DeviceScalar<Real>(0.0),
+                                                                  amrex::Gpu::DeviceScalar<Real>(0.0),
+                                                                  amrex::Gpu::DeviceScalar<Real>(0.0)};
                         Real* dz_ptr[3] = {d_dz[0].dataPtr(), d_dz[1].dataPtr(), d_dz[2].dataPtr()};
 
                         amrex::ParallelFor(1, [=] AMREX_GPU_DEVICE (int /*dummy*/) {
