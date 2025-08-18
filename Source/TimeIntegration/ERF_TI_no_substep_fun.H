@@ -303,8 +303,8 @@
         }
 
         // SK ********************************************************************************
-        // if ( ( std::fmod(time_for_fp, 5.0) < slow_dt ) &&nrk == 2) {
-        if ( nrk == 2) {
+        if ( ( std::fmod(time_for_fp, 0.001) < slow_dt ) &&nrk == 2) {
+        // if ( nrk == 2) {
             for ( MFIter mfi(S_sum[IntVars::cons],TilingIfNotGPU()); mfi.isValid(); ++mfi)
             {
                 const Box bx = mfi.tilebox();
@@ -411,10 +411,6 @@
                     zh1lo = (0.5+kh1lo)*dz[0]; // low height
                     zh2lo = (0.5+kh2lo)*dz[1];
                     zh3lo = (0.5+kh3lo)*dz[2];
-
-                    // // SK **************************************************************************
-                    // std::cout<<"SK: no_substep_fun: kh1lo, kh2lo, kh3lo: "<<kh1lo<<" "<<kh2lo<<" "<<kh3lo<<std::endl;
-                    // // SK **************************************************************************
                 }
 
                 const int kh1hi = kh1lo + 1; // high index
@@ -443,12 +439,6 @@
                 Real* uh1_d_ptr = uh1_d.dataPtr();
                 Real* uh2_d_ptr = uh2_d.dataPtr();
                 Real* uh3_d_ptr = uh3_d.dataPtr();
-
-                // SK **************************************************************************
-                std::cout<<"SK: no_substep_fun: MyProc = "<<amrex::ParallelDescriptor::MyProc()
-                <<", ilo = "<<ilo<<", ihi = "<<ihi<<", icen = "<<icen
-                <<", (ilo<=icen && icen<ihi && jlo<=jcen && jcen<jhi) = "<< (ilo<=icen && icen<ihi && jlo<=jcen && jcen<jhi) <<std::endl;
-                // SK **************************************************************************
 
                 if (ilo<=icen && icen<ihi && jlo<=jcen && jcen<jhi) {
                     amrex::ParallelFor(1, [=] AMREX_GPU_DEVICE (int /*dummy*/) {
@@ -499,10 +489,6 @@
                             terrain_type_str = "unknown";
                             break;
                     }
-
-                    // // SK **************************************************************************
-                    // std::cout<<"SK: no_substep_fun: (ilo<=icen && icen<ihi && jlo<=jcen && jcen<jhi) = "<< (ilo<=icen && icen<ihi && jlo<=jcen && jcen<jhi) <<std::endl;
-                    // // SK **************************************************************************
 
                     std::string filename = "u_values_" + terrain_type_str + ".txt";
                     static bool first_write = true;
