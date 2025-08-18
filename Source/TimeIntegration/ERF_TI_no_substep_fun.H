@@ -303,8 +303,8 @@
         }
 
         // SK ********************************************************************************
-        if ( ( std::fmod(time_for_fp, 5.0) < slow_dt ) &&nrk == 2) {
-        // if ( nrk == 2) {
+        // if ( ( std::fmod(time_for_fp, 5.0) < slow_dt ) &&nrk == 2) {
+        if ( nrk == 2) {
             for ( MFIter mfi(S_sum[IntVars::cons],TilingIfNotGPU()); mfi.isValid(); ++mfi)
             {
                 const Box bx = mfi.tilebox();
@@ -314,6 +314,8 @@
 
                 const int ilo = bx.smallEnd(0);
                 const int ihi = bx.bigEnd(0);
+                const int jlo = bx.smallEnd(1);
+                const int jhi = bx.bigEnd(1);
                 const int khi = bx.bigEnd(2);
 
                 const int idom_hi = fine_geom.Domain().bigEnd(0);
@@ -321,25 +323,25 @@
                 const int icen = (idom_hi+1)/2;
                 const int jcen = (jdom_hi+1)/2;
 
-                int k110lo = 0;
-                int k300lo = 0;
-                int k500lo = 0;
+                int kh1lo = 0;
+                int kh2lo = 0;
+                int kh3lo = 0;
 
-                Real z110lo = 0; // low height
-                Real z300lo = 0;
-                Real z500lo = 0;
+                Real zh1lo = 0; // low height
+                Real zh2lo = 0;
+                Real zh3lo = 0;
 
                 // Vector<Real> dz(3, 0.0);
                 Real dz[3] = {0.0,0.0,0.0};
 
                 if (solverChoice.terrain_type == TerrainType::StaticFittedMesh) {
-                    if (ilo<icen && icen<ihi) {
+                    if (ilo<=icen && icen<ihi && jlo<=jcen && jcen<jhi) {
                         const Array4<const Real>& z_nd_old = z_phys_nd[level]->const_array(mfi);
 #ifdef AMREX_USE_GPU
-                        amrex::Gpu::DeviceScalar<int> d_k110(0), d_k300(0), d_k500(0);
-                        amrex::Gpu::DeviceScalar<Real> d_z110(0.0), d_z300(0.0), d_z500(0.0);
-                        int* k_lo_ptr[3] = {d_k110.dataPtr(), d_k300.dataPtr(), d_k500.dataPtr()};
-                        Real* z_lo_ptr[3] = {d_z110.dataPtr(), d_z300.dataPtr(), d_z500.dataPtr()};
+                        amrex::Gpu::DeviceScalar<int> d_kh1(0), d_kh2(0), d_kh3(0);
+                        amrex::Gpu::DeviceScalar<Real> d_zh1(0.0), d_zh2(0.0), d_zh3(0.0);
+                        int* k_lo_ptr[3] = {d_kh1.dataPtr(), d_kh2.dataPtr(), d_kh3.dataPtr()};
+                        Real* z_lo_ptr[3] = {d_zh1.dataPtr(), d_zh2.dataPtr(), d_zh3.dataPtr()};
 
                         amrex::Gpu::DeviceScalar<Real> d_dz[3] = {amrex::Gpu::DeviceScalar<Real>(0.0),
                                                                   amrex::Gpu::DeviceScalar<Real>(0.0),
@@ -352,19 +354,19 @@
                             bool exceed2 = false;
                             for (int k=0; k<=khi+1; ++k) {
                                 Real z = z_nd_old(icen,jcen,k);
-                                if (!exceed0 && z > 110.0) {
+                                if (!exceed0 && z > 0.55) {
                                     *k_lo_ptr[0] = k-1;
                                     *z_lo_ptr[0] = z_nd_old(icen,jcen,k-1);
                                     *dz_ptr[0] = z_nd_old(icen,jcen,k) - z_nd_old(icen,jcen,k-1);
                                     exceed0 = true;
                                 }
-                                if (!exceed1 && z > 300.0) {
+                                if (!exceed1 && z > 5.0) {
                                     *k_lo_ptr[1] = k-1;
                                     *z_lo_ptr[1] = z_nd_old(icen,jcen,k-1);
                                     *dz_ptr[1] = z_nd_old(icen,jcen,k) - z_nd_old(icen,jcen,k-1);
                                     exceed1 = true;
                                 }
-                                if (!exceed2 && z > 500.0) {
+                                if (!exceed2 && z > 9.0) {
                                     *k_lo_ptr[2] = k-1;
                                     *z_lo_ptr[2] = z_nd_old(icen,jcen,k-1);
                                     *dz_ptr[2] = z_nd_old(icen,jcen,k) - z_nd_old(icen,jcen,k-1);
@@ -372,9 +374,9 @@
                                 }
                             }
                         });
-                        k110lo = d_k110.dataValue(); z110lo = d_z110.dataValue();
-                        k300lo = d_k300.dataValue(); z300lo = d_z300.dataValue();
-                        k500lo = d_k500.dataValue(); z500lo = d_z500.dataValue();
+                        kh1lo = d_kh1.dataValue(); zh1lo = d_zh1.dataValue();
+                        kh2lo = d_kh2.dataValue(); zh2lo = d_zh2.dataValue();
+                        kh3lo = d_kh3.dataValue(); zh3lo = d_zh3.dataValue();
 
                         dz[0] = d_dz[0].dataValue();
                         dz[1] = d_dz[1].dataValue();
@@ -384,13 +386,13 @@
                         bool e0=false, e1=false, e2=false;
                         for (int k=0;k<=khi+1;++k) {
                             Real z = z_nd_old(icen,jcen,k);
-                            if(!e0 && z>110.) { k110lo=k-1; z110lo=z_nd_old(icen,jcen,k-1); e0=true; }
-                            if(!e1 && z>300.) { k300lo=k-1; z300lo=z_nd_old(icen,jcen,k-1); e1=true; }
-                            if(!e2 && z>500.) { k500lo=k-1; z500lo=z_nd_old(icen,jcen,k-1); e2=true; }
+                            if(!e0 && z>0.55) { kh1lo=k-1; zh1lo=z_nd_old(icen,jcen,k-1); e0=true; }
+                            if(!e1 && z>5.0) { kh2lo=k-1; zh2lo=z_nd_old(icen,jcen,k-1); e1=true; }
+                            if(!e2 && z>9.0) { kh3lo=k-1; zh3lo=z_nd_old(icen,jcen,k-1); e2=true; }
                         }
-                        dz[0] = z_nd_old(icen,jcen,k110lo+1) - z110lo;
-                        dz[1] = z_nd_old(icen,jcen,k300lo+1) - z300lo;
-                        dz[2] = z_nd_old(icen,jcen,k500lo+1) - z500lo;
+                        dz[0] = z_nd_old(icen,jcen,kh1lo+1) - zh1lo;
+                        dz[1] = z_nd_old(icen,jcen,kh2lo+1) - zh2lo;
+                        dz[2] = z_nd_old(icen,jcen,kh3lo+1) - zh3lo;
 #endif
                     }
 
@@ -402,26 +404,30 @@
                     dz[1] = dx[2];
                     dz[2] = dx[2];
 
-                    k110lo = std::floor(110.0/dz[0] - 0.5); // low index
-                    k300lo = std::floor(300.0/dz[1] - 0.5);
-                    k500lo = std::floor(500.0/dz[2] - 0.5);
+                    kh1lo = std::floor(0.55/dz[0] - 0.5); // low index
+                    kh2lo = std::floor(5.0/dz[1] - 0.5);
+                    kh3lo = std::floor(9.0/dz[2] - 0.5);
 
-                    z110lo = (0.5+k110lo)*dz[0]; // low height
-                    z300lo = (0.5+k300lo)*dz[1];
-                    z500lo = (0.5+k500lo)*dz[2];
+                    zh1lo = (0.5+kh1lo)*dz[0]; // low height
+                    zh2lo = (0.5+kh2lo)*dz[1];
+                    zh3lo = (0.5+kh3lo)*dz[2];
+
+                    // // SK **************************************************************************
+                    // std::cout<<"SK: no_substep_fun: kh1lo, kh2lo, kh3lo: "<<kh1lo<<" "<<kh2lo<<" "<<kh3lo<<std::endl;
+                    // // SK **************************************************************************
                 }
 
-                const int k110hi = k110lo + 1; // high index
-                const int k300hi = k300lo + 1;
-                const int k500hi = k500lo + 1;
+                const int kh1hi = kh1lo + 1; // high index
+                const int kh2hi = kh2lo + 1;
+                const int kh3hi = kh3lo + 1;
 
-                const Real w110hi = (110.0 - z110lo)/dz[0];
-                const Real w300hi = (300.0 - z300lo)/dz[1];
-                const Real w500hi = (500.0 - z500lo)/dz[2];
+                const Real wh1hi = (0.55 - zh1lo)/dz[0];
+                const Real wh2hi = (5.0 - zh2lo)/dz[1];
+                const Real wh3hi = (9.0 - zh3lo)/dz[2];
 
-                const Real w110lo = 1.0 - w110hi;
-                const Real w300lo = 1.0 - w300hi;
-                const Real w500lo = 1.0 - w500hi;
+                const Real wh1lo = 1.0 - wh1hi;
+                const Real wh2lo = 1.0 - wh2hi;
+                const Real wh3lo = 1.0 - wh3hi;
 
                 Vector<Array4<Real>> ssum_h(n_data);
                 for (int i = 0; i < n_data; ++i) {
@@ -431,51 +437,55 @@
                 Gpu::copy(Gpu::hostToDevice, ssum_h.begin(), ssum_h.end(), ssum_d.begin());
                 Array4<Real>* ssum = ssum_d.dataPtr();
 
-                Gpu::DeviceScalar<Real> u110_d(0.0);
-                Gpu::DeviceScalar<Real> u300_d(0.0);
-                Gpu::DeviceScalar<Real> u500_d(0.0);
-                Real* u110_d_ptr = u110_d.dataPtr();
-                Real* u300_d_ptr = u300_d.dataPtr();
-                Real* u500_d_ptr = u500_d.dataPtr();
+                Gpu::DeviceScalar<Real> uh1_d(0.0);
+                Gpu::DeviceScalar<Real> uh2_d(0.0);
+                Gpu::DeviceScalar<Real> uh3_d(0.0);
+                Real* uh1_d_ptr = uh1_d.dataPtr();
+                Real* uh2_d_ptr = uh2_d.dataPtr();
+                Real* uh3_d_ptr = uh3_d.dataPtr();
 
-                if (ilo<icen && icen<ihi) {
+                // SK **************************************************************************
+                std::cout<<"SK: no_substep_fun: MyProc = "<<amrex::ParallelDescriptor::MyProc()
+                <<", ilo = "<<ilo<<", ihi = "<<ihi<<", icen = "<<icen
+                <<", (ilo<=icen && icen<ihi && jlo<=jcen && jcen<jhi) = "<< (ilo<=icen && icen<ihi && jlo<=jcen && jcen<jhi) <<std::endl;
+                // SK **************************************************************************
+
+                if (ilo<=icen && icen<ihi && jlo<=jcen && jcen<jhi) {
                     amrex::ParallelFor(1, [=] AMREX_GPU_DEVICE (int /*dummy*/) {
 
-                        Real u110_lo = ssum[IntVars::xmom](icen,jcen,k110lo) * 2.0 / 
-                                    ( ssum[IntVars::cons](icen  ,jcen,k110lo,Rho_comp) 
-                                    + ssum[IntVars::cons](icen-1,jcen,k110lo,Rho_comp) );
-                        Real u110_hi = ssum[IntVars::xmom](icen,jcen,k110hi) * 2.0 /
-                                    ( ssum[IntVars::cons](icen  ,jcen,k110hi,Rho_comp) 
-                                    + ssum[IntVars::cons](icen-1,jcen,k110hi,Rho_comp) );
-                        Real u110 = w110lo * u110_lo + w110hi * u110_hi;
+                        Real uh1_lo = ssum[IntVars::xmom](icen,jcen,kh1lo) * 2.0 / 
+                                    ( ssum[IntVars::cons](icen  ,jcen,kh1lo,Rho_comp) 
+                                    + ssum[IntVars::cons](icen-1,jcen,kh1lo,Rho_comp) );
+                        Real uh1_hi = ssum[IntVars::xmom](icen,jcen,kh1hi) * 2.0 /
+                                    ( ssum[IntVars::cons](icen  ,jcen,kh1hi,Rho_comp) 
+                                    + ssum[IntVars::cons](icen-1,jcen,kh1hi,Rho_comp) );
+                        Real uh1 = wh1lo * uh1_lo + wh1hi * uh1_hi;
 
-                        Real u300_lo = ssum[IntVars::xmom](icen,jcen,k300lo) * 2.0 /
-                                    ( ssum[IntVars::cons](icen  ,jcen,k300lo,Rho_comp) 
-                                    + ssum[IntVars::cons](icen-1,jcen,k300lo,Rho_comp) );
-                        Real u300_hi = ssum[IntVars::xmom](icen,jcen,k300hi) * 2.0 /
-                                    ( ssum[IntVars::cons](icen  ,jcen,k300hi,Rho_comp) 
-                                    + ssum[IntVars::cons](icen-1,jcen,k300hi,Rho_comp) );
-                        Real u300 = w300lo * u300_lo + w300hi * u300_hi;
+                        Real uh2_lo = ssum[IntVars::xmom](icen,jcen,kh2lo) * 2.0 /
+                                    ( ssum[IntVars::cons](icen  ,jcen,kh2lo,Rho_comp) 
+                                    + ssum[IntVars::cons](icen-1,jcen,kh2lo,Rho_comp) );
+                        Real uh2_hi = ssum[IntVars::xmom](icen,jcen,kh2hi) * 2.0 /
+                                    ( ssum[IntVars::cons](icen  ,jcen,kh2hi,Rho_comp) 
+                                    + ssum[IntVars::cons](icen-1,jcen,kh2hi,Rho_comp) );
+                        Real uh2 = wh2lo * uh2_lo + wh2hi * uh2_hi;
 
-                        Real u500_lo = ssum[IntVars::xmom](icen,jcen,k500lo) * 2.0 /
-                                    ( ssum[IntVars::cons](icen  ,jcen,k500lo,Rho_comp) 
-                                    + ssum[IntVars::cons](icen-1,jcen,k500lo,Rho_comp) );
-                        Real u500_hi = ssum[IntVars::xmom](icen,jcen,k500hi) * 2.0 /
-                                    ( ssum[IntVars::cons](icen  ,jcen,k500hi,Rho_comp) 
-                                    + ssum[IntVars::cons](icen-1,jcen,k500hi,Rho_comp) );
-                        Real u500 = w500lo * u500_lo + w500hi * u500_hi;
+                        Real uh3_lo = ssum[IntVars::xmom](icen,jcen,kh3lo) * 2.0 /
+                                    ( ssum[IntVars::cons](icen  ,jcen,kh3lo,Rho_comp) 
+                                    + ssum[IntVars::cons](icen-1,jcen,kh3lo,Rho_comp) );
+                        Real uh3_hi = ssum[IntVars::xmom](icen,jcen,kh3hi) * 2.0 /
+                                    ( ssum[IntVars::cons](icen  ,jcen,kh3hi,Rho_comp) 
+                                    + ssum[IntVars::cons](icen-1,jcen,kh3hi,Rho_comp) );
+                        Real uh3 = wh3lo * uh3_lo + wh3hi * uh3_hi;
 
-                        Gpu::Atomic::Add(u110_d_ptr,u110);
-                        Gpu::Atomic::Add(u300_d_ptr,u300);
-                        Gpu::Atomic::Add(u500_d_ptr,u500);
+                        Gpu::Atomic::Add(uh1_d_ptr,uh1);
+                        Gpu::Atomic::Add(uh2_d_ptr,uh2);
+                        Gpu::Atomic::Add(uh3_d_ptr,uh3);
                     });                        
 
                     // copy back to host
-                    Real u110 = u110_d.dataValue();
-                    Real u300 = u300_d.dataValue();
-                    Real u500 = u500_d.dataValue();
-
-                    // Gpu::copy(Gpu::deviceToHost, u110_d.dataPtr(), u110_d.dataPtr()+1, &h_total_power);
+                    Real uh1 = uh1_d.dataValue();
+                    Real uh2 = uh2_d.dataValue();
+                    Real uh3 = uh3_d.dataValue();
 
                     std::string terrain_type_str;
                     switch (solverChoice.terrain_type) {
@@ -490,6 +500,10 @@
                             break;
                     }
 
+                    // // SK **************************************************************************
+                    // std::cout<<"SK: no_substep_fun: (ilo<=icen && icen<ihi && jlo<=jcen && jcen<jhi) = "<< (ilo<=icen && icen<ihi && jlo<=jcen && jcen<jhi) <<std::endl;
+                    // // SK **************************************************************************
+
                     std::string filename = "u_values_" + terrain_type_str + ".txt";
                     static bool first_write = true;
                     std::ofstream out;
@@ -500,7 +514,7 @@
                     } else {
                         out.open(filename, std::ios::app); // append mode
                     }
-                    out << time_for_fp << ", " << u110 << ", " << u300 << ", " << u500 << std::endl;
+                    out << time_for_fp << ", " << uh1 << ", " << uh2 << ", " << uh3 << std::endl;
                     out.close();
 
                 }
