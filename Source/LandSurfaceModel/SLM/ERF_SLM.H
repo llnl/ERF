@@ -154,11 +154,19 @@ public:
 
     // Set thermo and grid properties
     void
-    Define (SolverChoice& /*sc*/) override
+    Define (SolverChoice& sc) override
     {
         // NOTE: We should parse things from sc here,
         //       but they are hard coded because this
         //       is a demonstration for now.
+
+        // Check if initializing from WRFInput
+        if (sc.init_type == InitType::WRFInput) {
+            amrex::Print() << " SLM is initializing from WRFInput!" << std::endl;
+            use_wrfinput = true;
+        } else {
+            use_wrfinput = false;
+        }
     }
 
     // Initialize data structures
@@ -169,7 +177,7 @@ public:
           const amrex::MultiFab& v_in,
           const amrex::Geometry& geom,
           const amrex::Real& dt,
-          std::unique_ptr<amrex::MultiFab>& z_phys_cc) override;
+          std::unique_ptr<amrex::MultiFab>& z_phys_cc_in) override;
 
     // Wrapper to do all the updating
     void
@@ -186,6 +194,28 @@ public:
             // initialize values using first reference data
             //this->init_slm_vars();
             first_step = false;
+
+            // update zref using updated z_phys_cc
+            // TODO: fix this - use_terrain flag is deprecated
+            if (!set_from_file) {
+                amrex::ParmParse pp_erf("erf");
+                pp_erf.query("use_terrain", use_terrain);
+
+                amrex::Real zlo      = m_geom.ProbLo(2);
+                amrex::Real dz       = m_geom.CellSize(2);
+                for ( amrex::MFIter mfi(landtype,TileNoZ()); mfi.isValid(); ++mfi) {
+                    const amrex::Box& xybx      = mfi.growntilebox(0);
+                    const amrex::Array4<const amrex::Real>& z_cc_arr = (use_terrain) ? z_phys_cc->const_array(mfi) : amrex::Array4<amrex::Real>{};
+                    auto ztop_arr = ztop.array(mfi);
+                    auto zrefxy_arr = zrefxy.array(mfi);
+
+                    ParallelFor(xybx, [=] AMREX_GPU_DEVICE(int i, int j, int) noexcept {
+                        amrex::Real zcc = (z_cc_arr) ? z_cc_arr(i,j,0) : zlo + 0.5*dz;
+                        zrefxy_arr(i,j,0) = ztop_arr(i,j,0) + zcc;
+                        //amrex::Print() << " i = " << i << " j = " << j << ": zrefxy = " << zrefxy_arr(i,j,0) << std::endl;
+                    });
+                }
+            }
         }
 
         this->AdvanceSLM();
@@ -237,12 +267,17 @@ public:
     {
         int varIdx = -1;
         std::string lc_varname = amrex::toLower(varname);
-        for (int idx(0); idx<LsmVar_SLM::NumVars; ++idx) {
-            if (lc_varname == amrex::toLower(LsmVarName[idx])) {
+        for (int idx(0); idx<SLM::m_lsm_size; ++idx) {
+            if (lc_varname == amrex::toLower(Lsm_VarName(idx))) {
                 varIdx = idx;
             }
         }
         return varIdx;
+    }
+
+    std::unordered_map<std::string, std::string>&
+    Lsm_WRFInputNames() override {
+        return SLM::wrfinput_map;
     }
 
     void
@@ -566,10 +601,23 @@ private:
     amrex::Real time_unit = 1.0;
     bool first_step = true;
 
+    amrex::MultiFab *z_phys_cc; // input z_phys_cc from ERF
+
     // Extra MFs for output:
     amrex::MultiFab slm_diag;
 
     amrex::Vector<const amrex::MultiFab*> slm_to_rad_vars;
+
+    // Defines the WRFInput names and corresponding SLM name used to
+    // fill variables at initialization
+    inline static std::unordered_map<std::string, std::string> wrfinput_map = {
+        {"TSLB", "tsoil"},
+        {"SMOIS", "wsoil"},
+        //{"LAI", "lai"},
+    };
+
+    // whether to initialize SLM from inputs file or from wrfinput
+    bool use_wrfinput = false;
 
     // List of 2D output variables that are declared as 3D
     // These will only be saved at k = 0 (surface level) to save space

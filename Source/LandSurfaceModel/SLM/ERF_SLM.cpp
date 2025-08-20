@@ -15,11 +15,11 @@ SLM::Init (const int& /*lev*/,
            const MultiFab& v_in,
            const Geometry& geom,
            const Real& dt,
-           std::unique_ptr<amrex::MultiFab>& z_phys_cc)
-			
+           std::unique_ptr<amrex::MultiFab>& z_phys_cc_in)
 {
     m_dt = dt;
     m_geom = geom;
+    z_phys_cc = z_phys_cc_in.get();
 
     ParmParse pp("slm");
     pp.query("nsoil", m_nz_lsm);
@@ -96,8 +96,8 @@ SLM::Init (const int& /*lev*/,
         lsm_fab_vars[ivar]->setVal(0.0);
 
         // Fluxes are nodal in z
-        lsm_fab_flux[ivar] = std::make_shared<MultiFab>(convert(ba_lsm, IntVect(0,0,1)), dm, 1, IntVect(0,0,0));
-        lsm_fab_flux[ivar]->setVal(0.);
+        //lsm_fab_flux[ivar] = std::make_shared<MultiFab>(convert(ba_lsm, IntVect(0,0,1)), dm, 1, IntVect(0,0,0));
+        //lsm_fab_flux[ivar]->setVal(0.);
     }
 
     // packed temporary 1D arrays in soil water and soil temperature
@@ -179,6 +179,8 @@ SLM::Init (const int& /*lev*/,
     slm_diag.define(ba_lsm_2d, dm, SLM_Diag::NumVars, ng_2d);
     slm_diag.setVal(0.0);
 
+    zrefxy.define(ba_lsm_2d, dm, 1, ng_2d);
+
     r_soil.setVal(0.0);
     lhf_air.setVal(0.0);
     lhf_canop.setVal(0.0);
@@ -225,7 +227,6 @@ SLM::Init (const int& /*lev*/,
 
         Real zlo      = m_geom.ProbLo(2);
         Real dz       = m_geom.CellSize(2);
-        zrefxy.define(ba_lsm_2d, dm, 1, ng_2d); 
         for ( MFIter mfi(cons_in,TileNoZ()); mfi.isValid(); ++mfi) {
             const Box& xybx      = mfi.growntilebox(0);
             const Array4<const Real>& z_cc_arr = (use_terrain) ? z_phys_cc->const_array(mfi) : Array4<Real>{};
@@ -238,7 +239,7 @@ SLM::Init (const int& /*lev*/,
 		    });	
 	    }		
     } else {
-	zrefxy.setVal(zref);  // set zrefxy with the value read from inputs file
+	    zrefxy.setVal(zref);  // set zrefxy with the value read from inputs file
     }
 
     //slm_to_rad_vars = {Lsm_Data_Ptr(LsmVar_SLM::tsurf), &albedovis_s, &albedovis_v, &albedonir_s, &albedonir_v, &IR_emis_vege, &net_rad};
@@ -278,17 +279,21 @@ void SLM::init_from_file()
 
     get_layer_prop("clay0", m_nz_lsm, clay0);
     get_layer_prop("sand0", m_nz_lsm, sand0);
-    get_layer_prop("sw0", m_nz_lsm, sw0);
-    get_layer_prop("st0", m_nz_lsm, st0);
+    if (!use_wrfinput) {
+        get_layer_prop("sw0", m_nz_lsm, sw0);
+        get_layer_prop("st0", m_nz_lsm, st0);
+    }
     if (dosoiltnudging || dosoilwnudging) {
         get_layer_prop("relax_hgt", m_nz_lsm, relax_hgt);
     } else {
         std::fill(relax_hgt.begin(), relax_hgt.end(), 0.0);
     }
 
-    for (int i = 0; i < m_nz_lsm; i++)
-    {
-        amrex::Print() << " " << i << ": soilt = " << st0[i] << " soilw = " << sw0[i] << " clay = " << clay0[i] << " sand = " << sand0[i] << " relax = " << relax_hgt[i] << std::endl;
+    if (!use_wrfinput) {
+        for (int i = 0; i < m_nz_lsm; i++)
+        {
+            amrex::Print() << " " << i << ": soilt = " << st0[i] << " soilw = " << sw0[i] << " clay = " << clay0[i] << " sand = " << sand0[i] << " relax = " << relax_hgt[i] << std::endl;
+        }
     }
 
     pp.query("tabs_s", tabs_s);
