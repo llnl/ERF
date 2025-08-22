@@ -43,7 +43,9 @@ SLM::Init (const int& /*lev*/,
       LsmVar_SLM::swdsvisxyref,  LsmVar_SLM::swdsnirxyref, LsmVar_SLM::swdsvisdxyref,
       LsmVar_SLM::swdsnirdxyref, LsmVar_SLM::lwref,        LsmVar_SLM::tref,
       LsmVar_SLM::uref,          LsmVar_SLM::vref,         LsmVar_SLM::dref,
-      LsmVar_SLM::qref,          LsmVar_SLM::pref,         LsmVar_SLM::node_z, LsmVar_SLM::soilt_nudge, LsmVar_SLM::soilw_nudge};
+      LsmVar_SLM::qref,          LsmVar_SLM::pref,         LsmVar_SLM::node_z,
+      LsmVar_SLM::soilt_nudge,   LsmVar_SLM::soilw_nudge,  LsmVar_SLM::lai,
+      LsmVar_SLM::vegtype,       LsmVar_SLM::soiltype};
 
     LsmVarName.resize(m_lsm_size);
     LsmVarName = {"tsurf",         "ustar",          "tstar",
@@ -55,7 +57,9 @@ SLM::Init (const int& /*lev*/,
                   "SW_dw_dir_nir", "SW_dw_dif_vis",  "SW_dw_dif_nir",
                   "LW_dw",         "ref_t",          "ref_u",
                   "ref_v",         "ref_d",          "ref_q",
-                  "ref_p",         "node_z","soilt_nudge", "soilw_nudge"};
+                  "ref_p",         "node_z",         "soilt_nudge",
+                  "soilw_nudge",   "lai",            "vegtype",
+                  "soiltype"};
 
     AMREX_ALWAYS_ASSERT(LsmVarMap.size() == LsmVarName.size());
     AMREX_ALWAYS_ASSERT(LsmVarMap.size() == m_lsm_size);
@@ -214,7 +218,10 @@ SLM::Init (const int& /*lev*/,
 
     net_rad.setVal(0.0);
 
-    slm_init();
+    if (!use_wrfinput) {
+        // Initialize here if not using wrfinput, otherwise it is done at first time step
+        slm_init();
+    }
 
 	//Following Noah-MP, zref is modified to become ztop (canopy topheight) + dz0(center height of the atmosphere's lowest grid)
     //First, read in SLM_use_inputs, if true, zref is set from the inputs parameter slm.zref
@@ -1032,6 +1039,8 @@ void SLM::init_soil_tw()
     const int d_khi_lsm = khi_lsm;
     const int d_klo_lsm = klo_lsm;
 
+    const bool wrfinput = use_wrfinput;
+
     amrex::Gpu::DeviceVector<Real> d_dz_lsm_vec(m_dz_lsm.size());
     amrex::Gpu::DeviceVector<Real> d_clay_vec(m_dz_lsm.size());
     amrex::Gpu::DeviceVector<Real> d_sand_vec(m_dz_lsm.size());
@@ -1071,15 +1080,83 @@ void SLM::init_soil_tw()
 
         auto sstxy_arr = sstxy.array(mfi);
 
+        auto soiltype_arr = lsm_fab_vars[LsmVar_SLM::soiltype]->array(mfi);
+
         ParallelFor(box3d, [=] AMREX_GPU_DEVICE (int i, int j, int k)
         {
             if (landmask_arr(i, j, 0) == 1)
             {
-                s_depth_arr(i, j, k) = d_dz_lsm[(k*-1)+d_khi_lsm];
-                clay_arr(i, j, k) = d_clay0[(k*-1)+d_khi_lsm];
-                sand_arr(i, j, k) = d_sand0[(k*-1)+d_khi_lsm];
-                soilt_arr(i, j, k) = d_st0[(k*-1)+d_khi_lsm];
-                soilw_arr(i, j, k) = d_sw0[(k*-1)+d_khi_lsm];
+                if (!wrfinput) {
+                    s_depth_arr(i, j, k) = d_dz_lsm[(k*-1)+d_khi_lsm];
+                    clay_arr(i, j, k) = d_clay0[(k*-1)+d_khi_lsm];
+                    sand_arr(i, j, k) = d_sand0[(k*-1)+d_khi_lsm];
+                    soilt_arr(i, j, k) = d_st0[(k*-1)+d_khi_lsm];
+                    soilw_arr(i, j, k) = d_sw0[(k*-1)+d_khi_lsm];
+                } else {
+                    // initialize sand and clay % based on soil type from WRFInput
+                    switch (static_cast<int>(soiltype_arr(i, j, d_khi_lsm)))
+                    {
+                        case 1: // sand
+                            sand_arr(i,j,k) = 0.92;
+                            clay_arr(i,j,k) = 0.03;
+                            break;
+                        case 2: // loamy sand
+                            sand_arr(i,j,k) = 0.82;
+                            clay_arr(i,j,k) = 0.06;
+                            break;
+                        case 3: // sandy loam
+                            sand_arr(i,j,k) = 0.65;
+                            clay_arr(i,j,k) = 0.10;
+                            break;
+                        case 4: // silt loam
+                            sand_arr(i,j,k) = 0.20;
+                            clay_arr(i,j,k) = 0.15;
+                            break;
+                        case 5: // silt
+                            sand_arr(i,j,k) = 0.08;
+                            clay_arr(i,j,k) = 0.12;
+                            break;
+                        case 6: // loam
+                            sand_arr(i,j,k) = 0.40;
+                            clay_arr(i,j,k) = 0.20;
+                            break;
+                        case 7: // sandy clay loam
+                            sand_arr(i,j,k) = 0.60;
+                            clay_arr(i,j,k) = 0.30;
+                            break;
+                        case 8: // clay loam
+                            sand_arr(i,j,k) = 0.32;
+                            clay_arr(i,j,k) = 0.34;
+                            break;
+                        case 9: // silty clay loam
+                            sand_arr(i,j,k) = 0.20;
+                            clay_arr(i,j,k) = 0.40;
+                            break;
+                        case 10: // sandy clay
+                            sand_arr(i,j,k) = 0.52;
+                            clay_arr(i,j,k) = 0.42;
+                            break;
+                        case 11: // silty clay
+                            sand_arr(i,j,k) = 0.06;
+                            clay_arr(i,j,k) = 0.47;
+                            break;
+                        case 12: // clay
+                            sand_arr(i,j,k) = 0.20;
+                            clay_arr(i,j,k) = 0.60;
+                            break;
+                        case 13: // organic material
+                            //sand_arr(i,j,k) = 0.0;
+                            //clay_arr(i,j,k) = 0.0;
+                            sand_arr(i,j,k) = 0.001;
+                            clay_arr(i,j,k) = 0.001;
+                            break;
+                        default:
+                            sand_arr(i,j,k) = -1.0;
+                            clay_arr(i,j,k) = -1.0;
+                            break;
+                    }
+
+                }
 
                 // initialize nudging profiles for soil based on the initial soilt and soilw
                 soilt_obs_arr(i, j, k) = soilt_arr(i, j, k);
@@ -1114,14 +1191,16 @@ void SLM::init_soil_tw()
             // k = -1 = top of soil layer = khi_lsm
             // k = -m_nz_lsm = klo_lsm
 
-            node_z_arr(i, j, d_khi_lsm) = 0.5 * s_depth_arr(i, j, d_khi_lsm);
-            for (int k = d_khi_lsm - 1; k >= d_klo_lsm; k--)
-            {
-                node_z_arr(i, j, k) = 0.5 * s_depth_arr(i, j, k);
-
-                for (int kk = d_khi_lsm; kk >= k + 1; kk--)
+            if (!wrfinput) {
+                node_z_arr(i, j, d_khi_lsm) = 0.5 * s_depth_arr(i, j, d_khi_lsm);
+                for (int k = d_khi_lsm - 1; k >= d_klo_lsm; k--)
                 {
-                    node_z_arr(i, j, k) = node_z_arr(i, j, k) + s_depth_arr(i, j, kk);
+                    node_z_arr(i, j, k) = 0.5 * s_depth_arr(i, j, k);
+
+                    for (int kk = d_khi_lsm; kk >= k + 1; kk--)
+                    {
+                        node_z_arr(i, j, k) = node_z_arr(i, j, k) + s_depth_arr(i, j, kk);
+                    }
                 }
             }
 
@@ -3021,7 +3100,7 @@ void
 SLM::set_terrain_inputs(const amrex::Vector<std::unique_ptr<amrex::MultiFab>>& sst_in,
                         const amrex::Vector<std::unique_ptr<amrex::iMultiFab>>& lmask_in)
 {
-    if (!first_step)
+    if (!first_step || use_wrfinput)
     {
         return;
     }
