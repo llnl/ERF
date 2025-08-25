@@ -722,6 +722,11 @@ void SLM::init_landtype()
                     // TODO: should this landmask be ERF's lmask_lev variable?
                     landmask_arr(i, j, 0) = 0;
                     vegetype_arr(i, j, 0) = 0;
+                    // set albedo for water so that it is populated for RRTMGP
+                    albedovis_v_arr(i, j, 0) = 0.06;
+                    albedonir_v_arr(i, j, 0) = 0.06;
+                    albedovis_s_arr(i, j, 0) = 0.06;
+                    albedonir_s_arr(i, j, 0) = 0.06;
                     break;
                 case 1: // evergreen needleaf forest
                     albedovis_v_arr(i, j, 0) = 0.04;
