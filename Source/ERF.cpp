@@ -1107,7 +1107,7 @@ ERF::InitData_post ()
     {
         lsf.read_forcing_file();
         lsf.interp_forcing(geom[0].data(), zlevels_stag[0]);
-        lsf.start_time = start_time;
+        //lsf.start_time = start_time;
     }
 
     if (solverChoice.rayleigh_damp_U ||solverChoice.rayleigh_damp_V ||
@@ -1762,6 +1762,13 @@ ERF::init_only (int lev, Real time)
 
     // Initialize background flow (optional)
     if (solverChoice.init_type == InitType::Input_Sounding) {
+        if (use_datetime) {
+            // TODO: fix? resets t_new/t_old relative to start_time so it is elapsed time
+            //start_time = 0.0;
+            t_new[lev] -= start_time;
+            t_old[lev] = t_new[lev] - 1.e200;
+        }
+
         // The physbc's need the terrain but are needed for initHSE
         // We have already made the terrain in the call to init_zphys
         //    in MakeNewLevelFromScratch

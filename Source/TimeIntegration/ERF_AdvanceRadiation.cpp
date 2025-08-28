@@ -45,6 +45,7 @@ void ERF::advance_radiation (int lev,
 
         // Enter radiation class driver
         amrex::Real time_for_rad = t_new[lev] + start_time;
+        amrex::Print() << " AdvanceRadiation - start_time = " << start_time << " t_new = " << t_new[lev] << " time_for_rad = " << time_for_rad << std::endl;
         rad[lev]->Run(lev, istep[lev], time_for_rad, dt_advance,
                       cons.boxArray(), geom[lev], &(cons),
                       sw_lw_fluxes[lev].get(), solar_zenith[lev].get(),

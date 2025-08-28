@@ -237,11 +237,11 @@ public:
                         //amrex::Print() << " i = " << i << " j = " << j << ": landtype = " << landtype_arr(i,j,0) << " soiltype = " << in_soiltype_arr(i,j,d_khi_lsm) << " LAI = " << lai_arr(i, j, 0) << std::endl;
 
                         if (landtype_arr(i,j,0) == 17) {
-                            amrex::Print() << "     -- water cell - setting landtype=0 landmask=0" << std::endl;
+                            //amrex::Print() << "     -- water cell - setting landtype=0 landmask=0" << std::endl;
                             landmask_arr(i,j,0) = 0;
                             landtype_arr(i,j,0) = 0;
                         } else if (landtype_arr(i,j,0) > 16) {
-                            amrex::Print() << "     -- urban cell - setting landtype=13" << std::endl;
+                            //amrex::Print() << "     -- urban cell - setting landtype=13" << std::endl;
                             landtype_arr(i,j,0) = 13;
                         }
                     });
