@@ -1589,6 +1589,7 @@ SLM::AdvanceSLM ()
 
                 // Output variables
                 tsurf_arr(i, j, d_khi_lsm) = t_skin_arr(i, j, 0); // TODO: ts in SLM is input and output - check how this should be coupled back to ERF
+                tsurf_arr(i, j, 0) = tsurf_arr(i, j, d_khi_lsm); // make sure this is set at k=0 for radiation coupling
                 flbq_arr(i, j, d_khi_lsm) = lhf_air_arr(i, j, 0) / (lcond*rhow);
                 flbt_arr(i, j, d_khi_lsm) = shf_air_arr(i, j, 0) / (Cp_d*rhow);
 
