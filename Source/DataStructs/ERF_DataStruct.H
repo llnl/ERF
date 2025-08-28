@@ -75,7 +75,7 @@ AMREX_ENUM(WindFarmLocType,
 );
 
 AMREX_ENUM(LandSurfaceType,
-    SLM, MM5, None, NOAH
+    SLM, MM5, None, NOAHMP
 );
 
 AMREX_ENUM(RadiationType,
@@ -551,6 +551,14 @@ struct SolverChoice {
             }
         }
 
+        // Are we using SHOC?
+        pp.query("use_shoc", use_shoc);
+#ifndef ERF_USE_SHOC
+        if (use_shoc) {
+            amrex::Abort("You set use_shoc to true but didn't build with SHOC; you must rebuild the executable");
+        }
+#endif
+
         // Which type of multilevel coupling
         coupling_type = CouplingType::TwoWay; // Default
         pp.query_enum_case_insensitive("coupling_type",coupling_type);
@@ -892,6 +900,9 @@ struct SolverChoice {
 
     // MOST stress rotations
     bool use_rotate_surface_flux = false;
+
+    // Should we use SHOC?
+    bool use_shoc = false;
 
     // User wishes to output time averaged velocity fields
     bool time_avg_vel = false;
