@@ -535,7 +535,7 @@ private:
     bool dosoiltnudging = false;
     amrex::Real tausoil = 86400.0;
 
-    amrex::Real z0_soil = 0.0387; // baresoil roughness length (m)
+    amrex::Real z0_soil = 0.01; // baresoil roughness length (m)
     static constexpr amrex::Real tfriz = 273.15;
     amrex::Real mws_mx0 = 50.0; // maximum puddle water storage (mm)
 
