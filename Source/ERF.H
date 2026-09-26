@@ -601,7 +601,7 @@ public:
                         const amrex::Real& dt_advance,
                         const amrex::Geometry& geom,
                         const amrex::MultiFab* z_phys_nd,
-                        amrex::MultiFab& eddyDiffs_lev);
+                        amrex::MultiFab& eddyDiffs_in);
 
     void advance_radiation (int lev,
                             amrex::MultiFab& cons_in,

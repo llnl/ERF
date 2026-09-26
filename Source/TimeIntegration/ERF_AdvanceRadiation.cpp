@@ -207,7 +207,7 @@ void ERF::advance_radiation (int lev,
                 // outside the domain are left to the setVal.
                 MultiFab toa_crse(ba_toa_c, dm_toa_c, nc, IntVect(1,1,0));
                 MultiFab toa_fine(ba_toa_f, dm_toa_f, nc, 0);
-                toa_crse.setVal(Real(0.0));
+                toa_crse.setVal(zero);
 
                 for (MFIter mfi(toa_crse); mfi.isValid(); ++mfi) {
                     const Box& dbx = mfi.validbox();
@@ -261,8 +261,8 @@ void ERF::advance_radiation (int lev,
                             source_box.smallEnd(2) <= 0 && source_box.bigEnd(2) >= 0,
                             "Radiation output destination must contain the k=0 surface plane");
                         const Box source_slab = makeSlab(source_box, 2, 0);
-                        coarse_surface[mfi].copy((*coarse_outputs[i])[mfi.index()],
-                                                 source_slab, 0, mfi.validbox(), 0, 1);
+                        coarse_surface[mfi].template copy<RunOn::Device>(
+                            (*coarse_outputs[i])[mfi.index()], source_slab, 0, mfi.validbox(), 0, 1);
                     }
 
                     InterpFromCoarseLevel(fine_surface, IntVect(0,0,0),
@@ -276,7 +276,7 @@ void ERF::advance_radiation (int lev,
                             destination_box.smallEnd(2) <= 0 && destination_box.bigEnd(2) >= 0,
                             "Radiation output destination must contain the k=0 surface plane");
                         const Box destination_slab = makeSlab(destination_box, 2, 0);
-                        (*fine_outputs[i])[mfi.index()].copy(
+                        (*fine_outputs[i])[mfi.index()].template copy<RunOn::Device>(
                             fine_surface[mfi], mfi.validbox(), 0, destination_slab, 0, 1);
                     }
                     m_SurfaceModel->distribute_radiation_output(lev, i);

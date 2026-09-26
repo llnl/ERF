@@ -721,14 +721,14 @@ private:
     // Input variables
     int landtype0 = 16; // landtype over whole domain
 
-    amrex::Real LAI0 = 0.0; // default leaf area index
+    amrex::Real LAI0 = zero; // default leaf area index
     amrex::Vector<amrex::Real> clay0; // uniform clay content (%)
     amrex::Vector<amrex::Real> sand0; // uniform sand content (%)
     amrex::Vector<amrex::Real> sw0; // uniform soil wetness (fraction)
     amrex::Vector<amrex::Real> st0; // uniform soil temperature (K)
     amrex::Vector<amrex::Real> relax_hgt; // depth dependent soil relaxation function
 
-    amrex::Real tabs_s = 0.0; // surface temperature (K)
+    amrex::Real tabs_s = zero; // surface temperature (K)
     amrex::Real t00 = 300.0; // constant offset for sstxy
     static constexpr amrex::Real t_canop_max = 343.; // maximum plant temperature
 
@@ -752,7 +752,7 @@ private:
     // parameters for stomatal resistance
     amrex::Real Rc_max = 5000.0; // maximum stomatal resistance
     amrex::Real T_opt = 298.0; // optimum temperature for transpiration
-    amrex::Real zref = 0.5; // height of reference level (m), used in transfer coef
+    amrex::Real zref = myhalf; // height of reference level (m), used in transfer coef
     amrex::MultiFab zrefxy;
 
     static constexpr amrex::Real IR_emis_urban = 0.9;
@@ -841,13 +841,13 @@ private:
     amrex::MultiFab r_c; // leaf-level stomatal resistance
     amrex::MultiFab r_d; // undercanopy aerodynamic resistance
     amrex::MultiFab r_soil;
-    static constexpr amrex::Real r_litter = 0.0; // litter resistance [s/m]
+    static constexpr amrex::Real r_litter = zero; // litter resistance [s/m]
 
 
     amrex::MultiFab net_rad;
     amrex::MultiFab wet_canop; // wetted portion of canopy
 
-    amrex::Real time = 0.0;
+    amrex::Real time = zero;
 
     amrex::Real start_time = -1.0;
     bool first_step = true;
@@ -892,8 +892,8 @@ private:
     // ALBDRY_NIR: dry soil albedos NIR (20 soil color classes)
     // ALBLAK: albedo frozen lakes: 1=vis, 2=nir
     // OMEGAS: two-stream parameter omega for snow: 1=vis, 2=nir
-    amrex::Real betads_rad = 0.5;  // two-stream parameter betad for snow
-    amrex::Real betais_rad = 0.5;  // two-stream parameter betai for snow
+    amrex::Real betads_rad = myhalf;  // two-stream parameter betad for snow
+    amrex::Real betais_rad = myhalf;  // two-stream parameter betai for snow
 
     // Snow albedo parameters (from &noahmp_global_parameters)
     amrex::Real tau0_rad = 1.0e6;         // tau0 from yang97 eqn. 10a
@@ -901,14 +901,14 @@ private:
     amrex::Real extra_growth_rad = 10.;   // extra growth near freezing yang97 eqn. 10c
     amrex::Real dirt_soot_rad = 0.3;      // dirt and soot term yang97 eqn. 10d
     amrex::Real rsurf_exp = 5.0;          // NoahMP option-1 soil resistance exponent
-    amrex::Real bats_cosz_rad = 2.0;      // zenith angle snow albedo adjustment; b in yang97 eqn. 15
+    amrex::Real bats_cosz_rad = two;      // zenith angle snow albedo adjustment; b in yang97 eqn. 15
     amrex::Real bats_vis_new_rad = 0.95;  // new snow visible albedo
     amrex::Real bats_nir_new_rad = 0.65;  // new snow nir albedo
     amrex::Real bats_vis_age_rad = 0.2;   // age factor for diffuse visible snow albedo yang97 eqn. 17
-    amrex::Real bats_nir_age_rad = 0.5;   // age factor for diffuse nir snow albedo yang97 eqn. 18
+    amrex::Real bats_nir_age_rad = myhalf;   // age factor for diffuse nir snow albedo yang97 eqn. 18
     amrex::Real bats_vis_dir_rad = 0.4;   // cosz factor for direct visible snow albedo yang97 eqn. 15
     amrex::Real bats_nir_dir_rad = 0.4;   // cosz factor for direct nir snow albedo yang97 eqn. 16
-    amrex::Real swemx_rad = 1.0;          // new snow mass to fully cover old snow (mm)
+    amrex::Real swemx_rad = one;          // new snow mass to fully cover old snow (mm)
 
     // NOAHMP emissivity parameters for longwave radiation from NoahmpTable.TBL
     amrex::Real snow_emis_rad = 0.95;     // snow emissivity

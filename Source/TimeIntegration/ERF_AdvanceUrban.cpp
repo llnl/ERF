@@ -13,7 +13,7 @@ ERF::advance_urban (int lev,
                     const Real& dt_advance,
                     const Geometry& geom_in,
                     const MultiFab* z_phys_nd_in,
-                    MultiFab& eddyDiffs_lev)
+                    MultiFab& eddyDiffs_in)
 {
     if (solverChoice.urban_type != UrbanType::None &&
         solverChoice.urban_enabled_lev[lev] == 1) {
@@ -37,7 +37,7 @@ ERF::advance_urban (int lev,
         }
 
         urban.Advance(lev, dt_advance, t_new[lev], start_time, geom_in,
-                      z_phys_nd_in, eddyDiffs_lev, calday);
+                      z_phys_nd_in, eddyDiffs_in, calday);
         urban.Update_State_Vars_Lev(lev, cons_in);
     }
 }

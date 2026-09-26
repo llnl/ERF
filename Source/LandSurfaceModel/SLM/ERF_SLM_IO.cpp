@@ -145,12 +145,12 @@ SLM::writeNCHeader(ncutils::NCFile &nc_file, const amrex::Geometry &geom)
         const int by_offset = box.smallEnd(1);
         ParallelFor(box.length(0), [=] AMREX_GPU_DEVICE (int i)
         {
-            x_arr(i) = prob_lo[0] + (bx_offset+i+0.5)*dx[0];
+            x_arr(i) = prob_lo[0] + (bx_offset+i+myhalf)*dx[0];
         });
 
         ParallelFor(box.length(1), [=] AMREX_GPU_DEVICE (int j)
         {
-            y_arr(j) = prob_lo[1] + (by_offset+j+0.5)*dx[1];
+            y_arr(j) = prob_lo[1] + (by_offset+j+myhalf)*dx[1];
         });
 
         ParallelFor(nz, [=] AMREX_GPU_DEVICE (int k)
