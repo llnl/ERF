@@ -3308,10 +3308,10 @@ void SLM::transfer_coeff(const amrex::MFIter &mfi)
     };
     // very stable: 0 < xsi < 1
     auto psim4 = [] AMREX_GPU_DEVICE (const amrex::Real &xsi, const amrex::Real &xsim0) -> amrex::Real {
-        return std::log(std::pow(xsi, 5) / xsim0) + amrex::Real(5.0) * (one - xsim0) + xsi - one;
+        return std::log(amrex::Math::powi<5>(xsi) / xsim0) + amrex::Real(5.0) * (one - xsim0) + xsi - one;
     };
     auto psih4 = [] AMREX_GPU_DEVICE (const amrex::Real &xsi, const amrex::Real &xsih0) -> amrex::Real {
-        return std::log(std::pow(xsi, 5) / xsih0) + amrex::Real(5.0) * (one - xsih0) + xsi - one;
+        return std::log(amrex::Math::powi<5>(xsi) / xsih0) + amrex::Real(5.0) * (one - xsih0) + xsi - one;
     };
 
 
@@ -3445,8 +3445,9 @@ void SLM::transfer_coeff(const amrex::MFIter &mfi)
         tstar_arr(i, j, 0) = -kk * (thp - tsp) / fh;
 
         // recompute Ch and Cd for onsistency
-        mom_trans_coef = std::pow((ustar_arr(i, j, 0)/vel),2);
+        mom_trans_coef = amrex::Math::powi<2>(ustar_arr(i, j, 0)/vel);
         heat_trans_coef = (kk/fh) * (ustar_arr(i, j, 0)/vel);
+        amrex::ignore_unused(heat_trans_coef);
 
         // aerodynamic resistance between surface and reference level
         r_a_arr(i, j, 0) = fh / kk / ustar_arr(i, j, 0);
@@ -3708,7 +3709,7 @@ void SLM::resistances(const amrex::MFIter &mfi)
             *///
 
             // temperature factor
-            rc_fac_t = std::max(zero, one - amrex::Real(0.0016) * std::pow(d_T_opt - t_cas_arr(i, j, 0), 2));
+            rc_fac_t = std::max(zero, one - amrex::Real(0.0016) * amrex::Math::powi<2>(d_T_opt - t_cas_arr(i, j, 0)));
 
             // NoahMP BTR_OPTION=1 soil-moisture stress factor. All rooted
             // layers remain in the depth denominator, including dry layers.
@@ -4140,9 +4141,9 @@ void SLM::solve_ground_skin_temperature(const amrex::MFIter &mfi)
                 evaporation = std::min(evaporation, max_ground_evaporation);
             }
             if (evaporation < zero) evaporation *= dew_factor;
-            const amrex::Real irg = emg * sigma * std::pow(tg, 4)
+            const amrex::Real irg = emg * sigma * amrex::Math::powi<4>(tg)
                                   - emg * (1.0 - emv) * lwdn
-                                  - emg * emv * sigma * std::pow(tv, 4);
+                                  - emg * emv * sigma * amrex::Math::powi<4>(tv);
             return net_sw - irg - sensible - lcond * evaporation
                    - conduction_coeff * (tg - tsoil);
         };
@@ -4185,9 +4186,9 @@ void SLM::solve_ground_skin_temperature(const amrex::MFIter &mfi)
             evaporation = std::min(evaporation, max_ground_evaporation);
         }
         if (evaporation < zero) evaporation *= dew_factor;
-        const amrex::Real irg = emg * sigma * std::pow(tg, 4)
+        const amrex::Real irg = emg * sigma * amrex::Math::powi<4>(tg)
                               - emg * (1.0 - emv) * lwdn
-                              - emg * emv * sigma * std::pow(tv, 4);
+                              - emg * emv * sigma * amrex::Math::powi<4>(tv);
         const amrex::Real ground_conduction = conduction_coeff * (tg - tsoil);
 
         t_ground_skin_arr(i, j, 0) = tg;
@@ -4203,13 +4204,13 @@ void SLM::solve_ground_skin_temperature(const amrex::MFIter &mfi)
         lhf_air_arr(i, j, 0) = vegetated ? lhf_canop_arr(i, j, 0) + lcond * evaporation
                                           : lcond * evaporation;
 
-        const amrex::Real tir1 = emv * sigma * std::pow(tv, 4);
-        const amrex::Real tir2 = emg * sigma * std::pow(tg, 4);
+        const amrex::Real tir1 = emv * sigma * amrex::Math::powi<4>(tv);
+        const amrex::Real tir2 = emg * sigma * amrex::Math::powi<4>(tg);
         const amrex::Real lwdn2 = (1.0 - emv) * lwdn + tir1;
         const amrex::Real lwup2 = tir2 + (1.0 - emg) * lwdn2;
         const amrex::Real irc = -emv * (1.0 + (1.0 - emv) * (1.0 - emg)) * lwdn
-                              - emv * emg * sigma * std::pow(tg, 4)
-                              + (two - emv * (one - emg)) * emv * sigma * std::pow(tv, 4);
+                              - emv * emg * sigma * amrex::Math::powi<4>(tg)
+                              + (two - emv * (one - emg)) * emv * sigma * amrex::Math::powi<4>(tv);
         const amrex::Real lwup1 = lwdn + irc + irg;
         net_rad_arr(i, j, 0, SLM_NetRad::tir2) = tir2;
         net_rad_arr(i, j, 0, SLM_NetRad::net_lwup2) = lwup2;
@@ -4476,7 +4477,7 @@ void SLM::soil_water(const amrex::MFIter &mfi)
                     const int lsm_kk = d_khi_lsm - kk;
                     if (soilw_arr(i, j, lsm_kk) < one)
                     {
-                        cc = std::min(excess_water, (1.0 - soilw_arr(i, j, lsm_kk))*poro_soil_arr(i, j, lsm_kk)*dsw_vars(i, j, lsm_kk, SLM_DSW::sdepth_mm));
+                        cc = std::min(excess_water, (one - soilw_arr(i, j, lsm_kk))*poro_soil_arr(i, j, lsm_kk)*dsw_vars(i, j, lsm_kk, SLM_DSW::sdepth_mm));
                         soilw_arr(i, j, lsm_kk) += cc / (poro_soil_arr(i, j, lsm_kk)*dsw_vars(i, j, lsm_kk, SLM_DSW::sdepth_mm));
                         excess_water -= cc;
                         if (excess_water <= zero)
@@ -5398,7 +5399,6 @@ void SLM::twostream_noahmp(int ib, int ic, int /*vegtyp*/, amrex::Real cosz, amr
     amrex::Real phi1,phi2,sigma;
     amrex::Real ftds,ftis,fres;
     amrex::Real denfveg;
-    amrex::Real vai_spread;
     //jref:start
     amrex::Real freveg,frebar;
     //jref:end
@@ -5417,7 +5417,6 @@ void SLM::twostream_noahmp(int ib, int ic, int /*vegtyp*/, amrex::Real cosz, amr
 
     // -----------------------------------------------------------------
     // compute within and between gaps
-    vai_spread = vai;
     if(vai == zero) {
             gap     = one;
             kopen   = one;
@@ -6063,9 +6062,9 @@ void SLM::radiation_noahmp(const amrex::MFIter &mfi)
         //                            (reflected by ground and re-absorbed by canopy)
         // --------------------------------------------------------------------------------------------------
         amrex::Real air_c = -emv * (1.0 + (1.0 - emv) * (1.0 - emg)) * lwdn
-                          - emv * emg * SB * std::pow(tg, 4);
+                          - emv * emg * SB * amrex::Math::powi<4>(tg);
         amrex::Real cir_c = (two - emv * (one - emg)) * emv * SB;
-        amrex::Real irc = air_c + cir_c * std::pow(tv, 4);
+        amrex::Real irc = air_c + cir_c * amrex::Math::powi<4>(tv);
 
         // --------------------------------------------------------------------------------------------------
         // Ground net longwave radiation (IRG) - NOAHMP lines 4086-4087, 4104
@@ -6081,12 +6080,12 @@ void SLM::radiation_noahmp(const amrex::MFIter &mfi)
         // Physical interpretation of CIR_G*TG^4 term:
         //   EMG*SB*TG^4: ground emits upward
         // --------------------------------------------------------------------------------------------------
-        amrex::Real air_g = -emg * (1.0 - emv) * lwdn - emg * emv * SB * std::pow(tv, 4);
+        amrex::Real air_g = -emg * (1.0 - emv) * lwdn - emg * emv * SB * amrex::Math::powi<4>(tv);
         amrex::Real cir_g = emg * SB;
-        amrex::Real irg = cir_g * std::pow(tg, 4) + air_g;
+        amrex::Real irg = cir_g * amrex::Math::powi<4>(tg) + air_g;
 
-        amrex::Real tir1 = emv * SB * std::pow(tv, 4);
-        amrex::Real tir2 = emg * SB * std::pow(tg, 4);
+        amrex::Real tir1 = emv * SB * amrex::Math::powi<4>(tv);
+        amrex::Real tir2 = emg * SB * amrex::Math::powi<4>(tg);
         amrex::Real lwdn1 = lwdn;
         amrex::Real lwdn2 = (1.0 - emv) * lwdn + tir1;
         amrex::Real lwup2 = tir2 + (1.0 - emg) * lwdn2;
